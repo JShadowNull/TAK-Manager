@@ -1,0 +1,24 @@
+{% set popup_id = 'popup-install-docker' %}
+{% set title = 'Install Docker' %}
+{% set content_html = '
+<div id="docker-step-download" class="docker-step">
+    <h3 class="text-xl font-bold mb-4">Docker Installation</h3>
+    <p class="mb-4">Click next to begin the Docker installation process. You will need your system password to proceed.</p>
+</div>
+<div id="docker-step-already-installed" class="docker-step hidden">
+    <p class="mb-4 text-green-500 text-center text-sm">Docker is already installed on your system.</p>
+</div>
+' %}
+{% set buttons_html = "
+<button id='popup-install-docker-close-btn' class='text-buttonTextColor rounded-lg p-2 text-sm border-1 border-buttonBorder bg-buttonColor hover:text-black hover:shadow-soft hover:border-black hover:shadow-black hover:bg-red-500'>
+    Close
+</button>
+<button id='popup-install-docker-download-link' class='text-buttonTextColor rounded-lg p-2 text-sm border-1 border-buttonBorder bg-buttonColor hover:text-black hover:shadow-soft hover:border-black hover:shadow-black hover:bg-green-500'>
+    Download Docker
+</button>
+<button id='popup-install-docker-install-takserver-btn' class='text-buttonTextColor rounded-lg p-2 text-sm border-1 border-buttonBorder bg-buttonColor hover:text-black hover:shadow-soft hover:border-black hover:shadow-black hover:bg-green-500'>
+    Install TAKServer
+</button>
+" %}
+
+{% include 'components/popup_base.html' %}

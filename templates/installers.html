@@ -1,0 +1,70 @@
+<!-- frontend/templates/installers.html -->
+
+{% extends "components/base.html" %}
+
+{% block title %}Installers and Setup{% endblock %}
+
+{% block content %}
+    {% set title = 'Installers and Setup' %}
+    {% include 'components/title_bar.html' %}
+
+    <!-- Flex layout for sections, matching the style of index.html -->
+    <div class="flex flex-wrap gap-8 pt-14">
+        
+        <!-- Install Docker Section (custom width applied) -->
+        <div class="flex-1 bg-cardBg p-6 rounded-lg shadow-lg text-white border-1 border-accentBoarder max-w-52">
+            <h2 class="text-base mb-4 text-center">Install Docker</h2>
+            <div class="flex justify-center p-2">
+                <!-- SVG icon with the ID 'install-docker-btn' -->
+                <svg id="install-docker-btn" class="w-5 h-5 mr-2 fill-current text-white hover:text-green-500 hover:cursor-pointer"
+                     xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                    <!-- Original SVG path -->
+                    <path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25Zm3.53 9.28a.75.75 0 0 0-1.06-1.06l-2.22 2.22V6.75a.75.75 0 0 0-1.5 0v5.94l-2.22-2.22a.75.75 0 0 0-1.06 1.06l3.75 3.75a.75.75 0 0 0 1.06 0l3.75-3.75Z" clip-rule="evenodd" />
+                </svg>
+            </div>
+        </div>
+        
+        <!-- Install TAKServer Section (custom width applied) -->
+        <div class="flex-1 bg-cardBg p-6 rounded-lg shadow-lg text-white border border-accentBoarder max-w-52">
+            <h2 class="text-base mb-4 text-center">Install TAKServer</h2>
+            <div class="flex justify-center p-2">
+                <!-- SVG icon with the ID 'install-takserver-btn' -->
+                <svg id="install-takserver-btn" class="w-5 h-5 mr-2 fill-current text-white hover:text-green-500 hover:cursor-pointer"
+                     xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                    <!-- Original SVG path -->
+                    <path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25Zm3.53 9.28a.75.75 0 0 0-1.06-1.06l-2.22 2.22V6.75a.75.75 0 0 0-1.5 0v5.94l-2.22-2.22a.75.75 0 0 0-1.06 1.06l3.75 3.75a.75.75 0 0 0 1.06 0l3.75-3.75Z" clip-rule="evenodd" />
+                </svg>
+            </div>
+        </div>
+        <!-- Install OTA Updates Section (custom width applied) -->
+        <div class="flex-1 bg-cardBg p-6 rounded-lg shadow-lg text-white border border-accentBoarder max-w-52">
+            <h2 class="text-base mb-4 text-center">Configure OTA Updates</h2>
+            <div class="flex justify-center p-2">
+                <!-- SVG icon with the ID 'install-ota-updates-btn' -->
+                <svg id="install-ota-updates-btn" class="w-5 h-5 mr-2 fill-current text-white hover:text-green-500 hover:cursor-pointer"
+                     xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                    <!-- Original SVG path -->
+                    <path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25Zm3.53 9.28a.75.75 0 0 0-1.06-1.06l-2.22 2.22V6.75a.75.75 0 0 0-1.5 0v5.94l-2.22-2.22a.75.75 0 0 0-1.06 1.06l3.75 3.75a.75.75 0 0 0 1.06 0l3.75-3.75Z" clip-rule="evenodd" />
+                </svg>
+            </div>
+        </div>
+
+    <!-- Set variables for the Docker Installation Popup -->
+    {% include 'installers_components/docker.html' %}
+
+    <!-- TAKServer Installation Popup -->
+    {% include 'installers_components/takserver.html' %}
+
+    <!-- OTA Updates Configuration Popup -->
+    {% include 'installers_components/otaupdate.html' %}
+
+{% endblock %}
+
+{% block scripts %}
+    <!-- Socket.IO Client Library -->
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/takserver/takserver_terminal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/docker/docker_terminal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/ota/ota_update.js') }}"></script>
+    {% endblock %}
+

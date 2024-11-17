@@ -1,0 +1,11 @@
+{% macro create_button(text, hover_color="green", type="button", additional_classes="", data_attributes={}) %}
+    <button 
+        type="{{ type }}"
+        class="text-buttonTextColor rounded-lg p-2 text-sm border-1 border-buttonBorder bg-buttonColor hover:text-black hover:shadow-soft hover:border-black hover:shadow-black hover:bg-{{ hover_color }}-500 {{ additional_classes }}"
+        {% for key, value in data_attributes.items() %}
+            data-{{ key }}="{{ value }}"
+        {% endfor %}
+    >
+        {{ text }}
+    </button>
+{% endmacro %}

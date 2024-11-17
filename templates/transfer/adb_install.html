@@ -1,0 +1,42 @@
+{% set popup_id = 'popup-install-adb' %}
+{% set title = 'ADB Installation' %}
+{% set show_terminal = True %}
+{% set content_html = '''
+<!-- Step 1: ADB Not Installed -->
+<div id="adb-step-not-installed" class="adb-step hidden">
+    <p class="text-red-500 text-sm text-center">ADB (Android Debug Bridge) is required for Rapid Transfer.</p>
+    <p class="text-sm text-center mt-2"> Click Install to proceed.</p>
+</div>
+
+<div id="adb-step-installing" class="adb-step hidden">
+    <h2 class="text-green-500 text-center text-sm font-bold">Installing ADB</h2>
+    <div id="adb-terminal-output" class="terminal-output list-none space-y-2 overflow-y-auto text-textSecondary text-sm border border-accentBoarder h-64 p-2 rounded-lg mt-4">
+        <!-- Terminal output will be appended here -->
+    </div>
+</div>
+
+<div id="adb-step-success" class="adb-step hidden">
+    <p class="text-sm text-center">ADB has been successfully installed.</p>
+</div>
+
+<div id="adb-step-failed" class="adb-step hidden">
+    <p class="text-red-500 text-sm text-center">ADB installation failed. Review the terminal output for more details.</p>
+</div>
+''' %}
+
+{% set buttons_html = '''
+<button id="adb-return-dashboard-btn" class="text-buttonTextColor rounded-lg p-2 text-sm border-1 border-buttonBorder bg-buttonColor hover:text-black hover:shadow-soft hover:border-black hover:shadow-black hover:bg-red-500">
+    Return to Dashboard
+</button>
+<button id="adb-install-btn" class="text-buttonTextColor rounded-lg p-2 text-sm border-1 border-buttonBorder bg-buttonColor hover:text-black hover:shadow-soft hover:border-black hover:shadow-black hover:bg-green-500">
+    Install ADB
+</button>
+<button id="adb-next-btn" class="text-buttonTextColor rounded-lg p-2 text-sm border-1 border-buttonBorder bg-buttonColor hover:text-black hover:border-black hover:shadow-soft hover:shadow-black hover:bg-green-500 hidden">
+    Next
+</button>
+<button id="adb-close-btn" class="text-buttonTextColor rounded-lg p-2 text-sm border-1 border-buttonBorder bg-buttonColor hover:text-black hover:border-black hover:shadow-soft hover:shadow-black hover:bg-red-500 hidden">
+    Close
+</button>
+''' %}
+
+{% include 'components/popup_base.html' %}

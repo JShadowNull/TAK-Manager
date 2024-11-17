@@ -1,0 +1,97 @@
+    <!-- TAKServer Installation Popup -->
+    {% set popup_id = 'popup-install-takserver' %}
+    {% set title = 'Install TAKServer' %}
+    {% set show_terminal = True %}
+    {% set content_html = '''
+    <!-- Add Docker Required Step -->
+    <div id="takserver-step-docker-required" class="takserver-step hidden">
+        <p class="mb-4 text-red-500 text-sm text-center">Docker is required but not installed!</p>
+        <p class="text-sm text-center mb-4">Please install Docker before proceeding with TAKServer installation.</p>
+    </div>
+
+    <!-- Existing steps -->
+    <div id="takserver-step-1" class="takserver-step">
+        <p>Please ensure Docker is installed before proceeding. Click the button below to begin the installation of TAKServer within Docker. This process will handle certificate enrollment and generate an admin certificate for secure web login. Once the installation is complete, you can use the tool to export the web certificate to your computer for easy access.</p>
+    </div>
+
+    <!-- Step 2: Form for uploading Docker zip file and entering PostgreSQL password -->
+    <div id="takserver-step-2" class="takserver-step hidden">
+        <form id="takserver-install-form">
+            <div class="mb-4">
+                <label for="name" class="block text-white text-base mb-1">Name:</label>
+                <input type="text" id="name" name="name" required class="w-full bg-buttonColor text-sm border-1 border-buttonBorder p-2 rounded-lg" pattern="^[A-Za-z]+$" title="Only alphabetic characters are allowed.">
+            </div>
+            <div class="mb-4">
+                <label for="docker-zip-file" class="block text-white text-base mb-1">Select Docker Zip File:</label>
+                <p class="text-sm mb-2"> Upload your TAKServer docker zip file downloaded from TAK.gov. Ensure you do not modify the file name. </p>
+                <input type="file" id="docker-zip-file" name="docker_zip_file" accept=".zip" required class="w-full bg-buttonColor text-sm border-1 hover:cursor-pointer border-buttonBorder p-2 rounded-lg">
+            </div>
+            <div class="mb-4">
+                <label for="postgres-password" class="block text-white text-base mb-1">Database Password:</label>
+                <p class="text-sm text-yellow-300 mb-2"> You will not have to remember this password but ensure it is secure.</p>
+                <input type="password" id="postgres-password" name="postgres_password" required class="w-full bg-buttonColor text-sm border-1 border-buttonBorder p-2 rounded-lg" pattern="^\S+$" title="Spaces are not allowed.">
+            </div>
+            <div class="mb-4">
+                <label for="certificate-password" class="block text-white text-base mb-1">Certificate Password:</label>
+                <p class="text-sm text-yellow-300 mb-2"> You will have to remember this password ensure it is secure.</p>
+                <input type="password" id="certificate-password" name="certificate_password" required class="w-full bg-buttonColor text-sm border-1 border-buttonBorder p-2 rounded-lg" pattern="^\S+$" title="Spaces are not allowed.">
+            </div>
+            <div class="mb-4">
+                <label for="organization" class="block text-white text-base mb-1">Organization Name:</label>
+                <input type="text" id="organization" name="organization" required class="w-full bg-buttonColor text-sm border-1 border-buttonBorder p-2 rounded-lg" pattern="^[A-Za-z]+$" title="Only alphabetic characters are allowed.">
+            </div>
+            <div class="mb-4">
+                <label for="organizational_unit" class="block text-white text-base mb-1">Unit Name:</label>
+                <input type="text" id="organizational_unit" name="organizational_unit" required class="w-full bg-buttonColor text-sm border-1 border-buttonBorder p-2 rounded-lg" pattern="^[A-Za-z]+$" title="Only alphabetic characters are allowed.">
+            </div>
+            <div class="mb-4">
+                <label for="state" class="block text-white text-base mb-1">Your State:</label>
+                <input type="text" id="state" name="state" required class="w-full mr-1 ml-1 bg-buttonColor text-sm border-1 border-buttonBorder p-2 rounded-lg" pattern="^[A-Za-z]+$" title="Only alphabetic characters are allowed.">
+            </div>
+            <div class="mb-4">
+                <label for="city" class="block text-white text-base mb-1">Your City:</label>
+                <input type="text" id="city" name="city" required class="w-full bg-buttonColor text-sm border-1 border-buttonBorder p-2 rounded-lg" pattern="^[A-Za-z]+$" title="Only alphabetic characters are allowed.">
+            </div>
+        </form> 
+    </div>
+
+    <!-- Step 3: Terminal Output -->
+    <div id="takserver-step-3" class="takserver-step hidden">
+        <!-- Terminal output will be shown here -->
+        <div id="popup-install-takserver-terminal-output" class="terminal-output list-none space-y-2 overflow-y-auto text-textSecondary text-sm border border-accentBoarder h-64 p-2 rounded-lg mt-4">
+            <!-- Terminal output will be appended here -->
+        </div>
+    </div>
+
+
+    <!-- Step 4: Installation Success -->
+    <div id="takserver-step-4" class="takserver-step hidden">
+        <p class="mb-2 text-sm text-center">Installation successful! Would you like to launch the TAKServer webpage?</p>
+    </div>
+    ''' %}
+
+    {% set buttons_html = '''
+    <button id="takserver-install-docker-btn" class="text-buttonTextColor rounded-lg p-2 text-sm border-1 border-buttonBorder bg-buttonColor hover:text-black hover:shadow-soft hover:border-black hover:shadow-black hover:bg-green-500">
+        Install Docker
+    </button>
+    <button id="popup-install-takserver-back-btn" class="text-buttonTextColor rounded-lg p-2 text-sm border-1 border-buttonBorder bg-buttonColor hover:text-black hover:shadow-soft hover:border-black hover:shadow-black hover:bg-red-500">
+        Back
+    </button>
+    <button id="popup-install-takserver-next-btn" class="text-buttonTextColor rounded-lg p-2 text-sm border-1 border-buttonBorder bg-buttonColor hover:text-black hover:border-black hover:shadow-soft hover:shadow-black hover:bg-green-500">
+        Next
+    </button>
+    <button id="popup-install-takserver-start-install-btn" class="text-buttonTextColor rounded-lg p-2 text-sm border-1 border-buttonBorder bg-buttonColor hover:text-black hover:border-black hover:shadow-soft hover:shadow-black hover:bg-green-500">
+        Begin
+    </button>
+    <button id="popup-install-takserver-stop-btn" class="text-buttonTextColor rounded-lg p-2 text-sm border-1 border-buttonBorder bg-buttonColor hover:text-black hover:shadow-soft hover:border-black hover:shadow-black hover:bg-red-500">
+        Stop
+    </button>
+    <button id="popup-install-takserver-close-btn" class="text-buttonTextColor rounded-lg p-2 text-sm border-1 border-buttonBorder bg-buttonColor hover:text-black hover:shadow-soft hover:border-black hover:shadow-black hover:bg-red-500">
+        Close
+    </button>
+    <button id="popup-install-takserver-success-launch-btn" class="text-buttonTextColor rounded-lg p-2 text-sm border-1 border-buttonBorder bg-buttonColor hover:text-black hover:border-black hover:shadow-soft hover:shadow-black hover:bg-green-500">
+        Launch
+    </button>
+    ''' %}
+
+    {% include 'components/popup_base.html' %}

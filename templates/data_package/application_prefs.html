@@ -1,0 +1,1123 @@
+<div>
+    {% set name = "Use team color for GPS icons" %}
+    {% set label = "team_color_gps_icon" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable notifications when other users are controlled" %}
+    {% set label = "atakControlOtherUserNotification" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Show ETA (Estimated Time of Arrival) in RAB (Route and Bearing) preferences" %}
+    {% set label = "rab_preference_show_eta" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Minimum dynamic reporting rate for unreliable connections (in seconds)" %}
+    {% set label = "dynamicReportingRateMinUnreliable" %}
+    {% set input_type = "text" %}
+    {% set value = "20" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Use WR (Wave Relay) callsign for location reporting" %}
+    {% set label = "locationUseWRCallsign" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Disable the EUD (End User Device) API option" %}
+    {% set label = "eud_api_disable_option" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable scanning for plugins on startup" %}
+    {% set label = "atakPluginScanningOnStartup" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Disable automatic linking of map item links" %}
+    {% set label = "disable_autolink_mapitem_links" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Scaling factor for relative overlays" %}
+    {% set label = "relativeOverlaysScalingRadioList" %}
+    {% set input_type = "text" %}
+    {% set value = "1.0" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable file sharing functionality" %}
+    {% set label = "filesharingEnabled" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Disable the file sharing preference item" %}
+    {% set label = "disablePreferenceItem_filesharingEnabled" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Hide dispatch location" %}
+    {% set label = "dispatchLocationHidden" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Show map zoom controls" %}
+    {% set label = "map_zoom_visible" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable logging to file" %}
+    {% set label = "loggingfile" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Toggle visibility of DPGK (Digital Precision Grid Kit) root" %}
+    {% set label = "dpgkRootVisibilityToggle" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Use custom color for GPS icons" %}
+    {% set label = "custom_color_gps_icon_pref" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Timeout for file sharing connections (in seconds)" %}
+    {% set label = "filesharingConnectionTimeoutSecs" %}
+    {% set input_type = "text" %}
+    {% set value = "10" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Display altitude as AGL (Above Ground Level)" %}
+    {% set label = "alt_display_agl" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Dim the map with the brightness key" %}
+    {% set label = "dim_map_with_brightness_key" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Ask for confirmation before quitting ATAK control" %}
+    {% set label = "atakControlAskToQuit" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Number of attempts to download files in file sharing" %}
+    {% set label = "fileshareDownloadAttempts" %}
+    {% set input_type = "text" %}
+    {% set value = "10" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Name of the imagery tab" %}
+    {% set label = "imagery_tab_name" %}
+    {% set input_type = "select" %}
+    {% set options = [
+        {'value': 'Imagery', 'text': 'Imagery'},
+        {'value': 'Maps', 'text': 'Maps'}
+    ] %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Port number for chat functionality" %}
+    {% set label = "chatPort" %}
+    {% set input_type = "text" %}
+    {% set value = "17012" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Disable the chat port preference item" %}
+    {% set label = "disablePreferenceItem_chatPort" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Scale factor for location markers" %}
+    {% set label = "location_marker_scale_key" %}
+    {% set input_type = "text" %}
+    {% set value = "-1" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable audible notifications" %}
+    {% set label = "audibleNotify" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable Bluetooth for ATAK control" %}
+    {% set label = "atakControlBluetooth" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Display range in feet" %}
+    {% set label = "rng_feet_display_pref" %}
+    {% set input_type = "text" %}
+    {% set value = "5280" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable toast notifications" %}
+    {% set label = "enableToast" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable developer tools" %}
+    {% set label = "atakDeveloperTools" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable automatic upload of logs" %}
+    {% set label = "enableAutoUploadLogs" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Reverse orientation for ATAK control" %}
+    {% set label = "atakControlReverseOrientation" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Only allow streaming with VPN enabled" %}
+    {% set label = "onlyStreamingWithVPN" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Altitude display preference (MSL - Mean Sea Level)" %}
+    {% set label = "alt_display_pref" %}
+    {% set input_type = "select" %}
+    {% set options = [
+        {'value': 'MSL', 'text': 'Mean Sea Level'},
+        {'value': 'HAE', 'text': 'Height Above Ellipsoid'}
+    ] %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Timeout for TCP connections (in seconds)" %}
+    {% set label = "tcpConnectTimeout" %}
+    {% set input_type = "text" %}
+    {% set value = "20" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Multicast address for chat functionality" %}
+    {% set label = "chatAddress" %}
+    {% set input_type = "text" %}
+    {% set value = "224.10.10.1" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Disable the chat address preference item" %}
+    {% set label = "disablePreferenceItem_chatAddress" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Timeout for file sharing transfers (in seconds)" %}
+    {% set label = "filesharingTransferTimeoutSecs" %}
+    {% set input_type = "text" %}
+    {% set value = "10" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable phone number in SA (Situational Awareness)" %}
+    {% set label = "saHasPhoneNumber" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Tabs for coordinate entry" %}
+    {% set label = "coordinate_entry_tabs" %}
+    {% set input_type = "text" %}
+    {% set value = "" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable volume map switcher" %}
+    {% set label = "volumemapswitcher" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "RAB distance slant range preference" %}
+    {% set label = "rab_dist_slant_range" %}
+    {% set input_type = "text" %}
+    {% set value = "clamped" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable QUIC (Quick UDP Internet Connections) protocol" %}
+    {% set label = "network_quic_enabled" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable high-speed capability for PPP0 (Point-to-Point Protocol)" %}
+    {% set label = "ppp0_highspeed_capable" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable faux navigation bar" %}
+    {% set label = "faux_nav_bar" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable repository startup synchronization" %}
+    {% set label = "repoStartupSync" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Constant reporting rate for reliable connections (in seconds)" %}
+    {% set label = "constantReportingRateReliable" %}
+    {% set input_type = "text" %}
+    {% set value = "15" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Camera chooser for QuickPic application" %}
+    {% set label = "quickpic.camera_chooser" %}
+    {% set input_type = "select" %}
+    {% set options = [
+        {'value': 'system', 'text': 'System'},
+        {'value': 'takgeocam', 'text': 'TAK GeoCam'}
+    ] %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Display server connection widget" %}
+    {% set label = "displayServerConnectionWidget" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Port number for unsecure API server" %}
+    {% set label = "apiUnsecureServerPort" %}
+    {% set input_type = "text" %}
+    {% set value = "8080" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Disable the unsecure API server port preference item" %}
+    {% set label = "disablePreferenceItem_apiUnsecureServerPort" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Toggle visibility of GRG root" %}
+    {% set label = "grgRootVisibilityToggle" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Action for long press on map in ATAK" %}
+    {% set label = "atakLongPressMap" %}
+    {% set input_type = "text" %}
+    {% set value = "nothing" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Prefer alternate number for display" %}
+    {% set label = "preferAltNumber" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Timeout for UDP connections with no data (in seconds)" %}
+    {% set label = "udpNoDataTimeout" %}
+    {% set input_type = "text" %}
+    {% set value = "30" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable metrics collection" %}
+    {% set label = "collect_metrics" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Use default GPS icon" %}
+    {% set label = "default_gps_icon" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable dispatch location COT external at start" %}
+    {% set label = "dispatchLocationCotExternalAtStart" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Adjust curved display for ATAK" %}
+    {% set label = "atakAdjustCurvedDisplay" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Insert destination in directed CoT messages" %}
+    {% set label = "insertDestInDirectedCoT" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Shorten labels for ATAK control" %}
+    {% set label = "atakControlShortenLabels" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Port number for file sharing web server" %}
+    {% set label = "filesharingWebServerPort" %}
+    {% set input_type = "text" %}
+    {% set value = "8080" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Disable the file sharing web server port preference item" %}
+    {% set label = "disablePreferenceItem_filesharingWebServerPort" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Maximum dynamic reporting rate for reliable connections (in seconds)" %}
+    {% set label = "dynamicReportingRateMaxReliable" %}
+    {% set input_type = "text" %}
+    {% set value = "2" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Show labels for ATAK control" %}
+    {% set label = "atakControlShowLabels" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Quit ATAK control on back button press" %}
+    {% set label = "atakControlQuitOnBack" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable update server for app management" %}
+    {% set label = "appMgmtEnableUpdateServer" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Disable the app management update server preference item" %}
+    {% set label = "disablePreferenceItem_ppMgmtEnableUpdateServer" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable phone vibration" %}
+    {% set label = "vibratePhone" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Forced brightness level for ATAK" %}
+    {% set label = "atakForcedBrightness" %}
+    {% set input_type = "text" %}
+    {% set value = "-1" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable device profile on connect" %}
+    {% set label = "deviceProfileEnableOnConnect" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Disable the device profile on connect preference item" %}
+    {% set label = "disablePreferenceItem_deviceProfileEnableOnConnect" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Set domain preference (e.g., Ground, Air)" %}
+    {% set label = "set_domain_pref" %}
+    {% set input_type = "text" %}
+    {% set value = "Ground" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Text size for labels" %}
+    {% set label = "label_text_size" %}
+    {% set input_type = "text" %}
+    {% set value = "14" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable permissive mode for HTTP client" %}
+    {% set label = "httpClientPermissiveMode" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Port number for API certificate enrollment" %}
+    {% set label = "apiCertEnrollmentPort" %}
+    {% set input_type = "text" %}
+    {% set value = "8446" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Disable the API certificate enrollment port preference item" %}
+    {% set label = "disablePreferenceItem_apiCertEnrollmentPort" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable file sharing for all servers" %}
+    {% set label = "filesharingAllServers" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Disable the file sharing all servers preference item" %}
+    {% set label = "disablePreferenceItem_ilesharingAllServers" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable map scale rounding" %}
+    {% set label = "map_scale_rounding" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable real-time metrics" %}
+    {% set label = "realtime_metrics" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Range in meters display preference" %}
+    {% set label = "rng_meters_display_pref" %}
+    {% set input_type = "text" %}
+    {% set value = "2000" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Coordinate display preference (e.g., MGRS, UTM)" %}
+    {% set label = "coord_display_pref" %}
+    {% set input_type = "text" %}
+    {% set value = "MGRS" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable screen lock for ATAK" %}
+    {% set label = "atakScreenLock" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Show map eye altitude" %}
+    {% set label = "map_eyealt_visible" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable logging file upload for debugging" %}
+    {% set label = "loggingfile_upload_debug" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "RAB color preference" %}
+    {% set label = "rab_color_pref" %}
+    {% set input_type = "text" %}
+    {% set value = "red" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Layer outline color preference" %}
+    {% set label = "pref_layer_outline_color" %}
+    {% set input_type = "text" %}
+    {% set value = "#00ff00" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Show map center designator" %}
+    {% set label = "map_center_designator" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable right navigation orientation" %}
+    {% set label = "nav_orientation_right" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable smart cache" %}
+    {% set label = "prefs_enable_smart_cache" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable globe mode for ATAK" %}
+    {% set label = "atakGlobeModeEnabled" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Show TAK version number in dispatch" %}
+    {% set label = "dispatchTAKVersionNumber" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable certificate enrollment export" %}
+    {% set label = "certEnrollmentExport" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Disable the certificate enrollment export preference item" %}
+    {% set label = "disablePreferenceItem_certEnrollmentExport" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Auto-close tilt rotation menu" %}
+    {% set label = "tilt_rotation_menu_auto_close" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Center self on back button press" %}
+    {% set label = "atakBackButtonCenterSelf" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable legacy HTTP for file sharing web server" %}
+    {% set label = "filesharingWebServerLegacyHttpEnabled" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "File sharing size threshold for no-go (in MB)" %}
+    {% set label = "filesharingSizeThresholdNoGo" %}
+    {% set value = "100" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Team color for location" %}
+    {% set label = "locationTeam" %}
+    {% set input_type = "select" %}
+    {% set options = [
+        {'value': 'Blue', 'text': 'Blue'},
+        {'value': 'Dark Blue', 'text': 'Dark Blue'},
+        {'value': 'Cyan', 'text': 'Cyan'},
+        {'value': 'Teal', 'text': 'Teal'},
+        {'value': 'Green', 'text': 'Green'},
+        {'value': 'Dark Green', 'text': 'Dark Green'},
+        {'value': 'Red', 'text': 'Red'},
+        {'value': 'Orange', 'text': 'Orange'},
+        {'value': 'Yellow', 'text': 'Yellow'},
+        {'value': 'Brown', 'text': 'Brown'},
+        {'value': 'Magenta', 'text': 'Magenta'},
+        {'value': 'Purple', 'text': 'Purple'},
+        {'value': 'Maroon', 'text': 'Maroon'},
+        {'value': 'White', 'text': 'White'}
+    ] %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable large text mode" %}
+    {% set label = "largeTextMode" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Maximum dynamic reporting rate for unreliable connections (in seconds)" %}
+    {% set label = "dynamicReportingRateMaxUnreliable" %}
+    {% set value = "2" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable wave relay redirect" %}
+    {% set label = "waveRelayRedirect" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Mocking option for GPS" %}
+    {% set label = "mockingOption" %}
+    {% set value = "WRGPS" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Secure delete timeout (in seconds)" %}
+    {% set label = "secureDeleteTimeout" %}
+    {% set value = "10" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Compass heading display preference (e.g., Numeric, Cardinal)" %}
+    {% set label = "compass_heading_display" %}
+    {% set value = "Numeric" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "RAB bearing units preference" %}
+    {% set label = "rab_brg_units_pref" %}
+    {% set value = "0" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Multicast TTL (Time to Live)" %}
+    {% set label = "multicastTTL" %}
+    {% set value = "64" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Auto-disable mesh SA when streaming" %}
+    {% set label = "autoDisableMeshSAWhenStreaming" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Force airplane radio list for ATAK" %}
+    {% set label = "atakForceAirplaneRadioList" %}
+    {% set value = "none" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Disable softkey illumination for ATAK" %}
+    {% set label = "atakDisableSoftkeyIllumination" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Minimum dynamic reporting rate for reliable connections (in seconds)" %}
+    {% set label = "dynamicReportingRateMinReliable" %}
+    {% set value = "20" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable multicast loopback for network" %}
+    {% set label = "network_multicast_loopback" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable dispatch location COT external" %}
+    {% set label = "dispatchLocationCotExternal" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Port number for secure file sharing web server" %}
+    {% set label = "filesharingSecureWebServerPort" %}
+    {% set value = "8443" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Disable the secure file sharing web server port preference item" %}
+    {% set label = "disablePreferenceItem_filesharingSecureWebServerPort" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Dynamic reporting rate for stationary unreliable connections (in seconds)" %}
+    {% set label = "dynamicReportingRateStationaryUnreliable" %}
+    {% set value = "30" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Dynamic reporting rate for stationary reliable connections (in seconds)" %}
+    {% set label = "dynamicReportingRateStationaryReliable" %}
+    {% set value = "180" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Fade notification time (in seconds)" %}
+    {% set label = "fade_notification" %}
+    {% set value = "90" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Force English language for the application" %}
+    {% set label = "forceEnglish" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable large action bar" %}
+    {% set label = "largeActionBar" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Shade for side pane handle" %}
+    {% set label = "sidepane_handle_shade" %}
+    {% set value = "Dark" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Port number for secure API server" %}
+    {% set label = "apiSecureServerPort" %}
+    {% set value = "8443" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Disable the secure API server port preference item" %}
+    {% set label = "disablePreferenceItem_apiSecureServerPort" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "SA SIP (Session Initiation Protocol) address assignment" %}
+    {% set label = "saSipAddressAssignment" %}
+    {% set value = "No VoIP" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable DEX (Desktop Experience) controls" %}
+    {% set label = "dexControls" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "URL for ATAK update server" %}
+    {% set label = "atakUpdateServerUrl" %}
+    {% set value = "https://10.100.100.22:8443/update" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Show map scale" %}
+    {% set label = "map_scale_visible" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable double tap to zoom for ATAK" %}
+    {% set label = "atakDoubleTapToZoom" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable non-streaming connections" %}
+    {% set label = "enableNonStreamingConnections" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Smart cache download limit (in bytes)" %}
+    {% set label = "prefs_smart_cache_download_limit" %}
+    {% set value = "5000000" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Width and height for overlay manager" %}
+    {% set label = "overlay_manager_width_height" %}
+    {% set value = "33" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Use KLV (Key-Length-Value) elevation preference" %}
+    {% set label = "prefs_use_klv_elevation" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Scroll to self on start" %}
+    {% set label = "scrollToSelfOnStart" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "RAB north reference preference" %}
+    {% set label = "rab_north_ref_pref" %}
+    {% set value = "1" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Location unit type (e.g., a-f-G-U-C)" %}
+    {% set label = "locationUnitType" %}
+    {% set value = "a-f-G-U-C" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Altitude unit preference" %}
+    {% set label = "alt_unit_pref" %}
+    {% set value = "0" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Key length for API certificate enrollment" %}
+    {% set label = "apiCertEnrollmentKeyLength" %}
+    {% set value = "4096" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Disable the API certificate enrollment key length preference item" %}
+    {% set label = "disablePreferenceItem_apiCertEnrollmentKeyLength" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Monitor server connections" %}
+    {% set label = "monitorServerConnections" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Disable the monitor server connections preference item" %}
+    {% set label = "disablePreferenceItem_monitorServerConnections" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Speed unit preference" %}
+    {% set label = "speed_unit_pref" %}
+    {% set value = "0" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Show layer outlines by default" %}
+    {% set label = "prefs_layer_outlines_default_show" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "ATAK role type (e.g., Team Member)" %}
+    {% set label = "atakRoleType" %}
+    {% set value = "Team Member" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Display position of self coordinate info" %}
+    {% set label = "self_coord_info_display" %}
+    {% set value = "bottom_right" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Restore recorded location on startup" %}
+    {% set label = "restoreRecordedLocation" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Frame limit for the application" %}
+    {% set label = "frame_limit" %}
+    {% set value = "0" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Location reporting strategy (e.g., Dynamic)" %}
+    {% set label = "locationReportingStrategy" %}
+    {% set value = "Dynamic" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Enable extended buttons in landscape mode" %}
+    {% set label = "landscape_extended_buttons" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "RAB range units preference" %}
+    {% set label = "rab_rng_units_pref" %}
+    {% set value = "1" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Generate full pool of resources" %}
+    {% set label = "generate_full_pool" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Override permission request" %}
+    {% set label = "override_permission_request" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Log only errors to file" %}
+    {% set label = "loggingfile_error_only" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Reverse faux navigation bar" %}
+    {% set label = "faux_nav_bar_reverse" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Bluetooth reconnect interval for ATAK (in seconds)" %}
+    {% set label = "atakBluetoothReconnectSeconds" %}
+    {% set value = "180" %}
+    {% set input_type = "text" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Constant reporting rate for unreliable connections (in seconds)" %}
+    {% set label = "constantReportingRateUnreliable" %}
+    {% set input_type = "text" %}
+    {% set value = "3" %}
+    {% include "data_package/preference_item.html" %}
+</div>
+<div>
+    {% set name = "Log network traffic to file" %}
+    {% set label = "lognettraffictofile" %}
+    {% set input_type = "checkbox" %}
+    {% set checked = true %}
+    {% include "data_package/preference_item.html" %}
+</div>

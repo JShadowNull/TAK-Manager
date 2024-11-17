@@ -1,0 +1,5 @@
+{
+  "watch": ["backend/", "frontend/"],
+  "ext": "py,html,css,js",
+  "exec": "npm run build:css && lsof -ti:5000 | xargs kill -9 || true && python app.py &"
+}
