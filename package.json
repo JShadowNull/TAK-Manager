@@ -4,7 +4,9 @@
   "description": "This is a modular Flask-based application that monitors CPU, RAM usage, and running services. It provides a simple interface for viewing system metrics using a Flask backend and a PyWebview frontend. This guide will help you add new functionality and ensure everything is properly configured.",
   "main": "index.js",
   "scripts": {
-    "build:css": "npx tailwindcss -i ./frontend/static/css/tailwind.css -o ./frontend/static/css/styles.css"
+    "build:css": "npx tailwindcss -i ./frontend/static/css/tailwind.css -o ./frontend/static/css/styles.css",
+    "watch:css": "npx tailwindcss -i ./frontend/static/css/tailwind.css -o ./frontend/static/css/styles.css --watch",
+    "build": "npm run build:css"
   },
   "keywords": [],
   "author": "",
