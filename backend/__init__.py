@@ -1,21 +1,25 @@
 # backend/__init__.py
-
-from flask import Flask, render_template
+import os
+from flask import Flask, send_from_directory
 from backend.routes.socketio import socketio
 
 def create_app():
-    # Configure the app to use 'frontend/static' for static files
+    # Configure the app to use the dist directory for static files
     app = Flask(__name__,
-                template_folder="../frontend/templates",
-                static_folder="../frontend/static")
+                static_folder="../dist",
+                static_url_path='')
 
     # Initialize socketio with the app
     socketio.init_app(app, cors_allowed_origins="*")
 
-    # Serve the index page
-    @app.route('/')
-    def index():
-        return render_template('index.html')
+    # Serve the React frontend
+    @app.route('/', defaults={'path': ''})
+    @app.route('/<path:path>')
+    def serve(path):
+        if path != "" and os.path.exists(app.static_folder + '/' + path):
+            return send_from_directory(app.static_folder, path)
+        else:
+            return send_from_directory(app.static_folder, 'index.html')
 
     # Import and register blueprints after initializing socketio
     from backend.routes.dashboard_routes import dashboard_bp
@@ -24,11 +28,13 @@ def create_app():
     from backend.routes.data_package_route import data_package_bp
     from backend.routes.transfer_route import transfer_bp
 
-    app.register_blueprint(dashboard_bp)
-    app.register_blueprint(docker_bp)
-    app.register_blueprint(docker_manager_bp)
-    app.register_blueprint(takserver_bp)
-    app.register_blueprint(ota_update_bp)
-    app.register_blueprint(data_package_bp)
-    app.register_blueprint(transfer_bp)
+    # Register API routes with /api prefix
+    app.register_blueprint(dashboard_bp, url_prefix='/api')
+    app.register_blueprint(docker_bp, url_prefix='/api')
+    app.register_blueprint(docker_manager_bp, url_prefix='/api')
+    app.register_blueprint(takserver_bp, url_prefix='/api')
+    app.register_blueprint(ota_update_bp, url_prefix='/api')
+    app.register_blueprint(data_package_bp, url_prefix='/api')
+    app.register_blueprint(transfer_bp, url_prefix='/api')
+
     return app
