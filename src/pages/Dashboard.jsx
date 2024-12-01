@@ -248,35 +248,41 @@ function Dashboard() {
       {/* Monitoring Section */}
       <div className="flex flex-wrap gap-8">
         {/* CPU Usage Section */}
-        <div className="flex-1 bg-cardBg p-6 rounded-lg shadow-lg text-white max-w-lg border border-accentBoarder">
+        <div className="flex-1 bg-cardBg p-6 rounded-lg shadow-lg text-white max-w-md border border-accentBoarder min-w-[28rem]">
           <h2 className="text-base mb-4">CPU Usage</h2>
           <p id="cpu" className="mt-2 text-cpuChartColor text-center">Loading...</p>
           <canvas ref={cpuChartRef} className="mt-4 text-textSecondary"></canvas>
         </div>
 
         {/* RAM Usage Section */}
-        <div className="flex-1 bg-cardBg p-6 rounded-lg shadow-lg text-white max-w-lg border border-accentBoarder">
+        <div className="flex-1 bg-cardBg p-6 rounded-lg shadow-lg text-white max-w-md border border-accentBoarder min-w-[28rem]">
           <h2 className="text-base mb-4">RAM Usage</h2>
           <p id="ram" className="mt-2 text-ramChartColor text-center">Loading...</p>
           <canvas ref={ramChartRef} className="mt-4"></canvas>
         </div>
 
         {/* Running Services Section */}
-        <div className="flex-none bg-cardBg p-6 rounded-lg shadow-lg text-white w-96 border border-accentBoarder">
+        <div className="flex-1 bg-cardBg p-6 rounded-lg shadow-lg text-white max-w-md border border-accentBoarder min-w-[28rem]">
           <h2 className="text-base mb-4">Running Services</h2>
-          <CustomScrollbar className="h-64 rounded-lg border border-accentBoarder">
-            <ul id="services" className="list-none text-sm m-0 p-0">
-              <li className="p-4 hover:bg-buttonColor transition-colors duration-200 text-textSecondary border border-transparent hover:border-accentBoarder">
-                Loading...
-              </li>
-            </ul>
-          </CustomScrollbar>
+          <div className="h-64 overflow-hidden rounded-lg border border-accentBoarder">
+            <CustomScrollbar>
+              <div className="h-full">
+                <ul id="services" className="list-none text-sm m-0 p-0">
+                  <li className="p-4 hover:bg-buttonColor transition-colors duration-200 text-textSecondary border-b border-accentBoarder last:border-b-0">
+                    Loading...
+                  </li>
+                </ul>
+              </div>
+            </CustomScrollbar>
+          </div>
         </div>
 
         {/* IP Address Section */}
-        <div className="flex-1 bg-cardBg p-6 rounded-lg shadow-lg text-white max-w-lg border border-accentBoarder">
-          <h2 className="text-base mb-4">IP Address</h2>
-          <p id="ip-address" className="mt-2 text-center">Loading...</p>
+        <div className="flex-1 flex items-start max-w-md">
+          <div className="bg-cardBg px-6 py-4 rounded-lg shadow-lg text-white w-full border border-accentBoarder min-w-[28rem]">
+            <h2 className="text-base mb-2">IP Address</h2>
+            <p id="ip-address" className="text-center">Loading...</p>
+          </div>
         </div>
       </div>
     </div>

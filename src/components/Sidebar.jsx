@@ -5,8 +5,9 @@ import {
   AdjustmentsHorizontalIcon,
   MapPinIcon,
   WrenchScrewdriverIcon,
-  CircleStackIcon,
-  ArrowsRightLeftIcon
+  CircleStackIcon,  
+  ArrowsRightLeftIcon,
+  ServerIcon
 } from '@heroicons/react/24/outline';
 
 function Sidebar() {
@@ -26,9 +27,9 @@ function Sidebar() {
       iconColor: 'text-purple-500'
     },
     { 
-      path: '/qtm', 
-      icon: MapPinIcon, 
-      text: 'QTM',
+      path: '/takserver', 
+      icon: WrenchScrewdriverIcon, 
+      text: 'TAK Server Manager',
       iconColor: 'text-blue-500'
     },
     { 

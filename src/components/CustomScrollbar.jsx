@@ -1,59 +1,40 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { Scrollbars } from 'react-custom-scrollbars-2';
 
 function CustomScrollbar({ children, className = '' }) {
-  const [isScrolling, setIsScrolling] = useState(false);
-  const scrollTimeoutRef = useRef(null);
-  const containerRef = useRef(null);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const handleWheel = () => {
-      setIsScrolling(true);
-      
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-      }
-
-      scrollTimeoutRef.current = setTimeout(() => {
-        setIsScrolling(false);
-      }, 1000);
-    };
-
-    container.addEventListener('wheel', handleWheel);
-    container.addEventListener('touchmove', handleWheel);
-
-    return () => {
-      container.removeEventListener('wheel', handleWheel);
-      container.removeEventListener('touchmove', handleWheel);
-      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-    };
-  }, []);
-
   return (
-    <div 
-      ref={containerRef}
-      className={`
-        ${className}
-        scrollbar-custom
-        overflow-y-auto
-        h-full
-        [&::-webkit-scrollbar]:w-2
-        [&::-webkit-scrollbar-track]:bg-transparent
-        [&::-webkit-scrollbar-track]:rounded-lg
-        [&::-webkit-scrollbar-thumb]:bg-accentBoarder
-        [&::-webkit-scrollbar-thumb]:rounded-lg
-        [&::-webkit-scrollbar-thumb]:min-h-[40px]
-        [&::-webkit-scrollbar-thumb]:border-2
-        [&::-webkit-scrollbar-thumb]:border-transparent
-        [&::-webkit-scrollbar-thumb]:bg-clip-padding
-        [&::-webkit-scrollbar]:transition-opacity
-        [&::-webkit-scrollbar]:duration-300
-        ${isScrolling ? '[&::-webkit-scrollbar]:opacity-100' : '[&::-webkit-scrollbar]:opacity-0'}
-      `}
-    >
-      {children}
+    <div className={`h-full ${className}`}>
+      <Scrollbars
+        autoHide
+        autoHideTimeout={1000}
+        autoHideDuration={200}
+        style={{ width: '100%', height: '100%' }}
+        renderThumbVertical={({ style, ...props }) => (
+          <div
+            {...props}
+            style={{
+              ...style,
+              backgroundColor: 'rgba(17, 41, 67, 1.000)',
+              borderRadius: '8px',
+              width: '8px'
+            }}
+          />
+        )}
+        renderTrackVertical={({ style, ...props }) => (
+          <div
+            {...props}
+            style={{
+              ...style,
+              right: '2px',
+              bottom: '2px',
+              top: '2px',
+              borderRadius: '8px',
+              width: '8px'
+            }}
+          />
+        )}
+      >
+        {children}
+      </Scrollbars>
     </div>
   );
 }

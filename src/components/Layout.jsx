@@ -8,13 +8,17 @@ function Layout() {
   return (
     <div className="flex h-screen bg-primaryBg">
       <Sidebar />
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
+      <div className="flex-1 flex flex-col h-full">
         <TitleBar />
-        <div className="flex-1 relative">
-          <CustomScrollbar className="absolute inset-0 p-10 text-lg">
-            <Outlet />
-          </CustomScrollbar>
-        </div>
+        <main className="flex-1 overflow-hidden">
+          <div className="h-full relative">
+            <CustomScrollbar>
+              <div className="p-8">
+                <Outlet />
+              </div>
+            </CustomScrollbar>
+          </div>
+        </main>
       </div>
     </div>
   );

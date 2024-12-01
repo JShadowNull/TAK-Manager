@@ -386,7 +386,7 @@ function DataPackage() {
             </button>
           </div>
         </div>
-        <CustomScrollbar className="max-h-[400px]">
+        <CustomScrollbar className="h-[400px]">
           <div className="space-y-4 cot-streams-container">
             <CotStreams
               preferences={preferences}
@@ -432,7 +432,7 @@ function DataPackage() {
             </button>
           </div>
         </div>
-        <CustomScrollbar className="max-h-[400px]">
+        <CustomScrollbar className="h-[400px]">
           <div className="space-y-4 app-prefs-container">
             <ApplicationPreferences
               preferences={preferences}

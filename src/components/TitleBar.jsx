@@ -10,8 +10,8 @@ function TitleBar() {
         return 'Dashboard';
       case '/services':
         return 'Services';
-      case '/qtm':
-        return 'QTM';
+      case '/takserver':
+        return 'TAK Server Manager';
       case '/installers':
         return 'Installers/Setup';
       case '/data-package':
@@ -24,7 +24,7 @@ function TitleBar() {
   };
 
   return (
-    <div className="bg-cardBg p-4 shadow-lg mb-6 border-b border-accentBoarder w-full fixed top-0 left-64 right-0 z-10">
+    <div className="bg-cardBg p-4 shadow-lg border-b border-accentBoarder w-full fixed top-0 left-64 right-0 z-10">
       <h1 className="text-lg font-bold text-textPrimary pl-6">{getTitle()}</h1>
     </div>
   );
