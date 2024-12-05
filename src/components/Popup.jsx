@@ -18,20 +18,20 @@ function Popup({
       id={id} 
       className="fixed inset-0 flex items-center justify-center z-50"
     >
-      {/* Background Overlay with Blur Effect */}
+      {/* Background Overlay */}
       <div 
-        className="fixed inset-0 bg-black bg-opacity-50 backdrop-filter backdrop-blur-sm"
+        className="fixed inset-0 bg-black bg-opacity-50"
         onClick={onClose}
       />
       
       {/* Popup Content */}
-      <div className="bg-cardBg border-1 border-accentBoarder p-6 rounded-lg shadow-lg max-w-lg w-full text-white relative z-10 flex flex-col items-center">
+      <div className="bg-cardBg border border-accentBoarder p-6 rounded-lg shadow-lg w-full max-w-2xl relative z-10">
         {/* Popup Title */}
-        <h3 className="text-lg mb-4 text-center">{title}</h3>
+        <h3 className="text-base font-bold mb-4 text-textPrimary">{title}</h3>
 
         {/* Popup Content Area */}
-        <div className="popup-content text-sm overflow-y-auto max-w-full p-2 max-h-96 flex-grow flex justify-center items-start">
-          <div className="w-full max-w-lg">
+        <div className="popup-content text-sm overflow-y-auto max-w-full p-2 max-h-96">
+          <div className="w-full">
             {children}
           </div>
         </div>
@@ -40,19 +40,22 @@ function Popup({
         {showTerminal && (
           <div 
             ref={terminalRef}
-            className="list-none space-y-2 overflow-y-auto text-textSecondary text-sm border border-accentBoarder h-64 p-2 rounded-lg mt-4 w-full"
+            className="mt-4 bg-primaryBg border border-accentBoarder rounded-lg p-4 h-64 overflow-y-auto text-sm font-mono"
           >
             {terminalOutput.map((line, index) => (
-              <div key={index} className="select-text">{line}</div>
+              <div 
+                key={index} 
+                className="text-textPrimary select-text whitespace-pre-wrap"
+              >
+                {line}
+              </div>
             ))}
           </div>
         )}
 
         {/* Buttons Area */}
-        <div className="flex justify-center mt-4 space-x-2 w-full">
-          <div className="flex justify-center space-x-2 w-full">
-            {buttons}
-          </div>
+        <div className="flex justify-end mt-6 gap-4">
+          {buttons}
         </div>
       </div>
     </div>

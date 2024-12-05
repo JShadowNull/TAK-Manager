@@ -89,14 +89,28 @@ class TakServerInstaller:
         self.run_command.emit_log_output("Docker started successfully.", 'takserver-installer')
 
     def create_working_directory(self):
-        """Create the working directory if it does not exist."""
+        """Create the working directory, removing it first if it exists."""
         self.check_stop()
-        if not os.path.exists(self.working_dir):
+        
+        # If directory exists, remove it
+        if os.path.exists(self.working_dir):
+            try:
+                self.run_command.emit_log_output(f"Removing existing directory: {self.working_dir}", 'takserver-installer')
+                shutil.rmtree(self.working_dir)
+                self.run_command.emit_log_output(f"Successfully removed existing directory", 'takserver-installer')
+            except Exception as e:
+                error_message = f"Failed to remove existing directory: {str(e)}"
+                self.run_command.emit_log_output(error_message, 'takserver-installer')
+                socketio.emit('installation_failed', {'error': error_message}, namespace='/takserver-installer')
+                raise SystemExit(error_message)
+
+        try:
             os.makedirs(self.working_dir)
             self.run_command.emit_log_output(f"Created directory: {self.working_dir}", 'takserver-installer')
             self.completed_steps.append('create_working_directory')
-        else:
-            error_message = f"Directory already exists: {self.working_dir}."
+        except Exception as e:
+            error_message = f"Failed to create directory: {str(e)}"
+            self.run_command.emit_log_output(error_message, 'takserver-installer')
             socketio.emit('installation_failed', {'error': error_message}, namespace='/takserver-installer')
             raise SystemExit(error_message)
 
@@ -276,7 +290,7 @@ services:
     tty: true
     volumes:
       - ./tak:/opt/tak:z
-      - db-data:/var/lib/postgresql/data:z 
+      - db-data:/var/lib/postgresql/data
 
   takserver:
     build:
@@ -307,7 +321,7 @@ networks:
         - subnet: 172.16.16.0/24
 
 volumes:
-  db-data:  # Declaring the named volume for takserver-db
+  db-data:  # Named volume for database persistence
 """
 
         with open(docker_compose_path, "w") as file:

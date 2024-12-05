@@ -304,3 +304,93 @@ class TransferNamespace(Namespace):
 
 # Register the transfer namespace
 socketio.on_namespace(TransferNamespace('/transfer'))
+
+from backend.services.scripts.takserver.check_status import TakServerStatus
+# TAKServer Status Monitoring Socket
+class TakServerStatusNamespace(Namespace):
+    def __init__(self, namespace=None):
+        super().__init__(namespace)
+        self.tak_status = TakServerStatus()
+        self.monitor_thread = None
+        self.operation_in_progress = False  # Add lock flag
+
+    def on_connect(self):
+        print('Client connected to /takserver-status namespace')
+        if not self.monitor_thread:
+            self.monitor_thread = socketio.start_background_task(self.monitor_takserver_status)
+            thread_manager.add_thread(self.monitor_thread)
+        # Send immediate status update when client connects
+        self.on_check_status()
+
+    def on_disconnect(self):
+        print('Client disconnected from /takserver-status namespace')
+
+    def monitor_takserver_status(self):
+        last_status = None
+        while True:
+            try:
+                # Skip status check if operation is in progress
+                if not self.operation_in_progress:
+                    current_status = self.tak_status.get_status()
+                    if current_status != last_status:
+                        self.emit_status_update(current_status)
+                        last_status = current_status
+            except Exception as e:
+                if not self.operation_in_progress:  # Only emit error if no operation is in progress
+                    error_status = {
+                        'error': str(e),
+                        'installed': False,
+                        'running': False,
+                        'docker_running': False,
+                        'version': None
+                    }
+                    self.emit_status_update(error_status)
+            
+            eventlet.sleep(2)
+
+    def emit_status_update(self, status):
+        """Emit status updates to both relevant namespaces"""
+        # Emit to status namespace for status-specific components
+        socketio.emit('takserver_status', {
+            'isInstalled': status['installed'],
+            'isRunning': status['running'],
+            'dockerRunning': status['docker_running'],
+            'version': status.get('version'),
+            'error': status.get('error'),
+            'isStarting': status.get('is_starting', False),
+            'isStopping': status.get('is_stopping', False),
+            'isRestarting': status.get('is_restarting', False)
+        }, namespace='/takserver-status')
+
+    def on_check_status(self):
+        """Handle manual status check requests"""
+        try:
+            if not self.operation_in_progress:  # Only check if no operation is in progress
+                status = self.tak_status.get_status()
+                self.emit_status_update(status)
+        except Exception as e:
+            error_status = {
+                'error': str(e),
+                'installed': False,
+                'running': False,
+                'docker_running': False,
+                'version': None
+            }
+            self.emit_status_update(error_status)
+
+    def start_operation(self):
+        """Set the operation lock"""
+        self.operation_in_progress = True
+
+    def end_operation(self):
+        """Release the operation lock and update status"""
+        self.operation_in_progress = False
+        # Force a status update after operation completes
+        try:
+            current_status = self.tak_status.get_status()
+            self.emit_status_update(current_status)
+        except Exception as e:
+            print(f"Error updating status after operation: {e}")
+
+# Register the TAK server status namespace
+socketio.on_namespace(TakServerStatusNamespace('/takserver-status'))

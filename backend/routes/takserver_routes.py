@@ -1,9 +1,12 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
+from werkzeug.utils import secure_filename
 from backend.services.scripts.takserver.takserver_installer import TakServerInstaller
+from backend.services.scripts.takserver.check_status import TakServerStatus
 import threading
 import os
 import uuid
 from backend.services.scripts.system.thread_manager import ThreadManager
+from backend.routes.socketio import socketio
 
 # Create blueprint for TAKServer routes
 takserver_bp = Blueprint('takserver', __name__)
@@ -14,58 +17,83 @@ thread_manager = ThreadManager()
 # Dictionary to keep track of running installations
 installations = {}
 
+# Add at the top with other imports
+tak_status_checker = TakServerStatus()
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'zip'
+
 @takserver_bp.route('/install-takserver', methods=['POST'])
 def install_takserver():
     try:
-        # Get the uploaded file and password from the request
-        data = request.form
-        docker_zip_file = request.files.get('docker_zip_file')
-        postgres_password = data.get('postgres_password')
-        certificate_password = data.get('certificate_password')
-        organization = data.get('organization')
-        state = data.get('state')
-        city = data.get('city')
-        organizational_unit = data.get('organizational_unit')
-        name = data.get('name')
+        # Validate file exists in request
+        if 'docker_zip_file' not in request.files:
+            return jsonify({"error": "No file provided"}), 400
+            
+        file = request.files['docker_zip_file']
         
-        if not docker_zip_file or not postgres_password:
-            return jsonify({"error": "Docker zip file and PostgreSQL password are required."}), 400
+        # Validate filename
+        if file.filename == '':
+            return jsonify({"error": "No file selected"}), 400
+            
+        if not allowed_file(file.filename):
+            return jsonify({"error": "Invalid file type. Please upload a ZIP file"}), 400
 
-        # Save the uploaded Docker zip file to a temporary location
+        # Get form data
+        required_fields = [
+            'postgres_password',
+            'certificate_password',
+            'organization',
+            'state',
+            'city',
+            'organizational_unit',
+            'name'
+        ]
+        
+        # Validate all required fields are present
+        for field in required_fields:
+            if field not in request.form:
+                return jsonify({"error": f"Missing required field: {field}"}), 400
+
+        # Create temp directory if it doesn't exist
         temp_dir = '/tmp' if os.name != 'nt' else os.environ.get('TEMP', 'C:\\Temp')
-        docker_zip_path = os.path.join(temp_dir, docker_zip_file.filename)
-        docker_zip_file.save(docker_zip_path)
+        os.makedirs(temp_dir, exist_ok=True)
 
-        # Generate a unique installation ID
+        # Save file with secure filename
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(temp_dir, filename)
+        file.save(file_path)
+
+        # Generate installation ID
         installation_id = str(uuid.uuid4())
 
-        # Initialize the TakServerInstaller
-        takserver_installer = TakServerInstaller(
-            docker_zip_path, 
-            postgres_password, 
-            certificate_password, 
-            organization, 
-            state, 
-            city, 
-            organizational_unit, 
-            name
+        # Initialize installer with all parameters
+        installer = TakServerInstaller(
+            docker_zip_path=file_path,
+            postgres_password=request.form['postgres_password'],
+            certificate_password=request.form['certificate_password'],
+            organization=request.form['organization'],
+            state=request.form['state'],
+            city=request.form['city'],
+            organizational_unit=request.form['organizational_unit'],
+            name=request.form['name']
         )
 
-        # Store the installer in the installations dictionary
-        installations[installation_id] = takserver_installer
+        # Store installer instance
+        installations[installation_id] = installer
 
-        # Start the installation process in a separate thread
-        thread = threading.Thread(target=takserver_installer.main)
+        # Start installation in thread
+        thread = threading.Thread(target=installer.main)
         thread.start()
         thread_manager.add_thread(thread)
 
         return jsonify({
-            'message': 'TAKServer installation started!', 
+            'message': 'TAK Server installation started',
             'installation_id': installation_id
         })
 
     except Exception as e:
-        return jsonify({"error": f"Error during TAKServer installation: {e}"}), 500
+        return jsonify({"error": str(e)}), 500
 
 @takserver_bp.route('/rollback-takserver', methods=['POST'])
 def rollback_takserver():
@@ -91,27 +119,60 @@ def rollback_takserver():
 @takserver_bp.route('/takserver-start', methods=['POST'])
 def start_takserver():
     try:
-        # Add your takserver start logic here
-        return jsonify({'message': 'TAKServer started successfully'})
+        # Get the status namespace instance
+        status_namespace = socketio.server.namespace_handlers.get('/takserver-status')
+        if status_namespace:
+            status_namespace.start_operation()  # Set the lock
+            
+        if tak_status_checker.start_containers():
+            if status_namespace:
+                status_namespace.end_operation()  # Release lock and update status
+            return jsonify({'message': 'TAKServer started successfully'})
+        else:
+            if status_namespace:
+                status_namespace.end_operation()
+            return jsonify({"error": "Failed to start TAKServer"}), 500
     except Exception as e:
+        if status_namespace:
+            status_namespace.end_operation()
         return jsonify({"error": f"Error starting TAKServer: {e}"}), 500
 
 @takserver_bp.route('/takserver-stop', methods=['POST'])
 def stop_takserver():
     try:
-        # Add your takserver stop logic here
-        return jsonify({'message': 'TAKServer stopped successfully'})
+        status_namespace = socketio.server.namespace_handlers.get('/takserver-status')
+        if status_namespace:
+            status_namespace.start_operation()
+            
+        if tak_status_checker.stop_containers():
+            if status_namespace:
+                status_namespace.end_operation()
+            return jsonify({'message': 'TAKServer stopped successfully'})
+        else:
+            if status_namespace:
+                status_namespace.end_operation()
+            return jsonify({"error": "Failed to stop TAKServer"}), 500
     except Exception as e:
+        if status_namespace:
+            status_namespace.end_operation()
         return jsonify({"error": f"Error stopping TAKServer: {e}"}), 500
 
-@takserver_bp.route('/takserver-status', methods=['GET'])
-def get_status():
+@takserver_bp.route('/takserver-restart', methods=['POST'])
+def restart_takserver():
     try:
-        # Add your status check logic here
-        status = {
-            'installed': True,  # Replace with actual check
-            'running': True,    # Replace with actual check
-        }
-        return jsonify(status)
+        status_namespace = socketio.server.namespace_handlers.get('/takserver-status')
+        if status_namespace:
+            status_namespace.start_operation()
+            
+        if tak_status_checker.restart_containers():
+            if status_namespace:
+                status_namespace.end_operation()
+            return jsonify({'message': 'TAKServer restarted successfully'})
+        else:
+            if status_namespace:
+                status_namespace.end_operation()
+            return jsonify({"error": "Failed to restart TAKServer"}), 500
     except Exception as e:
-        return jsonify({"error": f"Error checking TAKServer status: {e}"}), 500 
+        if status_namespace:
+            status_namespace.end_operation()
+        return jsonify({"error": f"Error restarting TAKServer: {e}"}), 500
