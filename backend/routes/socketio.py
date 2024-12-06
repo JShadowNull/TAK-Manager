@@ -394,3 +394,62 @@ class TakServerStatusNamespace(Namespace):
 
 # Register the TAK server status namespace
 socketio.on_namespace(TakServerStatusNamespace('/takserver-status'))
+
+# Docker Status Namespace
+from backend.services.scripts.docker.docker_checker import DockerChecker
+
+class DockerStatusNamespace(Namespace):
+    def __init__(self, namespace=None):
+        super().__init__(namespace)
+        self.docker_checker = DockerChecker()
+        self.monitor_thread = None
+
+    def on_connect(self):
+        print('Client connected to /docker-status namespace')
+        if not self.monitor_thread:
+            self.monitor_thread = socketio.start_background_task(self.monitor_docker_status)
+            thread_manager.add_thread(self.monitor_thread)
+        # Send immediate status update when client connects
+        self.emit_status_update()
+
+    def on_disconnect(self):
+        print('Client disconnected from /docker-status namespace')
+
+    def monitor_docker_status(self):
+        last_status = None
+        while True:
+            try:
+                current_status = self.docker_checker.get_status()
+                if current_status != last_status:
+                    self.emit_status_update(current_status)
+                    last_status = current_status
+            except Exception as e:
+                error_status = {
+                    'isInstalled': False,
+                    'isRunning': False,
+                    'error': f"Error checking Docker status: {str(e)}"
+                }
+                self.emit_status_update(error_status)
+            eventlet.sleep(2)
+
+    def emit_status_update(self, status=None):
+        """Emit Docker status updates"""
+        if status is None:
+            status = self.docker_checker.get_status()
+        socketio.emit('docker_status', status, namespace='/docker-status')
+
+    def on_check_status(self):
+        """Handle manual status check requests"""
+        try:
+            status = self.docker_checker.get_status()
+            self.emit_status_update(status)
+        except Exception as e:
+            error_status = {
+                'isInstalled': False,
+                'isRunning': False,
+                'error': f"Error checking Docker status: {str(e)}"
+            }
+            self.emit_status_update(error_status)
+
+# Register the Docker status namespace
+socketio.on_namespace(DockerStatusNamespace('/docker-status'))

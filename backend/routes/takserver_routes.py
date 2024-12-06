@@ -11,14 +11,12 @@ from backend.routes.socketio import socketio
 # Create blueprint for TAKServer routes
 takserver_bp = Blueprint('takserver', __name__)
 
-# Initialize ThreadManager
+# Initialize managers and checkers
 thread_manager = ThreadManager()
+tak_status_checker = TakServerStatus()
 
 # Dictionary to keep track of running installations
 installations = {}
-
-# Add at the top with other imports
-tak_status_checker = TakServerStatus()
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'zip'

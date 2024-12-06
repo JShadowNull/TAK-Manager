@@ -34,128 +34,184 @@ function TakServerStatus({ handleStartStop }) {
   const [isStarting, setIsStarting] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
+  const [dockerError, setDockerError] = useState(null);
+  const [dockerStatus, setDockerStatus] = useState({
+    isInstalled: false,
+    isRunning: false,
+    error: null
+  });
+  const [isStartingDocker, setIsStartingDocker] = useState(false);
+  const dockerManagerSocketRef = useRef(null);
 
-  // Add socket connection for installation progress
+  const handleStartDocker = () => {
+    setIsStartingDocker(true);
+    if (dockerManagerSocketRef.current) {
+      dockerManagerSocketRef.current.emit('start_docker');
+    }
+  };
+
   useEffect(() => {
-    // Socket for installation progress
-    const installerSocket = io('/takserver-installer', {
+    // Initialize Docker status socket
+    const dockerStatusSocket = io('/docker-status', {
       transports: ['websocket'],
       path: '/socket.io'
     });
 
-    // Socket for status updates
-    const statusSocket = io('/takserver-status', {
+    // Initialize Docker manager socket for start functionality only
+    dockerManagerSocketRef.current = io('/docker-manager', {
       transports: ['websocket'],
       path: '/socket.io'
     });
 
-    // Installation socket events
-    installerSocket.on('connect', () => {
-      setTerminalOutput(prev => [...prev, '✓ Connected to installation service']);
+    // Docker status socket events
+    dockerStatusSocket.on('connect', () => {
+      console.log('Connected to Docker status service');
     });
 
-    installerSocket.on('connect_error', (error) => {
-      setTerminalOutput(prev => [...prev, `× Connection error: ${error.message}`]);
+    dockerStatusSocket.on('connect_error', (error) => {
+      console.error('Docker status connection error:', error);
+      setDockerStatus(prev => ({
+        ...prev,
+        error: 'Failed to connect to Docker status service'
+      }));
     });
 
-    installerSocket.on('terminal_output', (data) => {
-      const logMessage = data.data;
-      if (logMessage) {
-        setTerminalOutput(prev => [...prev, logMessage]);
-        if (terminalRef.current) {
-          terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    dockerStatusSocket.on('docker_status', (status) => {
+      setDockerStatus(status);
+      if (status.isInstalled && status.isRunning) {
+        connectTakServerSockets();
+      }
+    });
+
+    const connectTakServerSockets = () => {
+      // Move existing socket connection code here
+      const installerSocket = io('/takserver-installer', {
+        transports: ['websocket'],
+        path: '/socket.io'
+      });
+
+      const statusSocket = io('/takserver-status', {
+        transports: ['websocket'],
+        path: '/socket.io'
+      });
+
+      // Installation socket events
+      installerSocket.on('connect', () => {
+        setTerminalOutput(prev => [...prev, '✓ Connected to installation service']);
+      });
+
+      installerSocket.on('connect_error', (error) => {
+        setTerminalOutput(prev => [...prev, `× Connection error: ${error.message}`]);
+      });
+
+      installerSocket.on('terminal_output', (data) => {
+        const logMessage = data.data;
+        if (logMessage) {
+          setTerminalOutput(prev => [...prev, logMessage]);
+          if (terminalRef.current) {
+            terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+          }
         }
-      }
-    });
+      });
 
-    // Status socket events
-    statusSocket.on('takserver_status', (status) => {
-      setIsInstalled(status.isInstalled);
-      setIsRunning(status.isRunning);
-      
-      // Reset loading states when status updates
-      if (!status.error) {
-        setIsStarting(false);
-        setIsStopping(false);
-        setIsRestarting(false);
-      }
-      
-      if (status.error) {
-        setOperationError(status.error);
-        setTerminalOutput(prev => [...prev, `Error: ${status.error}`]);
-        // Reset loading states on error
-        setIsStarting(false);
-        setIsStopping(false);
-        setIsRestarting(false);
-      }
-    });
+      // Status socket events
+      statusSocket.on('takserver_status', (status) => {
+        setIsInstalled(status.isInstalled);
+        setIsRunning(status.isRunning);
+        
+        // Reset loading states when status updates
+        if (!status.error) {
+          setIsStarting(false);
+          setIsStopping(false);
+          setIsRestarting(false);
+        }
+        
+        if (status.error) {
+          setOperationError(status.error);
+          setTerminalOutput(prev => [...prev, `Error: ${status.error}`]);
+          // Reset loading states on error
+          setIsStarting(false);
+          setIsStopping(false);
+          setIsRestarting(false);
+        }
+      });
 
-    // Add status socket event handler for terminal output
-    statusSocket.on('terminal_output', (data) => {
-      const message = data.data;
-      
-      // Update loading states based on message content
-      if (message.includes('Starting TAK Server containers...')) {
-        setIsStarting(true);
-        setIsStopping(false);
-        setIsRestarting(false);
-      } 
-      else if (message.includes('Stopping TAK Server containers...')) {
-        setIsStarting(false);
-        setIsStopping(true);
-        setIsRestarting(false);
-      }
-      else if (message.includes('Restarting TAK Server containers...')) {
-        setIsStarting(false);
-        setIsStopping(false);
-        setIsRestarting(true);
-      }
-      // Reset states on completion or error
-      else if (message.includes('successfully') || message.includes('Error')) {
-        setIsStarting(false);
-        setIsStopping(false);
-        setIsRestarting(false);
-      }
+      // Add status socket event handler for terminal output
+      statusSocket.on('terminal_output', (data) => {
+        const message = data.data;
+        
+        // Update loading states based on message content
+        if (message.includes('Starting TAK Server containers...')) {
+          setIsStarting(true);
+          setIsStopping(false);
+          setIsRestarting(false);
+        } 
+        else if (message.includes('Stopping TAK Server containers...')) {
+          setIsStarting(false);
+          setIsStopping(true);
+          setIsRestarting(false);
+        }
+        else if (message.includes('Restarting TAK Server containers...')) {
+          setIsStarting(false);
+          setIsStopping(false);
+          setIsRestarting(true);
+        }
+        // Reset states on completion or error
+        else if (message.includes('successfully') || message.includes('Error')) {
+          setIsStarting(false);
+          setIsStopping(false);
+          setIsRestarting(false);
+        }
 
-      // Add message to terminal output
-      setTerminalOutput(prev => [...prev, message]);
-    });
+        // Add message to terminal output
+        setTerminalOutput(prev => [...prev, message]);
+      });
 
-    // Installation events
-    installerSocket.on('installation_started', () => {
-      setIsInstalling(true);
-      setIsStoppingInstallation(false);
-      setShowInstallProgress(true);
-    });
+      // Installation events
+      installerSocket.on('installation_started', () => {
+        setIsInstalling(true);
+        setIsStoppingInstallation(false);
+        setShowInstallProgress(true);
+      });
 
-    installerSocket.on('installation_complete', () => {
-      setIsInstalling(false);
-      setIsStoppingInstallation(false);
-      setInstallationSuccessful(true);
-    });
+      installerSocket.on('installation_complete', () => {
+        setIsInstalling(false);
+        setIsStoppingInstallation(false);
+        setInstallationSuccessful(true);
+      });
 
-    installerSocket.on('installation_failed', (data) => {
-      setIsInstalling(false);
-      setIsStoppingInstallation(false);
-      setIsRollingBack(false);
-    });
+      installerSocket.on('installation_failed', (data) => {
+        setIsInstalling(false);
+        setIsStoppingInstallation(false);
+        setIsRollingBack(false);
+      });
 
-    installerSocket.on('rollback_started', () => {
-      setIsRollingBack(true);
-    });
+      installerSocket.on('rollback_started', () => {
+        setIsRollingBack(true);
+      });
 
-    installerSocket.on('rollback_complete', () => {
-      setIsInstalling(false);
-      setIsStoppingInstallation(false);
-      setIsRollingBack(false);
-    });
+      installerSocket.on('rollback_complete', () => {
+        setIsInstalling(false);
+        setIsStoppingInstallation(false);
+        setIsRollingBack(false);
+      });
 
-    // Request initial status on component mount
-    statusSocket.emit('check_status');
+      // Request initial status on component mount
+      statusSocket.emit('check_status');
 
+      return () => {
+        installerSocket.disconnect();
+        statusSocket.disconnect();
+      };
+    };
+
+    // Cleanup on unmount
     return () => {
-      installerSocket.disconnect();
-      statusSocket.disconnect();
+      dockerStatusSocket.disconnect();
+      if (dockerManagerSocketRef.current) {
+        dockerManagerSocketRef.current.disconnect();
+        dockerManagerSocketRef.current = null;
+      }
     };
   }, []);
 
@@ -333,7 +389,9 @@ function TakServerStatus({ handleStartStop }) {
                           <CircularProgress 
                             size={16} 
                             sx={{ 
-                              color: isStarting || isRestarting ? 'rgb(34, 197, 94)' : 'rgb(239, 68, 68)',
+                              color: isStarting ? 'rgb(34, 197, 94)' : 
+                                    isRestarting ? 'rgb(234, 179, 8)' :  // yellow-500
+                                    'rgb(239, 68, 68)',
                             }} 
                           />
                         </Box>
@@ -373,32 +431,28 @@ function TakServerStatus({ handleStartStop }) {
           <div className="flex justify-start gap-4">
             {isInstalled ? (
               <>
+                {isRunning && (
+                  <button
+                    className={`text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder 
+                      bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-yellow-500 
+                      transition-all duration-200
+                      ${(isStarting || isStopping || isRestarting) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    onClick={handleRestartClick}
+                    disabled={isStarting || isStopping || isRestarting}
+                  >
+                    {isRestarting ? 'Restarting...' : 'Restart'}
+                  </button>
+                )}
                 <button
                   className={`text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder 
-                    bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 
-                    transition-all duration-200
-                    ${(isStarting || isStopping || isRestarting) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  onClick={handleRestartClick}
-                  disabled={isStarting || isStopping || isRestarting}
-                >
-                  {isRestarting ? (
-                    <span className="text-buttonTextColor">Restarting...</span>
-                  ) : (
-                    'Restart'
-                  )}
-                </button>
-                <button
-                  className={`text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder 
-                    bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 
+                    bg-buttonColor hover:text-black hover:shadow-md hover:border-black ${isRunning ? 'hover:bg-red-500' : 'hover:bg-green-500'} 
                     transition-all duration-200
                     ${(isStarting || isStopping || isRestarting) ? 'opacity-50 cursor-not-allowed' : ''}`}
                   onClick={handleStartStopClick}
                   disabled={isStarting || isStopping || isRestarting}
                 >
                   {isStarting || isStopping ? (
-                    <span className="text-buttonTextColor">
-                      {isStarting ? 'Starting...' : 'Stopping...'}
-                    </span>
+                    isStarting ? 'Starting...' : 'Stopping...'
                   ) : (
                     isRunning ? 'Stop' : 'Start'
                   )}
@@ -408,6 +462,7 @@ function TakServerStatus({ handleStartStop }) {
               <button
                 className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
                 onClick={() => setShowInstallForm(true)}
+                disabled={!dockerStatus.isRunning}
               >
                 Install TAK Server
               </button>
@@ -416,7 +471,74 @@ function TakServerStatus({ handleStartStop }) {
         </div>
       </div>
 
-      {/* Installation Form - only show if not installed */}
+      {/* Docker Error Popup with blur effect */}
+      {(!dockerStatus.isInstalled || !dockerStatus.isRunning) && (
+        <div className="fixed inset-y-0 right-0 left-64 flex items-center justify-center z-50">
+          {/* Background Overlay with Blur Effect */}
+          <div className="fixed inset-y-0 right-0 left-64 bg-black bg-opacity-50 backdrop-filter backdrop-blur-sm"></div>
+          
+          {/* Popup Content */}
+          <div className="bg-cardBg border-1 border-accentBoarder p-6 rounded-lg shadow-lg max-w-lg w-full text-white relative z-10 flex flex-col items-center mx-4">
+            <h3 className="text-lg mb-4">Docker Not Available</h3>
+            <div className="text-center mb-6">
+              <p className="text-red-500 font-semibold mb-4">
+                {!dockerStatus.isInstalled ? (
+                  'Docker is not installed'
+                ) : (
+                  'Docker is not running'
+                )}
+              </p>
+              <p className="text-sm text-gray-300 mb-6">
+                {!dockerStatus.isInstalled ? (
+                  <>
+                    Docker Desktop must be installed to use TAK Server Manager.
+                    Please install Docker Desktop and restart the application.
+                  </>
+                ) : (
+                  <>
+                    Docker Desktop is installed but not running.
+                    Click the button below to start Docker Desktop.
+                  </>
+                )}
+              </p>
+              <div className="flex justify-center space-x-4">
+                {!dockerStatus.isInstalled ? (
+                  <a 
+                    href="https://www.docker.com/products/docker-desktop/" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-blue-500 transition-all duration-200"
+                  >
+                    Download Docker Desktop
+                  </a>
+                ) : (
+                  <button
+                    onClick={handleStartDocker}
+                    disabled={isStartingDocker}
+                    className={`
+                      text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder 
+                      bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 
+                      transition-all duration-200 flex items-center gap-2
+                      ${isStartingDocker ? 'opacity-50 cursor-not-allowed' : ''}
+                    `}
+                  >
+                    {isStartingDocker ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-buttonTextColor border-t-transparent"/>
+                        Starting Docker...
+                      </>
+                    ) : (
+                      'Start Docker'
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Installation Form Popup */}
       {!isInstalled && showInstallForm && (
         <div className="w-full border border-accentBoarder bg-cardBg p-6 rounded-lg">
           <h3 className="text-base font-bold mb-4">Installation Configuration</h3>
