@@ -42,6 +42,7 @@ function TakServerStatus({ handleStartStop }) {
   });
   const [isStartingDocker, setIsStartingDocker] = useState(false);
   const dockerManagerSocketRef = useRef(null);
+  const [showUninstallConfirm, setShowUninstallConfirm] = useState(false);
 
   const handleStartDocker = () => {
     setIsStartingDocker(true);
@@ -431,6 +432,13 @@ function TakServerStatus({ handleStartStop }) {
           <div className="flex justify-start gap-4">
             {isInstalled ? (
               <>
+                <button
+                  className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-red-500 transition-all duration-200"
+                  onClick={() => setShowUninstallConfirm(true)}
+                  disabled={isStarting || isStopping || isRestarting}
+                >
+                  Uninstall
+                </button>
                 {isRunning && (
                   <button
                     className={`text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder 
@@ -462,7 +470,6 @@ function TakServerStatus({ handleStartStop }) {
               <button
                 className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
                 onClick={() => setShowInstallForm(true)}
-                disabled={!dockerStatus.isRunning}
               >
                 Install TAK Server
               </button>
@@ -471,72 +478,75 @@ function TakServerStatus({ handleStartStop }) {
         </div>
       </div>
 
-      {/* Docker Error Popup with blur effect */}
-      {(!dockerStatus.isInstalled || !dockerStatus.isRunning) && (
-        <div className="fixed inset-y-0 right-0 left-64 flex items-center justify-center z-50">
-          {/* Background Overlay with Blur Effect */}
-          <div className="fixed inset-y-0 right-0 left-64 bg-black bg-opacity-50 backdrop-filter backdrop-blur-sm"></div>
-          
-          {/* Popup Content */}
-          <div className="bg-cardBg border-1 border-accentBoarder p-6 rounded-lg shadow-lg max-w-lg w-full text-white relative z-10 flex flex-col items-center mx-4">
-            <h3 className="text-lg mb-4">Docker Not Available</h3>
-            <div className="text-center mb-6">
-              <p className="text-red-500 font-semibold mb-4">
-                {!dockerStatus.isInstalled ? (
-                  'Docker is not installed'
-                ) : (
-                  'Docker is not running'
-                )}
-              </p>
-              <p className="text-sm text-gray-300 mb-6">
-                {!dockerStatus.isInstalled ? (
-                  <>
-                    Docker Desktop must be installed to use TAK Server Manager.
-                    Please install Docker Desktop and restart the application.
-                  </>
-                ) : (
-                  <>
-                    Docker Desktop is installed but not running.
-                    Click the button below to start Docker Desktop.
-                  </>
-                )}
-              </p>
-              <div className="flex justify-center space-x-4">
-                {!dockerStatus.isInstalled ? (
-                  <a 
-                    href="https://www.docker.com/products/docker-desktop/" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-blue-500 transition-all duration-200"
-                  >
-                    Download Docker Desktop
-                  </a>
-                ) : (
-                  <button
-                    onClick={handleStartDocker}
-                    disabled={isStartingDocker}
-                    className={`
-                      text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder 
-                      bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 
-                      transition-all duration-200 flex items-center gap-2
-                      ${isStartingDocker ? 'opacity-50 cursor-not-allowed' : ''}
-                    `}
-                  >
-                    {isStartingDocker ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-buttonTextColor border-t-transparent"/>
-                        Starting Docker...
-                      </>
-                    ) : (
-                      'Start Docker'
-                    )}
-                  </button>
-                )}
-              </div>
-            </div>
+      {/* Docker Error Popup */}
+      <Popup
+        id="docker-error-popup"
+        title="Docker Not Available"
+        isVisible={!dockerStatus.isInstalled || !dockerStatus.isRunning}
+        onClose={() => {}}
+        blurSidebar={false}
+        buttons={
+          <div className="flex justify-end gap-4">
+            <button
+              onClick={() => {
+                // Uninstall logic will be added later
+                setShowUninstallConfirm(false);
+              }}
+              className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-red-500 transition-all duration-200"
+            >
+              Uninstall
+            </button>
           </div>
+        }
+      >
+        <div className="text-center">
+          <p className="text-red-500 font-semibold mb-1">
+            Warning: This action cannot be undone
+          </p>
+          <p className="text-sm text-gray-300">
+            Uninstalling TAK Server will remove all server data, configurations, and certificates.
+            Are you sure you want to proceed?
+          </p>
         </div>
-      )}
+      </Popup>
+
+      {/* Uninstall Confirmation Popup - blur sidebar */}
+      <Popup
+        id="uninstall-confirm-popup"
+        title="Confirm Uninstall"
+        isVisible={showUninstallConfirm}
+        onClose={() => setShowUninstallConfirm(false)}
+        blurSidebar={true}
+        buttons={
+          <div className="flex justify-end gap-4">
+            <button
+              onClick={() => setShowUninstallConfirm(false)}
+              className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                // Uninstall logic will be added later
+                setShowUninstallConfirm(false);
+              }}
+              className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-red-500 transition-all duration-200"
+            >
+              Uninstall
+            </button>
+          </div>
+        }
+      >
+        <div className="text-center">
+          <p className="text-red-500 font-semibold mb-1">
+            Warning: This action cannot be undone
+          </p>
+          <p className="text-sm text-gray-300">
+            Uninstalling TAK Server will remove all server data, configurations, and certificates.
+            Are you sure you want to proceed?
+          </p>
+        </div>
+      </Popup>
 
       {/* Installation Form Popup */}
       {!isInstalled && showInstallForm && (
@@ -714,7 +724,7 @@ function TakServerStatus({ handleStartStop }) {
         </>
       )}
 
-      {/* Installation Progress Popup */}
+      {/* Installation Progress Popup - blur sidebar */}
       <Popup
         id="install-progress-popup"
         title="TAK Server Installation Progress"
@@ -722,6 +732,7 @@ function TakServerStatus({ handleStartStop }) {
         showTerminal={true}
         terminalOutput={terminalOutput}
         terminalRef={terminalRef}
+        blurSidebar={true}
         onClose={() => {
           if (!isInstalling && !isRollingBack) {
             setShowInstallProgress(false);
@@ -773,7 +784,7 @@ function TakServerStatus({ handleStartStop }) {
         </div>
       </Popup>
 
-      {/* Completion Popup */}
+      {/* Completion Popup - blur sidebar */}
       <Popup
         id="completion-popup"
         title="Installation Complete"
@@ -782,6 +793,7 @@ function TakServerStatus({ handleStartStop }) {
           setShowCompletionPopup(false);
           handleClose();
         }}
+        blurSidebar={true}
         buttons={
           <button
             className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"

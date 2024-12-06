@@ -9,25 +9,26 @@ function Popup({
   terminalRef,
   isVisible, 
   buttons,
-  onClose 
+  onClose,
+  blurSidebar = false
 }) {
   if (!isVisible) return null;
 
   return (
     <div 
       id={id} 
-      className="fixed inset-0 flex items-center justify-center z-50"
+      className={`fixed ${blurSidebar ? 'inset-0' : 'inset-y-0 right-0 left-64'} flex items-center justify-center z-50`}
     >
-      {/* Background Overlay */}
+      {/* Background Overlay with Blur Effect */}
       <div 
-        className="fixed inset-0 bg-black bg-opacity-50"
+        className={`fixed ${blurSidebar ? 'inset-0' : 'inset-y-0 right-0 left-64'} bg-black bg-opacity-50 backdrop-filter backdrop-blur-sm`}
         onClick={onClose}
       />
       
       {/* Popup Content */}
-      <div className="bg-cardBg border border-accentBoarder p-6 rounded-lg shadow-lg w-full max-w-2xl relative z-10">
+      <div className="bg-cardBg border border-accentBoarder p-6 rounded-lg shadow-lg max-w-lg w-full relative z-10 mx-4">
         {/* Popup Title */}
-        <h3 className="text-base font-bold mb-4 text-textPrimary">{title}</h3>
+        <h3 className="text-lg font-bold mb-4 text-textPrimary">{title}</h3>
 
         {/* Popup Content Area */}
         <div className="popup-content text-sm overflow-y-auto max-w-full p-2 max-h-96">
