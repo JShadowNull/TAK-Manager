@@ -4,9 +4,6 @@ function Popup({
   id, 
   title, 
   children, 
-  showTerminal = false, 
-  terminalOutput, 
-  terminalRef,
   isVisible, 
   buttons,
   onClose,
@@ -36,23 +33,6 @@ function Popup({
             {children}
           </div>
         </div>
-
-        {/* Terminal Output */}
-        {showTerminal && (
-          <div 
-            ref={terminalRef}
-            className="mt-4 bg-primaryBg border border-accentBoarder rounded-lg p-4 h-64 overflow-y-auto text-sm font-mono"
-          >
-            {terminalOutput.map((line, index) => (
-              <div 
-                key={index} 
-                className="text-textPrimary select-text whitespace-pre-wrap"
-              >
-                {line}
-              </div>
-            ))}
-          </div>
-        )}
 
         {/* Buttons Area */}
         <div className="flex justify-end mt-6 gap-4">

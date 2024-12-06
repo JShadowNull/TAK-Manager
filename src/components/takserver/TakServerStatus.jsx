@@ -6,6 +6,7 @@ import AdvancedFeatures from './AdvancedFeatures';
 import Configuration from './Configuration';
 import CircularProgress from '@mui/material/CircularProgress';
 import Box from '@mui/material/Box';
+import TerminalPopup from '../common/TerminalPopup';
 
 function TakServerStatus({ handleStartStop }) {
   const [showInstallForm, setShowInstallForm] = useState(false);
@@ -43,6 +44,14 @@ function TakServerStatus({ handleStartStop }) {
   const [isStartingDocker, setIsStartingDocker] = useState(false);
   const dockerManagerSocketRef = useRef(null);
   const [showUninstallConfirm, setShowUninstallConfirm] = useState(false);
+  const [isUninstalling, setIsUninstalling] = useState(false);
+  const uninstallSocketRef = useRef(null);
+  const [uninstallComplete, setUninstallComplete] = useState(false);
+  const [uninstallSuccess, setUninstallSuccess] = useState(false);
+  const [uninstallError, setUninstallError] = useState(null);
+  const [installationFailed, setInstallationFailed] = useState(false);
+  const [installationError, setInstallationError] = useState(null);
+  const [showNextButton, setShowNextButton] = useState(false);
 
   const handleStartDocker = () => {
     setIsStartingDocker(true);
@@ -60,6 +69,12 @@ function TakServerStatus({ handleStartStop }) {
 
     // Initialize Docker manager socket for start functionality only
     dockerManagerSocketRef.current = io('/docker-manager', {
+      transports: ['websocket'],
+      path: '/socket.io'
+    });
+
+    // Initialize uninstall socket
+    uninstallSocketRef.current = io('/takserver-uninstall', {
       transports: ['websocket'],
       path: '/socket.io'
     });
@@ -84,6 +99,37 @@ function TakServerStatus({ handleStartStop }) {
       }
     });
 
+    // Uninstall socket events
+    uninstallSocketRef.current.on('connect', () => {
+      console.log('Connected to uninstall service');
+      setTerminalOutput(['✓ Connected to uninstall service']);
+    });
+
+    uninstallSocketRef.current.on('uninstall_status', (status) => {
+      setIsUninstalling(status.isUninstalling);
+      if (status.message) {
+        setTerminalOutput(prev => [...prev, status.message]);
+      }
+    });
+
+    uninstallSocketRef.current.on('terminal_output', (data) => {
+      if (data.data) {
+        setTerminalOutput(prev => [...prev, data.data]);
+      }
+    });
+
+    uninstallSocketRef.current.on('uninstall_complete', (result) => {
+      setIsUninstalling(false);
+      setUninstallComplete(true);
+      if (result.success) {
+        setUninstallSuccess(true);
+        setTerminalOutput(prev => [...prev, 'TAK Server uninstallation completed successfully']);
+      } else {
+        setUninstallError(result.message);
+        setTerminalOutput(prev => [...prev, `Error: ${result.message}`]);
+      }
+    });
+
     const connectTakServerSockets = () => {
       // Move existing socket connection code here
       const installerSocket = io('/takserver-installer', {
@@ -98,20 +144,16 @@ function TakServerStatus({ handleStartStop }) {
 
       // Installation socket events
       installerSocket.on('connect', () => {
-        setTerminalOutput(prev => [...prev, '✓ Connected to installation service']);
+        setTerminalOutput(['✓ Connected to installation service']);
       });
 
       installerSocket.on('connect_error', (error) => {
-        setTerminalOutput(prev => [...prev, `× Connection error: ${error.message}`]);
+        setTerminalOutput([`× Connection error: ${error.message}`]);
       });
 
       installerSocket.on('terminal_output', (data) => {
-        const logMessage = data.data;
-        if (logMessage) {
-          setTerminalOutput(prev => [...prev, logMessage]);
-          if (terminalRef.current) {
-            terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
-          }
+        if (data.data) {
+          setTerminalOutput(prev => [...prev, data.data]);
         }
       });
 
@@ -179,12 +221,15 @@ function TakServerStatus({ handleStartStop }) {
         setIsInstalling(false);
         setIsStoppingInstallation(false);
         setInstallationSuccessful(true);
+        setShowNextButton(true);
       });
 
       installerSocket.on('installation_failed', (data) => {
         setIsInstalling(false);
         setIsStoppingInstallation(false);
         setIsRollingBack(false);
+        setInstallationFailed(true);
+        setInstallationError(data.message || 'Installation failed');
       });
 
       installerSocket.on('rollback_started', () => {
@@ -212,6 +257,9 @@ function TakServerStatus({ handleStartStop }) {
       if (dockerManagerSocketRef.current) {
         dockerManagerSocketRef.current.disconnect();
         dockerManagerSocketRef.current = null;
+      }
+      if (uninstallSocketRef.current) {
+        uninstallSocketRef.current.disconnect();
       }
     };
   }, []);
@@ -301,10 +349,7 @@ function TakServerStatus({ handleStartStop }) {
   const handleCancelInstallation = async () => {
     if (installationId && isInstalling && !isStoppingInstallation) {
       try {
-        // Disable the stop button immediately
         setIsStoppingInstallation(true);
-        
-        // Add status message
         setTerminalOutput(prev => [...prev, 'Stopping installation and starting rollback...']);
 
         const response = await fetch('/api/takserver/rollback-takserver', {
@@ -319,9 +364,13 @@ function TakServerStatus({ handleStartStop }) {
           throw new Error('Failed to stop installation');
         }
 
+        setInstallationFailed(true);
+        setInstallationError('Installation cancelled by user');
       } catch (error) {
         console.error('Error stopping installation:', error);
         setTerminalOutput(prev => [...prev, `Error stopping installation: ${error.message}`]);
+        setInstallationFailed(true);
+        setInstallationError(error.message);
       }
     }
   };
@@ -366,6 +415,25 @@ function TakServerStatus({ handleStartStop }) {
       setTerminalOutput(prev => [...prev, `Error: ${error.message}`]);
       // Reset loading state on error
       setIsRestarting(false);
+    }
+  };
+
+  const handleUninstall = () => {
+    if (uninstallSocketRef.current) {
+      setShowUninstallConfirm(false);
+      setShowInstallProgress(true);
+      setTerminalOutput(['Starting TAK Server uninstallation...']);
+      setUninstallComplete(false);
+      setUninstallSuccess(false);
+      setUninstallError(null);
+      uninstallSocketRef.current.emit('start_uninstall');
+    }
+  };
+
+  const handleUninstallComplete = () => {
+    setShowInstallProgress(false);
+    if (uninstallSuccess) {
+      window.location.reload();
     }
   };
 
@@ -435,7 +503,7 @@ function TakServerStatus({ handleStartStop }) {
                 <button
                   className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-red-500 transition-all duration-200"
                   onClick={() => setShowUninstallConfirm(true)}
-                  disabled={isStarting || isStopping || isRestarting}
+                  disabled={isStarting || isStopping || isRestarting || isUninstalling}
                 >
                   Uninstall
                 </button>
@@ -444,9 +512,9 @@ function TakServerStatus({ handleStartStop }) {
                     className={`text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder 
                       bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-yellow-500 
                       transition-all duration-200
-                      ${(isStarting || isStopping || isRestarting) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      ${(isStarting || isStopping || isRestarting || isUninstalling) ? 'opacity-50 cursor-not-allowed' : ''}`}
                     onClick={handleRestartClick}
-                    disabled={isStarting || isStopping || isRestarting}
+                    disabled={isStarting || isStopping || isRestarting || isUninstalling}
                   >
                     {isRestarting ? 'Restarting...' : 'Restart'}
                   </button>
@@ -455,9 +523,9 @@ function TakServerStatus({ handleStartStop }) {
                   className={`text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder 
                     bg-buttonColor hover:text-black hover:shadow-md hover:border-black ${isRunning ? 'hover:bg-red-500' : 'hover:bg-green-500'} 
                     transition-all duration-200
-                    ${(isStarting || isStopping || isRestarting) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    ${(isStarting || isStopping || isRestarting || isUninstalling) ? 'opacity-50 cursor-not-allowed' : ''}`}
                   onClick={handleStartStopClick}
-                  disabled={isStarting || isStopping || isRestarting}
+                  disabled={isStarting || isStopping || isRestarting || isUninstalling}
                 >
                   {isStarting || isStopping ? (
                     isStarting ? 'Starting...' : 'Stopping...'
@@ -510,7 +578,7 @@ function TakServerStatus({ handleStartStop }) {
         </div>
       </Popup>
 
-      {/* Uninstall Confirmation Popup - blur sidebar */}
+      {/* Uninstall Confirmation Popup */}
       <Popup
         id="uninstall-confirm-popup"
         title="Confirm Uninstall"
@@ -521,15 +589,12 @@ function TakServerStatus({ handleStartStop }) {
           <div className="flex justify-end gap-4">
             <button
               onClick={() => setShowUninstallConfirm(false)}
-              className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
+              className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-gray-500 transition-all duration-200"
             >
               Cancel
             </button>
             <button
-              onClick={() => {
-                // Uninstall logic will be added later
-                setShowUninstallConfirm(false);
-              }}
+              onClick={handleUninstall}
               className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-red-500 transition-all duration-200"
             >
               Uninstall
@@ -538,7 +603,7 @@ function TakServerStatus({ handleStartStop }) {
         }
       >
         <div className="text-center">
-          <p className="text-red-500 font-semibold mb-1">
+          <p className="text-red-500 font-semibold mb-4">
             Warning: This action cannot be undone
           </p>
           <p className="text-sm text-gray-300">
@@ -724,65 +789,71 @@ function TakServerStatus({ handleStartStop }) {
         </>
       )}
 
-      {/* Installation Progress Popup - blur sidebar */}
-      <Popup
-        id="install-progress-popup"
-        title="TAK Server Installation Progress"
+      {/* Installation/Uninstall Progress Popup */}
+      <TerminalPopup
         isVisible={showInstallProgress}
-        showTerminal={true}
+        title={
+          isUninstalling 
+            ? "TAK Server Uninstallation Progress" 
+            : isInstalling 
+              ? "TAK Server Installation Progress"
+              : uninstallComplete
+                ? "Uninstallation Complete"
+                : installationSuccessful || installationFailed
+                  ? "Installation Complete"
+                  : "Operation Progress"
+        }
         terminalOutput={terminalOutput}
         terminalRef={terminalRef}
-        blurSidebar={true}
+        showTerminal={true}
+        isInProgress={isInstalling || isUninstalling}
+        isComplete={uninstallComplete || (!isInstalling && !isUninstalling && (installationSuccessful || installationFailed))}
+        isSuccess={uninstallSuccess || installationSuccessful}
+        errorMessage={uninstallError || installationError}
+        progressMessage={
+          isRollingBack 
+            ? 'Rolling Back Installation...'
+            : isStoppingInstallation 
+              ? 'Stopping Installation...' 
+              : isInstalling 
+                ? 'Installing TAK Server...'
+                : isUninstalling
+                  ? 'Uninstalling TAK Server...'
+                  : 'Operation in Progress'
+        }
+        successMessage={
+          uninstallSuccess 
+            ? 'TAK Server was successfully uninstalled'
+            : installationSuccessful
+              ? 'TAK Server was successfully installed'
+              : 'Operation completed successfully'
+        }
+        nextStepMessage={
+          (!isUninstalling && installationSuccessful && showNextButton)
+            ? "Click 'Next' to configure your TAK Server"
+            : ''
+        }
+        failureMessage={
+          isUninstalling
+            ? 'TAK Server uninstallation failed'
+            : installationFailed
+              ? 'TAK Server installation failed'
+              : 'Operation failed'
+        }
         onClose={() => {
-          if (!isInstalling && !isRollingBack) {
-            setShowInstallProgress(false);
+          setShowInstallProgress(false);
+          setTerminalOutput([]); // Clear terminal output on close
+          if (uninstallSuccess) {
+            window.location.reload();
           }
         }}
-        buttons={
-          <>
-            {isInstalling ? (
-              <button
-                className={`text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor 
-                  hover:text-black hover:shadow-md hover:border-black hover:bg-red-500 transition-all duration-200
-                  ${isStoppingInstallation ? 'opacity-50 cursor-not-allowed' : ''}`}
-                onClick={handleCancelInstallation}
-                disabled={isStoppingInstallation}
-              >
-                {isStoppingInstallation ? 'Stopping...' : 'Stop Installation'}
-              </button>
-            ) : !isInstalling && !isRollingBack && !isStoppingInstallation && installationSuccessful ? (
-              <button
-                className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
-                onClick={handleNext}
-              >
-                Next
-              </button>
-            ) : !isRollingBack && !isInstalling && !isStoppingInstallation ? (
-              <button
-                className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-red-500 transition-all duration-200"
-                onClick={() => setShowInstallProgress(false)}
-              >
-                Close
-              </button>
-            ) : null}
-          </>
+        onNext={(!isUninstalling && installationSuccessful && showNextButton) ? handleNext : undefined}
+        onCancel={
+          isInstalling 
+            ? handleCancelInstallation
+            : undefined
         }
-      >
-        <div className="text-center mb-4">
-          <p>
-            {isRollingBack 
-              ? 'Rolling Back Installation...'
-              : isStoppingInstallation 
-                ? 'Stopping Installation...' 
-                : isInstalling 
-                  ? 'Installing TAK Server...' 
-                  : 'Installation Complete'}
-          </p>
-          {isInstalling && !isStoppingInstallation && !isRollingBack && (
-            <p className="text-sm text-yellow-400">This process may take several minutes.</p>
-          )}
-        </div>
-      </Popup>
+      />
 
       {/* Completion Popup - blur sidebar */}
       <Popup

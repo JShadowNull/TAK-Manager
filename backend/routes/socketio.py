@@ -453,3 +453,66 @@ class DockerStatusNamespace(Namespace):
 
 # Register the Docker status namespace
 socketio.on_namespace(DockerStatusNamespace('/docker-status'))
+
+from backend.services.scripts.takserver.takserver_uninstaller import TakServerUninstaller
+
+# TAKServer Uninstall Namespace
+class TakServerUninstallNamespace(Namespace):
+    def __init__(self, namespace=None):
+        super().__init__(namespace)
+        self.uninstaller = TakServerUninstaller()
+        self.operation_in_progress = False
+
+    def on_connect(self):
+        print('Client connected to /takserver-uninstall namespace')
+        # Send initial status on connect
+        self.emit_status()
+
+    def on_disconnect(self):
+        print('Client disconnected from /takserver-uninstall namespace')
+
+    def emit_status(self):
+        """Emit current uninstall status"""
+        socketio.emit('uninstall_status', {
+            'isUninstalling': self.operation_in_progress
+        }, namespace='/takserver-uninstall')
+
+    def on_check_status(self):
+        """Handle status check request"""
+        self.emit_status()
+
+    def on_start_uninstall(self):
+        """Handle uninstall request"""
+        if not self.operation_in_progress:
+            self.operation_in_progress = True
+            # Emit status update immediately
+            self.emit_status()
+            thread = socketio.start_background_task(self.uninstall_task)
+            thread_manager.add_thread(thread)
+
+    def uninstall_task(self):
+        """Background task for uninstallation"""
+        try:
+            success = self.uninstaller.uninstall()
+            if success:
+                socketio.emit('uninstall_complete', {
+                    'success': True,
+                    'message': 'TAK Server uninstallation completed successfully'
+                }, namespace='/takserver-uninstall')
+            else:
+                socketio.emit('uninstall_complete', {
+                    'success': False,
+                    'message': 'TAK Server uninstallation failed'
+                }, namespace='/takserver-uninstall')
+        except Exception as e:
+            socketio.emit('uninstall_complete', {
+                'success': False,
+                'message': f'Uninstallation error: {str(e)}'
+            }, namespace='/takserver-uninstall')
+        finally:
+            self.operation_in_progress = False
+            # Emit final status update
+            self.emit_status()
+
+# Register the uninstall namespace
+socketio.on_namespace(TakServerUninstallNamespace('/takserver-uninstall'))
