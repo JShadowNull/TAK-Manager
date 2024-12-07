@@ -516,31 +516,59 @@ function TakServerStatus({ handleStartStop }) {
                   Uninstall
                 </button>
                 {isRunning && (
+                  <>
+                    <button
+                      className={`text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder 
+                        bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-yellow-500 
+                        transition-all duration-200
+                        ${(isStarting || isStopping || isRestarting || isUninstalling) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      onClick={handleRestartClick}
+                      disabled={isStarting || isStopping || isRestarting || isUninstalling}
+                    >
+                      {isRestarting ? 'Restarting...' : 'Restart'}
+                    </button>
+                    <button
+                      className={`text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder 
+                        bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-red-500
+                        transition-all duration-200
+                        ${(isStarting || isStopping || isRestarting || isUninstalling) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      onClick={handleStartStopClick}
+                      disabled={isStarting || isStopping || isRestarting || isUninstalling}
+                    >
+                      {isStarting || isStopping ? (
+                        isStarting ? 'Starting...' : 'Stopping...'
+                      ) : (
+                        'Stop'
+                      )}
+                    </button>
+                    <a
+                      href="https://localhost:8443"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder 
+                        bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-blue-500 
+                        transition-all duration-200"
+                    >
+                      Launch Admin Page
+                    </a>
+                  </>
+                )}
+                {!isRunning && (
                   <button
                     className={`text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder 
-                      bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-yellow-500 
+                      bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 
                       transition-all duration-200
                       ${(isStarting || isStopping || isRestarting || isUninstalling) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    onClick={handleRestartClick}
+                    onClick={handleStartStopClick}
                     disabled={isStarting || isStopping || isRestarting || isUninstalling}
                   >
-                    {isRestarting ? 'Restarting...' : 'Restart'}
+                    {isStarting || isStopping ? (
+                      isStarting ? 'Starting...' : 'Stopping...'
+                    ) : (
+                      'Start'
+                    )}
                   </button>
                 )}
-                <button
-                  className={`text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder 
-                    bg-buttonColor hover:text-black hover:shadow-md hover:border-black ${isRunning ? 'hover:bg-red-500' : 'hover:bg-green-500'} 
-                    transition-all duration-200
-                    ${(isStarting || isStopping || isRestarting || isUninstalling) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  onClick={handleStartStopClick}
-                  disabled={isStarting || isStopping || isRestarting || isUninstalling}
-                >
-                  {isStarting || isStopping ? (
-                    isStarting ? 'Starting...' : 'Stopping...'
-                  ) : (
-                    isRunning ? 'Stop' : 'Start'
-                  )}
-                </button>
               </>
             ) : (
               <button
