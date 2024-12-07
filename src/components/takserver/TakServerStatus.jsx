@@ -130,7 +130,6 @@ function TakServerStatus({ handleStartStop }) {
     });
 
     const connectTakServerSockets = () => {
-      // Move existing socket connection code here
       const installerSocket = io('/takserver-installer', {
         transports: ['websocket'],
         path: '/socket.io'
@@ -161,7 +160,6 @@ function TakServerStatus({ handleStartStop }) {
         setIsInstalled(status.isInstalled);
         setIsRunning(status.isRunning);
         
-        // Reset loading states when status updates
         if (!status.error) {
           setIsStarting(false);
           setIsStopping(false);
@@ -170,7 +168,6 @@ function TakServerStatus({ handleStartStop }) {
         
         if (status.error) {
           setOperationError(status.error);
-          setTerminalOutput(prev => [...prev, `Error: ${status.error}`]);
           // Reset loading states on error
           setIsStarting(false);
           setIsStopping(false);
@@ -178,35 +175,36 @@ function TakServerStatus({ handleStartStop }) {
         }
       });
 
-      // Add status socket event handler for terminal output
+      // Only handle terminal output from status socket if not installing
       statusSocket.on('terminal_output', (data) => {
-        const message = data.data;
-        
-        // Update loading states based on message content
-        if (message.includes('Starting TAK Server containers...')) {
-          setIsStarting(true);
-          setIsStopping(false);
-          setIsRestarting(false);
-        } 
-        else if (message.includes('Stopping TAK Server containers...')) {
-          setIsStarting(false);
-          setIsStopping(true);
-          setIsRestarting(false);
-        }
-        else if (message.includes('Restarting TAK Server containers...')) {
-          setIsStarting(false);
-          setIsStopping(false);
-          setIsRestarting(true);
-        }
-        // Reset states on completion or error
-        else if (message.includes('successfully') || message.includes('Error')) {
-          setIsStarting(false);
-          setIsStopping(false);
-          setIsRestarting(false);
-        }
+        if (!isInstalling && data.data) {
+          const message = data.data;
+          
+          // Update loading states based on message content
+          if (message.includes('Starting TAK Server containers...')) {
+            setIsStarting(true);
+            setIsStopping(false);
+            setIsRestarting(false);
+          } 
+          else if (message.includes('Stopping TAK Server containers...')) {
+            setIsStarting(false);
+            setIsStopping(true);
+            setIsRestarting(false);
+          }
+          else if (message.includes('Restarting TAK Server containers...')) {
+            setIsStarting(false);
+            setIsStopping(false);
+            setIsRestarting(true);
+          }
+          // Reset states on completion or error
+          else if (message.includes('successfully') || message.includes('Error')) {
+            setIsStarting(false);
+            setIsStopping(false);
+            setIsRestarting(false);
+          }
 
-        // Add message to terminal output
-        setTerminalOutput(prev => [...prev, message]);
+          setTerminalOutput(prev => [...prev, message]);
+        }
       });
 
       // Installation events
@@ -241,7 +239,7 @@ function TakServerStatus({ handleStartStop }) {
         setIsRollingBack(false);
       });
 
-      // Request initial status on component mount
+      // Request initial status
       statusSocket.emit('check_status');
 
       return () => {
@@ -348,6 +346,7 @@ function TakServerStatus({ handleStartStop }) {
   const handleCancelInstallation = async () => {
     if (installationId && isInstalling && !isStoppingInstallation) {
       try {
+        setIsStopping(true);
         setIsStoppingInstallation(true);
         setTerminalOutput(prev => [...prev, 'Stopping installation and starting rollback...']);
 
@@ -375,8 +374,15 @@ function TakServerStatus({ handleStartStop }) {
   };
 
   const handleNext = () => {
-    setShowInstallProgress(false);
-    setShowCompletionPopup(true);
+    if (isUninstalling || uninstallComplete) {
+      setShowInstallProgress(false);
+      setShowCompletionPopup(false);
+      // Show the uninstall completion popup
+      setUninstallComplete(true);
+    } else {
+      setShowInstallProgress(false);
+      setShowCompletionPopup(true);
+    }
   };
 
   const handleStartStopClick = async () => {
@@ -431,9 +437,12 @@ function TakServerStatus({ handleStartStop }) {
 
   const handleUninstallComplete = () => {
     setShowInstallProgress(false);
-    if (uninstallSuccess) {
-      window.location.reload();
-    }
+    setTerminalOutput([]);
+    setUninstallComplete(false);
+    setUninstallSuccess(false);
+    setUninstallError(null);
+    setIsUninstalling(false);
+    setIsInstalled(false); // Update the installation status
   };
 
   const LoadingSpinner = () => (
@@ -558,7 +567,7 @@ function TakServerStatus({ handleStartStop }) {
             <button
               onClick={handleStartDocker}
               disabled={isStartingDocker}
-              className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200 flex items-center gap-2"
+              className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200 flex items-center gap-2"
             >
               {isStartingDocker ? (
                 <>
@@ -566,7 +575,7 @@ function TakServerStatus({ handleStartStop }) {
                   Starting Docker...
                 </>
               ) : (
-                <>Start Docker</>
+                'Start Docker'
               )}
             </button>
           ) : (
@@ -574,7 +583,7 @@ function TakServerStatus({ handleStartStop }) {
               href="https://www.docker.com/products/docker-desktop/"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
+              className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
             >
               Download Docker Desktop
             </a>
@@ -582,14 +591,9 @@ function TakServerStatus({ handleStartStop }) {
         }
       >
         <div className="text-center">
-          {dockerStatus.error && (
-            <p className="text-sm text-red-500 mb-4">
-              Error: {dockerStatus.error}
-            </p>
-          )}
           {dockerStatus.isInstalled ? (
             <>
-              <p className="text-yellow-500 font-semibold mb-2">
+              <p className="text-yellow-500 font-semibold">
                 Docker Desktop is not running
               </p>
               <p className="text-sm text-gray-300">
@@ -598,7 +602,7 @@ function TakServerStatus({ handleStartStop }) {
             </>
           ) : (
             <>
-              <p className="text-yellow-500 font-semibold mb-2">
+              <p className="text-yellow-500 font-semibold">
                 Docker Desktop is required
               </p>
               <p className="text-sm text-gray-300">
@@ -618,24 +622,24 @@ function TakServerStatus({ handleStartStop }) {
         variant="standard"
         blurSidebar={true}
         buttons={
-          <div className="flex justify-end gap-4">
+          <>
             <button
               onClick={() => setShowUninstallConfirm(false)}
-              className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-gray-500 transition-all duration-200"
+              className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-gray-500 transition-all duration-200"
             >
               Cancel
             </button>
             <button
               onClick={handleUninstall}
-              className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-red-500 transition-all duration-200"
+              className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-red-500 transition-all duration-200"
             >
               Uninstall
             </button>
-          </div>
+          </>
         }
       >
         <div className="text-center">
-          <p className="text-red-500 font-semibold mb-4">
+          <p className="text-red-500 font-semibold">
             Warning: This action cannot be undone
           </p>
           <p className="text-sm text-gray-300">
@@ -858,14 +862,14 @@ function TakServerStatus({ handleStartStop }) {
         successMessage={
           uninstallSuccess 
             ? 'TAK Server was successfully uninstalled'
-            : installationSuccessful
-              ? 'TAK Server was successfully installed'
-              : 'Operation completed successfully'
+            : ''
         }
         nextStepMessage={
           (!isUninstalling && installationSuccessful && showNextButton)
-            ? "Click 'Next' to configure your TAK Server"
-            : ''
+            ? "Click 'Next' to proceed"
+            : uninstallSuccess
+              ? "Click 'Next' to complete uninstallation"
+              : ''
         }
         failureMessage={
           isUninstalling
@@ -874,14 +878,8 @@ function TakServerStatus({ handleStartStop }) {
               ? 'TAK Server installation failed'
               : 'Operation failed'
         }
-        onClose={() => {
-          setShowInstallProgress(false);
-          setTerminalOutput([]); // Clear terminal output on close
-          if (uninstallSuccess) {
-            window.location.reload();
-          }
-        }}
-        onNext={(!isUninstalling && installationSuccessful && showNextButton) ? handleNext : undefined}
+        onClose={handleUninstallComplete}
+        onNext={handleNext}
         onStop={
           isInstalling 
             ? handleCancelInstallation
@@ -890,11 +888,11 @@ function TakServerStatus({ handleStartStop }) {
         blurSidebar={true}
       />
 
-      {/* Completion Popup - blur sidebar */}
+      {/* Installation Completion Popup */}
       <Popup
         id="completion-popup"
         title="Installation Complete"
-        isVisible={showCompletionPopup}
+        isVisible={showCompletionPopup && !showInstallProgress && !uninstallComplete && !isUninstalling}
         variant="standard"
         onClose={() => {
           setShowCompletionPopup(false);
@@ -903,7 +901,7 @@ function TakServerStatus({ handleStartStop }) {
         blurSidebar={true}
         buttons={
           <button
-            className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
+            className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
             onClick={() => {
               setShowCompletionPopup(false);
               handleClose();
@@ -914,10 +912,49 @@ function TakServerStatus({ handleStartStop }) {
         }
       >
         <div className="text-center">
-          <p className="text-green-500 font-semibold mb-2">✓ TAK Server Installation Completed Successfully</p>
+          <p className="text-green-500 font-semibold">✓</p>
+          <p className="text-green-500 font-semibold">TAK Server Installation Completed Successfully</p>
           <p className="text-sm text-gray-300">
             You can now start using your TAK Server and configure additional features.
           </p>
+        </div>
+      </Popup>
+
+      {/* Uninstall Completion Popup */}
+      <Popup
+        id="uninstall-completion-popup"
+        title="Uninstallation Complete"
+        isVisible={uninstallComplete && !showInstallProgress && !showCompletionPopup}
+        variant="standard"
+        onClose={handleUninstallComplete}
+        blurSidebar={true}
+        buttons={
+          <button
+            className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
+            onClick={handleUninstallComplete}
+          >
+            Close
+          </button>
+        }
+      >
+        <div className="text-center">
+          {uninstallSuccess ? (
+            <>
+              <p className="text-green-500 font-semibold">✓</p>
+              <p className="text-green-500 font-semibold">TAK Server Uninstallation Completed Successfully</p>
+              <p className="text-sm text-gray-300">
+                TAK Server has been completely removed from your system.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-red-500 font-semibold">✗</p>
+              <p className="text-red-500 font-semibold">TAK Server Uninstallation Failed</p>
+              <p className="text-sm text-gray-300">
+                {uninstallError || 'An error occurred during uninstallation.'}
+              </p>
+            </>
+          )}
         </div>
       </Popup>
     </>

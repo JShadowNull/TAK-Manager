@@ -22,7 +22,8 @@ function Popup({
   nextStepMessage = '',
   failureMessage = '',
   onNext,
-  onStop
+  onStop,
+  isStoppingInstallation
 }) {
   if (!isVisible) return null;
 
@@ -41,43 +42,44 @@ function Popup({
     if (isInProgress) {
       if (onStop) {
         return (
-          <button
-            className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-red-500 transition-all duration-200 flex items-center gap-2"
-            onClick={onStop}
-          >
-            <span className="material-icons text-sm">stop_circle</span>
-            Stop
-          </button>
+          <div className="flex justify-center w-full">
+            <button
+              className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-red-500 transition-all duration-200"
+              onClick={onStop}
+              disabled={isStoppingInstallation}
+            >
+              {isStoppingInstallation ? 'Stopping...' : 'Stop'}
+            </button>
+          </div>
         );
       }
-      return (
-        <div className="text-sm text-gray-400">
-          Operation in progress...
-        </div>
-      );
+      return null;
     }
 
     if (isComplete) {
       if (onNext) {
         return (
-          <button
-            className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
-            onClick={onNext}
-          >
-            Next
-          </button>
+          <div className="flex justify-end w-full">
+            <button
+              className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
+              onClick={onNext}
+            >
+              Next
+            </button>
+          </div>
         );
       }
       return (
-        <button
-          className={`text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor 
-            hover:text-black hover:shadow-md hover:border-black 
-            ${isSuccess ? 'hover:bg-green-500' : 'hover:bg-red-500'} 
-            transition-all duration-200`}
-          onClick={onClose}
-        >
-          Close
-        </button>
+        <div className="flex justify-end w-full">
+          <button
+            className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor 
+              hover:text-black hover:shadow-md hover:accentBoarder hover:bg-red-500
+              transition-all duration-200"
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </div>
       );
     }
 
@@ -85,23 +87,20 @@ function Popup({
   };
 
   const getTerminalContent = () => {
-    if (isComplete) {
+    if (isComplete && !showTerminal) {
       return (
         <>
           {isSuccess ? (
-            <div className="flex flex-col items-center gap-4">
+            <div className="flex flex-col items-center space-y-1">
               <div className="text-green-500 text-xl">✓</div>
-              <p className="text-green-500 font-semibold">
-                {successMessage || 'Operation completed successfully'}
-              </p>
               {nextStepMessage && onNext && (
-                <p className="text-sm text-gray-300 mt-2">
+                <p className="text-sm text-gray-300">
                   {nextStepMessage}
                 </p>
               )}
             </div>
           ) : (
-            <div className="flex flex-col items-center gap-4">
+            <div className="flex flex-col items-center space-y-1">
               <div className="text-red-500 text-xl">✗</div>
               <p className="text-red-500 font-semibold">
                 {failureMessage || 'Operation failed'}
@@ -117,18 +116,22 @@ function Popup({
       );
     }
 
-    return (
-      <>
-        <p>
-          {progressMessage || 'Operation in progress...'}
-        </p>
-        {isInProgress && (
-          <p className="text-sm text-yellow-400">
-            This process may take several minutes.
+    if (!showTerminal) {
+      return (
+        <div className="space-y-1">
+          <p>
+            {progressMessage || 'Operation in progress...'}
           </p>
-        )}
-      </>
-    );
+          {isInProgress && (
+            <p className="text-sm text-yellow-400">
+              This process may take several minutes.
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    return null;
   };
 
   const renderTerminalOutput = () => {
@@ -139,10 +142,10 @@ function Popup({
     ));
   };
 
-  const terminalContent = showTerminal && !isComplete && (
+  const terminalContent = showTerminal && (
     <div 
       ref={actualTerminalRef}
-      className="mt-4 bg-black text-white p-4 rounded-lg h-64 overflow-y-auto font-mono text-sm"
+      className="mt-1 bg-primaryBg text-white p-4 rounded-lg h-64 overflow-y-auto font-mono text-sm border border-accentBoarder"
     >
       {renderTerminalOutput()}
     </div>
@@ -164,29 +167,35 @@ function Popup({
       />
       
       {/* Popup Content */}
-      <div className="bg-cardBg border border-accentBoarder p-6 rounded-lg shadow-lg max-w-lg w-full relative z-10 mx-4">
+      <div className="bg-cardBg border border-accentBoarder p-4 rounded-lg shadow-lg max-w-lg w-full relative z-10 mx-4">
         {/* Popup Title */}
         <h3 className="text-lg font-bold mb-4 text-textPrimary">{title}</h3>
 
         {/* Popup Content Area */}
         <div className="popup-content text-sm overflow-y-auto max-w-full p-2 max-h-96">
-          <div className="w-full">
+          <div className="w-full space-y-1">
             {variant === 'terminal' ? (
               <>
-                <div className="text-center mb-4">
+                <div className="text-center">
                   {getTerminalContent()}
                 </div>
                 {terminalContent}
               </>
             ) : (
-              children
+              <div className="space-y-1">
+                {children}
+              </div>
             )}
           </div>
         </div>
 
         {/* Buttons Area */}
-        <div className="flex justify-center mt-6 gap-4">
-          {variant === 'terminal' ? getTerminalButtons() : buttons}
+        <div className="mt-4 w-full">
+          {variant === 'terminal' ? getTerminalButtons() : (
+            <div className="flex justify-end gap-4">
+              {buttons}
+            </div>
+          )}
         </div>
       </div>
     </div>
