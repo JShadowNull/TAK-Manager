@@ -984,10 +984,10 @@ function ApplicationPreferences({ preferences, searchTerm, onPreferenceChange, o
             name={pref.name}
             label={pref.label}
             input_type={pref.input_type}
-            value={preferences[pref.label]?.value || pref.value}
-            checked={pref.input_type === 'checkbox' ? preferences[pref.label]?.value : undefined}
+            value={preferences[pref.label]?.value ?? pref.value}
+            checked={pref.input_type === 'checkbox' ? preferences[pref.label]?.checked ?? pref.checked : undefined}
             options={pref.options}
-            isEnabled={preferences[pref.label]?.enabled || false}
+            isEnabled={preferences[pref.label]?.enabled ?? false}
             onChange={(e) => {
               const value = pref.input_type === 'checkbox' 
                 ? e.target.checked 

@@ -7,10 +7,11 @@ const PreferenceItem = ({
   input_type,
   value,
   checked,
-  options,
+  options = [],
   onChange,
   onEnableChange,
-  isEnabled
+  isEnabled,
+  isCertificateDropdown
 }) => {
   return (
     <div className="preference-item">
@@ -22,7 +23,7 @@ const PreferenceItem = ({
           onChange={(e) => onEnableChange(e.target.checked)}
         />
         
-        <div className="input-area flex justify-between items-center w-full">
+        <div className={`input-area flex justify-between items-center w-full ${!isEnabled ? 'opacity-50' : ''}`}>
           <span className="text-sm preference-label flex-1" data-label={label}>
             {name}
           </span>
@@ -35,9 +36,11 @@ const PreferenceItem = ({
               checked={checked}
               onChange={onChange}
               options={options}
-              isCertificateDropdown={label.toLowerCase().includes('certificate')}
+              isCertificateDropdown={isCertificateDropdown || label.toLowerCase().includes('certificate') || label.toLowerCase().includes('ca')}
               disabled={!isEnabled}
               isPreferenceCheckbox={input_type === 'checkbox'}
+              className={`cert-select ${input_type === 'select' ? 'dropdown' : ''}`}
+              data-certificate-dropdown={isCertificateDropdown || label.toLowerCase().includes('certificate') || label.toLowerCase().includes('ca')}
             />
           </div>
         </div>

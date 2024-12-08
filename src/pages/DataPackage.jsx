@@ -82,30 +82,285 @@ function DataPackage() {
 
   // Initialize preferences with all possible items
   useEffect(() => {
-    const initialPreferences = {};
-    
-    // Initialize CoT streams with their default values
-    COT_STREAM_ITEMS.forEach(item => {
-      initialPreferences[item.label] = {
-        value: item.input_type === 'checkbox' ? item.checked : item.value,
-        enabled: false,
-        type: item.input_type,
-        checked: item.input_type === 'checkbox' ? item.checked : undefined
-      };
-    });
+    const initializePreferences = async () => {
+      // First set up initial preferences
+      const initialPreferences = {};
+      
+      // Initialize CoT streams with their default values
+      COT_STREAM_ITEMS.forEach(item => {
+        initialPreferences[item.label] = {
+          value: item.input_type === 'checkbox' ? item.checked : item.value,
+          enabled: false,
+          type: item.input_type,
+          checked: item.input_type === 'checkbox' ? item.checked : undefined,
+          options: item.options || []
+        };
+      });
 
-    // Initialize App preferences with their default values
-    APP_PREFERENCES.forEach(item => {
-      initialPreferences[item.label] = {
-        value: item.input_type === 'checkbox' ? item.checked : item.value,
-        enabled: false,
-        type: item.input_type,
-        checked: item.input_type === 'checkbox' ? item.checked : undefined
-      };
-    });
+      // Initialize App preferences with their default values
+      APP_PREFERENCES.forEach(item => {
+        initialPreferences[item.label] = {
+          value: item.input_type === 'checkbox' ? item.checked : item.value,
+          enabled: false,
+          type: item.input_type,
+          checked: item.input_type === 'checkbox' ? item.checked : undefined,
+          options: item.options || []
+        };
+      });
 
-    setPreferences(initialPreferences);
+      try {
+        // Try to load from backend
+        const response = await fetch('/api/datapackage/load-preferences', {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        if (data.preferences) {
+          // Update initialPreferences with saved preferences
+          Object.entries(data.preferences).forEach(([key, pref]) => {
+            if (initialPreferences[key]) {
+              initialPreferences[key] = {
+                ...initialPreferences[key],
+                value: pref.value !== undefined ? pref.value : initialPreferences[key].value,
+                enabled: pref.enabled !== undefined ? pref.enabled : initialPreferences[key].enabled,
+                checked: pref.value !== undefined && initialPreferences[key].type === 'checkbox' ? pref.value : initialPreferences[key].checked
+              };
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error loading preferences:', error);
+      }
+
+      // Set preferences after all updates
+      setPreferences(initialPreferences);
+
+      // Request certificate files after preferences are loaded
+      if (socketRef.current) {
+        socketRef.current.emit('get_certificate_files');
+      }
+    };
+
+    initializePreferences();
   }, []);
+
+  // Add auto-save effect for preferences
+  useEffect(() => {
+    const savePreferences = async () => {
+      try {
+        const response = await fetch('/api/datapackage/save-preferences', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({ preferences })
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+      } catch (error) {
+        console.error('Error saving preferences:', error);
+      }
+    };
+
+    // Save preferences whenever they change
+    savePreferences();
+  }, [preferences]);
+
+  // Add socket connection and handlers
+  useEffect(() => {
+    // Initialize socket connection
+    socketRef.current = io('/data-package', {
+      transports: ['websocket'],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000
+    });
+
+    // Socket event handlers
+    socketRef.current.on('connect', () => {
+      console.log('Connected to data-package namespace');
+      appendToTerminalOutput('Connected to server');
+      console.log('Requesting certificate files...');
+      socketRef.current.emit('get_certificate_files');
+    });
+
+    socketRef.current.on('disconnect', () => {
+      console.log('Disconnected from data-package namespace');
+      appendToTerminalOutput('Disconnected from server');
+    });
+
+    socketRef.current.on('terminal_output', (data) => {
+      appendToTerminalOutput(data.data);
+    });
+
+    socketRef.current.on('installation_complete', () => {
+      handleCompletion('success');
+    });
+
+    socketRef.current.on('installation_failed', () => {
+      handleCompletion('failure');
+    });
+
+    socketRef.current.on('certificate_files', (data) => {
+      console.log('Received certificate files:', data);
+      if (data.files && Array.isArray(data.files)) {
+        // Format the certificate options
+        const certOptions = data.files.map(file => ({
+          value: `cert/${file}`,
+          text: file
+        }));
+        console.log('Formatted certificate options:', certOptions);
+
+        // Update preferences with certificate options
+        setPreferences(prev => {
+          const newPreferences = { ...prev };
+          
+          // Find all certificate-related preferences
+          const certKeys = Object.keys(newPreferences).filter(key => 
+            key.toLowerCase().includes('certificate') || 
+            key.toLowerCase().includes('ca')
+          );
+          
+          // Update each certificate preference
+          certKeys.forEach(key => {
+            console.log(`Updating preference ${key} with options`);
+            if (newPreferences[key]) {
+              newPreferences[key] = {
+                ...newPreferences[key],
+                type: 'select', // Ensure type is set to select
+                options: certOptions,
+                // Keep existing value if valid, otherwise reset
+                value: certOptions.some(opt => opt.value === newPreferences[key].value) 
+                  ? newPreferences[key].value 
+                  : ''
+              };
+            }
+          });
+
+          console.log('Updated preferences:', newPreferences);
+          return newPreferences;
+        });
+      }
+    });
+
+    socketRef.current.on('certificate_files_error', (data) => {
+      console.error('Error getting certificate files:', data.error);
+      appendToTerminalOutput(`Error getting certificate files: ${data.error}`);
+    });
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
+    };
+  }, []);
+
+  // Add form validation effect
+  useEffect(() => {
+    validateForm();
+  }, [validateForm, preferences, zipFileName]);
+
+  // Terminal output handling
+  const appendToTerminalOutput = (text) => {
+    setTerminalOutput(prev => [...prev, text]);
+    if (terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }
+  };
+
+  // Handle configuration completion
+  const handleCompletion = (status) => {
+    setIsConfiguring(false);
+    if (status === 'success') {
+      appendToTerminalOutput('Configuration completed successfully.');
+      setCurrentStep(2);
+    } else {
+      appendToTerminalOutput('Configuration failed.');
+    }
+  };
+
+  // Start installation process
+  const startInstallation = async () => {
+    try {
+      const preferencesData = gatherPreferencesData();
+
+      if (Object.keys(preferencesData).length === 0) {
+        preferencesData.default_setting = 'true';
+      }
+
+      const response = await fetch('/api/datapackage/submit-preferences', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(preferencesData)
+      });
+
+      const data = await response.json();
+      appendToTerminalOutput(data.message || data.error);
+      
+      if (data.configuration_id) {
+        setIsConfiguring(true);
+        setConfigurationId(data.configuration_id);
+      }
+    } catch (error) {
+      appendToTerminalOutput(`Error during submission: ${error.message}`);
+      handleCompletion('failure');
+    }
+  };
+
+  // Update the preference gathering function
+  const gatherPreferencesData = useCallback(() => {
+    const formattedPreferences = {};
+    let foundCaCert = false;
+    let foundClientCert = false;
+
+    // Add zip file name
+    if (zipFileName) {
+      formattedPreferences['#zip_file_name'] = zipFileName;
+    }
+
+    Object.entries(preferences).forEach(([key, pref]) => {
+      if (!pref.enabled) return;
+
+      if (key === 'caLocation0' && pref.value && pref.value !== 'cert/') {
+        foundCaCert = true;
+        const filename = pref.value.split('/').pop();
+        formattedPreferences['#ca_cert_name'] = filename;
+        formattedPreferences[key] = filename;
+      } else if (key === 'certificateLocation0' && pref.value && pref.value !== 'cert/') {
+        foundClientCert = true;
+        const filename = pref.value.split('/').pop();
+        formattedPreferences['#client_cert_name'] = filename;
+        formattedPreferences[key] = filename;
+      } else {
+        formattedPreferences[key] = pref.value;
+      }
+    });
+
+    // Remove certificate markers if not found or invalid
+    if (!foundCaCert) {
+      delete formattedPreferences['#ca_cert_name'];
+      delete formattedPreferences['caLocation0'];
+    }
+    if (!foundClientCert) {
+      delete formattedPreferences['#client_cert_name'];
+      delete formattedPreferences['certificateLocation0'];
+    }
+
+    return formattedPreferences;
+  }, [preferences, zipFileName]);
 
   // Update the select/unselect all functions
   const handleSelectAll = useCallback((section) => {
@@ -150,203 +405,6 @@ function DataPackage() {
     });
   }, []);
 
-  // Add socket connection and handlers
-  useEffect(() => {
-    socketRef.current = io('/data-package', {
-      transports: ['websocket'],
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000
-    });
-
-    socketRef.current.on('connect', () => {
-      appendToTerminalOutput('Connected to server');
-    });
-
-    socketRef.current.on('terminal_output', (data) => {
-      appendToTerminalOutput(data.data);
-    });
-
-    socketRef.current.on('installation_complete', () => {
-      handleCompletion('success');
-    });
-
-    socketRef.current.on('installation_failed', () => {
-      handleCompletion('failure');
-    });
-
-    socketRef.current.on('certificate_files', (data) => {
-      // Handle certificate files update
-      if (data.files && Array.isArray(data.files)) {
-        // Update certificate options in preferences
-        setPreferences(prev => {
-          const newPreferences = { ...prev };
-          Object.entries(newPreferences).forEach(([key, pref]) => {
-            if (key.toLowerCase().includes('certificate') || key.toLowerCase().includes('ca')) {
-              newPreferences[key] = {
-                ...pref,
-                options: data.files.map(file => ({
-                  value: `cert/${file}`,
-                  text: file
-                }))
-              };
-            }
-          });
-          return newPreferences;
-        });
-      }
-    });
-
-    return () => {
-      socketRef.current.disconnect();
-    };
-  }, []);
-
-  // Update the preference loading effect to merge with initial preferences
-  useEffect(() => {
-    const loadPreferences = async () => {
-      try {
-        const response = await fetch('/load-preferences');
-        const data = await response.json();
-        if (data.preferences) {
-          setPreferences(prev => {
-            const newPreferences = { ...prev };
-            Object.entries(data.preferences).forEach(([key, pref]) => {
-              if (newPreferences[key]) {
-                newPreferences[key] = {
-                  ...newPreferences[key],
-                  value: pref.value || newPreferences[key].value,
-                  enabled: pref.enabled || newPreferences[key].enabled
-                };
-              }
-            });
-            return newPreferences;
-          });
-        }
-      } catch (error) {
-        console.error('Error loading preferences:', error);
-      }
-    };
-
-    loadPreferences();
-  }, []);
-
-  // Add form validation effect
-  useEffect(() => {
-    validateForm();
-  }, [validateForm, preferences, zipFileName]);
-
-  // Add save preferences effect
-  useEffect(() => {
-    const savePreferences = async () => {
-      try {
-        await fetch('/save-preferences', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(preferences)
-        });
-      } catch (error) {
-        console.error('Error saving preferences:', error);
-      }
-    };
-
-    savePreferences();
-  }, [preferences]);
-
-  // Terminal output handling
-  const appendToTerminalOutput = (text) => {
-    setTerminalOutput(prev => [...prev, text]);
-    if (terminalRef.current) {
-      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
-    }
-  };
-
-  // Handle configuration completion
-  const handleCompletion = (status) => {
-    setIsConfiguring(false);
-    if (status === 'success') {
-      appendToTerminalOutput('Configuration completed successfully.');
-      setCurrentStep(2);
-    } else {
-      appendToTerminalOutput('Configuration failed.');
-    }
-  };
-
-  // Update the preference gathering function for submission
-  const gatherPreferencesData = () => {
-    const formattedPreferences = {};
-    let foundCaCert = false;
-    let foundClientCert = false;
-
-    // Add zip file name
-    if (zipFileName) {
-      formattedPreferences['#zip_file_name'] = zipFileName;
-    }
-
-    Object.entries(preferences).forEach(([key, pref]) => {
-      if (!pref.enabled) return;
-
-      if (key === 'caLocation0' && pref.value && pref.value !== 'cert/') {
-        foundCaCert = true;
-        const filename = pref.value.split('/').pop();
-        formattedPreferences['#ca_cert_name'] = filename;
-        formattedPreferences[key] = filename;
-      } else if (key === 'certificateLocation0' && pref.value && pref.value !== 'cert/') {
-        foundClientCert = true;
-        const filename = pref.value.split('/').pop();
-        formattedPreferences['#client_cert_name'] = filename;
-        formattedPreferences[key] = filename;
-      } else {
-        formattedPreferences[key] = pref.value;
-      }
-    });
-
-    // Remove certificate markers if not found or invalid
-    if (!foundCaCert) {
-      delete formattedPreferences['#ca_cert_name'];
-      delete formattedPreferences['caLocation0'];
-    }
-    if (!foundClientCert) {
-      delete formattedPreferences['#client_cert_name'];
-      delete formattedPreferences['certificateLocation0'];
-    }
-
-    return formattedPreferences;
-  };
-
-  // Start installation process
-  const startInstallation = async () => {
-    try {
-      const preferencesData = gatherPreferencesData();
-
-      if (Object.keys(preferencesData).length === 0) {
-        preferencesData.default_setting = 'true';
-      }
-
-      const response = await fetch('/submit-preferences', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(preferencesData)
-      });
-
-      const data = await response.json();
-      appendToTerminalOutput(data.message || data.error);
-      
-      if (data.configuration_id) {
-        setIsConfiguring(true);
-        setConfigurationId(data.configuration_id);
-      }
-    } catch (error) {
-      appendToTerminalOutput(`Error during submission: ${error.message}`);
-      handleCompletion('failure');
-    }
-  };
-
   return (
     <div className="flex flex-col gap-8 pt-14">
       {/* Data Package Name Section */}
@@ -386,15 +444,17 @@ function DataPackage() {
             </button>
           </div>
         </div>
-        <CustomScrollbar className="h-[400px]">
-          <div className="space-y-4 cot-streams-container">
-            <CotStreams
-              preferences={preferences}
-              onPreferenceChange={handlePreferenceChange}
-              onEnableChange={handlePreferenceEnable}
-            />
-          </div>
-        </CustomScrollbar>
+        <div className="h-[400px]">
+          <CustomScrollbar>
+            <div className="space-y-4 cot-streams-container">
+              <CotStreams
+                preferences={preferences}
+                onPreferenceChange={handlePreferenceChange}
+                onEnableChange={handlePreferenceEnable}
+              />
+            </div>
+          </CustomScrollbar>
+        </div>
       </div>
 
       {/* Application Preferences Section */}
@@ -432,16 +492,18 @@ function DataPackage() {
             </button>
           </div>
         </div>
-        <CustomScrollbar className="h-[400px]">
-          <div className="space-y-4 app-prefs-container">
-            <ApplicationPreferences
-              preferences={preferences}
-              searchTerm={searchTerm}
-              onPreferenceChange={handlePreferenceChange}
-              onEnableChange={handlePreferenceEnable}
-            />
-          </div>
-        </CustomScrollbar>
+        <div className="h-[400px]">
+          <CustomScrollbar>
+            <div className="space-y-4 app-prefs-container">
+              <ApplicationPreferences
+                preferences={preferences}
+                searchTerm={searchTerm}
+                onPreferenceChange={handlePreferenceChange}
+                onEnableChange={handlePreferenceEnable}
+              />
+            </div>
+          </CustomScrollbar>
+        </div>
       </div>
 
       {/* Configure Button */}

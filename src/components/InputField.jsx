@@ -61,6 +61,7 @@ const InputField = ({
 
   // Certificate dropdown select input
   if (type === 'select') {
+    console.log(`InputField ${id} options:`, options);
     return (
       <div className="relative w-full">
         <select 
@@ -70,16 +71,26 @@ const InputField = ({
             p-2 pl-3 pr-10 rounded-lg cursor-pointer appearance-none 
             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 
             transition-colors duration-200
+            ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
           `}
-          value={value}
+          value={value || ''}
           onChange={onChange}
           name={id}
           disabled={disabled}
+          data-certificate-dropdown={isCertificateDropdown}
         >
-          <option value="">Select Certificate...</option>
-          {options.map((option, index) => (
-            <option key={index} value={option.value}>{option.text}</option>
-          ))}
+          {Array.isArray(options) && options.length > 0 ? (
+            <>
+              <option value="">{isCertificateDropdown ? "Select Certificate..." : "Select..."}</option>
+              {options.map((option, index) => (
+                <option key={`${option.value}-${index}`} value={option.value}>
+                  {option.text || option.value}
+                </option>
+              ))}
+            </>
+          ) : (
+            <option value="">{isCertificateDropdown ? "No certificates available" : "No options available"}</option>
+          )}
         </select>
         <div className="absolute inset-y-0 right-2 flex items-center pr-2 pointer-events-none">
           <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">

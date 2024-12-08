@@ -59,26 +59,32 @@ export const COT_STREAM_ITEMS = [
 function CotStreams({ preferences, onPreferenceChange, onEnableChange }) {
   return (
     <div className="divide-y divide-accentBoarder">
-      {COT_STREAM_ITEMS.map((item) => (
-        <div key={item.label} className="py-2 first:pt-0 last:pb-0">
-          <PreferenceItem
-            name={item.name}
-            label={item.label}
-            input_type={item.input_type}
-            value={preferences[item.label]?.value || item.value}
-            checked={item.input_type === 'checkbox' ? preferences[item.label]?.value : undefined}
-            options={item.options}
-            isEnabled={preferences[item.label]?.enabled || false}
-            onChange={(e) => {
-              const value = item.input_type === 'checkbox' 
-                ? e.target.checked 
-                : e.target.value;
-              onPreferenceChange(item.label, value);
-            }}
-            onEnableChange={(enabled) => onEnableChange(item.label, enabled)}
-          />
-        </div>
-      ))}
+      {COT_STREAM_ITEMS.map((item) => {
+        const isCertLocationField = item.label.toLowerCase().includes('location');
+        const pref = preferences[item.label] || {};
+        
+        return (
+          <div key={item.label} className="py-2 first:pt-0 last:pb-0">
+            <PreferenceItem
+              name={item.name}
+              label={item.label}
+              input_type={isCertLocationField ? 'select' : item.input_type}
+              value={pref.value || item.value}
+              checked={item.input_type === 'checkbox' ? pref.value : undefined}
+              options={isCertLocationField ? pref.options || [] : item.options || []}
+              isEnabled={pref.enabled || false}
+              onChange={(e) => {
+                const value = item.input_type === 'checkbox' 
+                  ? e.target.checked 
+                  : e.target.value;
+                onPreferenceChange(item.label, value);
+              }}
+              onEnableChange={(enabled) => onEnableChange(item.label, enabled)}
+              isCertificateDropdown={isCertLocationField}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }

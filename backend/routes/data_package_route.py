@@ -62,7 +62,7 @@ def submit_preferences():
         return jsonify({"error": error_msg}), 500
 
 # Route to handle stopping the configuration
-@data_package_bp.route('/stop-data-package', methods=['POST'])
+@data_package_bp.route('/stop', methods=['POST'])
 def stop_data_package():
     try:
         configuration_id = request.json.get('configuration_id')
@@ -88,31 +88,46 @@ def stop_data_package():
 @data_package_bp.route('/save-preferences', methods=['POST'])
 def save_preferences():
     try:
-        preferences = request.json
-        data_package = DataPackage()  # Create an instance to access methods
-        working_dir = Path(data_package.get_default_working_directory())  # Get working directory from DataPackage
-        temp_dir = working_dir / '.temp'  # Use .temp to hide the directory
+        data = request.get_json()
+        if not data or 'preferences' not in data:
+            return jsonify({"error": "No preferences data provided"}), 400
+            
+        preferences = data['preferences']
+        data_package = DataPackage()
+        working_dir = Path(data_package.get_default_working_directory())
+        temp_dir = working_dir / '.temp'
         temp_dir.mkdir(parents=True, exist_ok=True)
         
         prefs_file = temp_dir / 'data_package_preferences.json'
         with open(prefs_file, 'w') as f:
-            json.dump(preferences, f)
+            json.dump(preferences, f, indent=2)
         
         return jsonify({"message": "Preferences saved successfully"}), 200
     except Exception as e:
+        print(f"Error saving preferences: {str(e)}")
         return jsonify({"error": f"Failed to save preferences: {str(e)}"}), 500
 
 @data_package_bp.route('/load-preferences', methods=['GET'])
 def load_preferences():
     try:
-        data_package = DataPackage()  # Create an instance to access methods
-        working_dir = Path(data_package.get_default_working_directory())  # Get working directory from DataPackage
-        prefs_file = working_dir / '.temp' / 'data_package_preferences.json'  # Use .temp to hide the directory
+        data_package = DataPackage()
+        working_dir = Path(data_package.get_default_working_directory())
+        temp_dir = working_dir / '.temp'
+        prefs_file = temp_dir / 'data_package_preferences.json'
+        
+        # Create directory if it doesn't exist
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        
         if prefs_file.exists():
-            with open(prefs_file, 'r') as f:
-                preferences = json.load(f)
-            return jsonify({"preferences": preferences}), 200
+            try:
+                with open(prefs_file, 'r') as f:
+                    preferences = json.load(f)
+                return jsonify({"preferences": preferences}), 200
+            except json.JSONDecodeError as e:
+                print(f"Invalid JSON in preferences file: {str(e)}")
+                return jsonify({"preferences": {}}), 200
         return jsonify({"preferences": {}}), 200
     except Exception as e:
+        print(f"Error loading preferences: {str(e)}")
         return jsonify({"error": f"Failed to load preferences: {str(e)}"}), 500
 
