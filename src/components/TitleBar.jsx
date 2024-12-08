@@ -18,6 +18,8 @@ function TitleBar() {
         return 'Data Package Configuration';
       case '/transfer':
         return 'Rapid Transfer';
+      case '/cert-manager':
+        return 'Certificate Manager';
       default:
         return 'System Monitor';
     }

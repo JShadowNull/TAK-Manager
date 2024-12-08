@@ -6,6 +6,7 @@ import Services from './pages/Services';
 import Takserver from './pages/Takserver';
 import DataPackage from './pages/DataPackage';
 import Transfer from './pages/Transfer';
+import CertManager from './pages/CertManager';
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
         <Route path="takserver" element={<Takserver />} />
         <Route path="data-package" element={<DataPackage />} />
         <Route path="transfer" element={<Transfer />} />
+        <Route path="cert-manager" element={<CertManager />} />
       </Route>
     </Routes>
   );

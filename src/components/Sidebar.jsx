@@ -8,7 +8,8 @@ import {
   WrenchScrewdriverIcon,
   CircleStackIcon,  
   ArrowsRightLeftIcon,
-  ServerIcon
+  ServerIcon,
+  KeyIcon
 } from '@heroicons/react/24/outline';
 
 function Sidebar() {
@@ -74,11 +75,19 @@ function Sidebar() {
       alwaysShow: true
     },
     { 
+      path: '/cert-manager', 
+      icon: KeyIcon, 
+      text: 'Certificate Manager',
+      iconColor: 'text-yellow-500',
+      alwaysShow: false,
+      showWhen: () => takServerInstalled
+    },
+    { 
       path: '/data-package', 
       icon: CircleStackIcon, 
       text: 'Data Package Configuration',
       iconColor: 'text-pink-500',
-      alwaysShow: false, // Only show when TAK Server is installed
+      alwaysShow: false,
       showWhen: () => takServerInstalled
     },
     { 
