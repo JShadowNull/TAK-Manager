@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { io } from 'socket.io-client';
 import { 
   HomeIcon,
   AdjustmentsHorizontalIcon,
@@ -12,44 +13,87 @@ import {
 
 function Sidebar() {
   const location = useLocation();
+  const [takServerInstalled, setTakServerInstalled] = useState(false);
   
+  useEffect(() => {
+    // Create socket connection to backend
+    const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const takServerSocket = io('/takserver-status', {
+      transports: ['websocket'],
+      path: '/socket.io'
+    });
+
+    // Listen for status updates
+    takServerSocket.on('connect', () => {
+      console.log('Connected to TAK server status service');
+      takServerSocket.emit('check_status');
+    });
+
+    takServerSocket.on('takserver_status', (status) => {
+      setTakServerInstalled(status.isInstalled);
+    });
+
+    // Add error handling
+    takServerSocket.on('connect_error', (error) => {
+      console.error('Socket connection error:', error);
+    });
+
+    takServerSocket.on('error', (error) => {
+      console.error('Socket error:', error);
+    });
+
+    // Cleanup
+    return () => {
+      takServerSocket.off('takserver_status');
+      takServerSocket.off('connect_error');
+      takServerSocket.off('error');
+      takServerSocket.disconnect();
+    };
+  }, []);
+
   const navItems = [
     { 
       path: '/', 
       icon: HomeIcon, 
       text: 'Dashboard',
-      iconColor: 'text-orange-500'
+      iconColor: 'text-orange-500',
+      alwaysShow: true
     },
     { 
       path: '/services', 
       icon: AdjustmentsHorizontalIcon, 
       text: 'Services',
-      iconColor: 'text-purple-500'
+      iconColor: 'text-purple-500',
+      alwaysShow: true
     },
     { 
       path: '/takserver', 
       icon: WrenchScrewdriverIcon, 
       text: 'TAK Server Manager',
-      iconColor: 'text-blue-500'
+      iconColor: 'text-blue-500',
+      alwaysShow: true
     },
     { 
       path: '/data-package', 
       icon: CircleStackIcon, 
       text: 'Data Package Configuration',
-      iconColor: 'text-pink-500'
+      iconColor: 'text-pink-500',
+      alwaysShow: false, // Only show when TAK Server is installed
+      showWhen: () => takServerInstalled
     },
     { 
       path: '/transfer', 
       icon: ArrowsRightLeftIcon, 
       text: 'Rapid Transfer',
-      iconColor: 'text-yellow-500'
+      iconColor: 'text-yellow-500',
+      alwaysShow: true
     }
   ];
 
   return (
     <nav className="w-64 bg-cardBg p-6 text-textPrimary border-r border-accentBoarder">
       <ul>
-        {navItems.map(({ path, icon: Icon, text, iconColor }) => {
+        {navItems.filter(item => item.alwaysShow || item.showWhen()).map(({ path, icon: Icon, text, iconColor }) => {
           const isActive = location.pathname === path;
           return (
             <li key={path} className="mb-2">
