@@ -33,12 +33,6 @@ function Sidebar() {
       iconColor: 'text-blue-500'
     },
     { 
-      path: '/installers', 
-      icon: WrenchScrewdriverIcon, 
-      text: 'Installers/Setup',
-      iconColor: 'text-green-500'
-    },
-    { 
       path: '/data-package', 
       icon: CircleStackIcon, 
       text: 'Data Package Configuration',
