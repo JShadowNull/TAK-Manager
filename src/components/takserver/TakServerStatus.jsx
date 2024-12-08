@@ -714,6 +714,7 @@ function TakServerStatus({ handleStartStop }) {
               <label className="text-sm font-semibold text-textPrimary">
                 Docker ZIP File <span className="text-red-500">*</span>
               </label>
+              <p className="text-sm text-textSecondary">Example: takserver-docker-5.2-RELEASE-43.zip</p>
               <input
                 type="file"
                 id="docker_zip_file"
