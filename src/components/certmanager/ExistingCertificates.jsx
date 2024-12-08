@@ -2,8 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import CustomScrollbar from '../CustomScrollbar';
 import InputField from '../InputField';
-import { Chip } from '@mui/material';
+import { Chip, Tooltip } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import LockIcon from '@mui/icons-material/Lock';
+import LockOpenIcon from '@mui/icons-material/LockOpen';
 import CircularProgress from '@mui/material/CircularProgress';
 
 function ExistingCertificates({
@@ -109,8 +111,6 @@ function ExistingCertificates({
       });
       
       socketRef.current.on('cert_operation', (data) => {
-        console.log('Received cert operation:', data);
-        
         if (data.type === 'delete') {
           switch (data.status) {
             case 'started':
@@ -152,12 +152,10 @@ function ExistingCertificates({
       });
 
       socketRef.current.on('connect_error', (error) => {
-        console.error('Socket connection error:', error);
         setDeletingCerts(new Set());
       });
 
       socketRef.current.on('error', (error) => {
-        console.error('Socket error:', error);
         setDeletingCerts(new Set());
       });
     }
@@ -267,6 +265,27 @@ function ExistingCertificates({
                       {cert.role === 'ROLE_ADMIN' && (
                         <span className="text-sm text-accentBlue">(Admin)</span>
                       )}
+                      <Tooltip title={cert.passwordHashed ? "Password Protected" : "No Password Set"} arrow>
+                        <div className="flex items-center gap-1">
+                          {cert.passwordHashed ? (
+                            <>
+                              <LockIcon sx={{ 
+                                fontSize: 16, 
+                                color: 'rgba(106, 167, 248, 1.000)', // accentBlue
+                              }} />
+                              <span className="text-xs text-accentBlue">Password Configured</span>
+                            </>
+                          ) : (
+                            <>
+                              <LockOpenIcon sx={{ 
+                                fontSize: 16, 
+                                color: 'rgba(86, 119, 153, 1.000)', // textSecondary
+                              }} />
+                              <span className="text-xs text-textSecondary">No Password</span>
+                            </>
+                          )}
+                        </div>
+                      </Tooltip>
                       {cert.groups.map((group, index) => (
                         <Chip
                           key={index}

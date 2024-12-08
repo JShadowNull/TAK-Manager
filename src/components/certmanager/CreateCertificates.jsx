@@ -1,9 +1,21 @@
 import React, { useRef, useState } from 'react';
 import Switch from '@mui/material/Switch';
 import FormControlLabel from '@mui/material/FormControlLabel';
+import Tooltip from '@mui/material/Tooltip';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { styled } from '@mui/material/styles';
 import InputField from '../InputField';
 import { io } from 'socket.io-client';
+
+// Create a styled help icon
+const StyledHelpIcon = styled(HelpOutlineIcon)({
+  fontSize: '16px',
+  marginLeft: '4px',
+  color: 'rgba(86, 119, 153, 1.000)', // textSecondary color
+  '&:hover': {
+    color: 'rgba(208, 219, 229, 1.000)', // buttonTextColor
+  },
+});
 
 // Create a styled Switch component using Tailwind-like styles
 const StyledSwitch = styled(Switch)({
@@ -76,7 +88,7 @@ function CreateCertificates({ onOperationProgress }) {
   const [buttonState, setButtonState] = useState('idle');
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [certFields, setCertFields] = useState([
-    { name: '', isAdmin: false, group: '__ANON__' }
+    { name: '', isAdmin: false, group: '__ANON__', password: '' }
   ]);
   const [batchName, setBatchName] = useState('');
   const [batchGroup, setBatchGroup] = useState('__ANON__');
@@ -105,7 +117,7 @@ function CreateCertificates({ onOperationProgress }) {
   };
 
   const handleAddCertField = () => {
-    setCertFields([...certFields, { name: '', isAdmin: false, group: '__ANON__' }]);
+    setCertFields([...certFields, { name: '', isAdmin: false, group: '__ANON__', password: '' }]);
   };
 
   const handleRemoveCertField = (index) => {
@@ -239,7 +251,8 @@ function CreateCertificates({ onOperationProgress }) {
           .map(field => ({
             username: field.name.trim(),
             groups: field.group ? [field.group] : ['__ANON__'],
-            is_admin: field.isAdmin
+            is_admin: field.isAdmin,
+            password: field.password || undefined
           }))
       };
     }
@@ -367,6 +380,14 @@ function CreateCertificates({ onOperationProgress }) {
         {!isBatchMode && certFields.map((field, index) => (
           <div key={index} className="flex gap-4 items-end">
             <div className="flex-1">
+              <div className="mb-2">
+                <span className="text-sm text-buttonTextColor font-medium flex items-center">
+                  Certificate Name
+                  <Tooltip title="The unique identifier for this certificate" arrow placement="top">
+                    <StyledHelpIcon />
+                  </Tooltip>
+                </span>
+              </div>
               <InputField
                 type="text"
                 id={`cert-${index}`}
@@ -378,6 +399,14 @@ function CreateCertificates({ onOperationProgress }) {
               />
             </div>
             <div className="flex-1">
+              <div className="mb-2">
+                <span className="text-sm text-buttonTextColor font-medium flex items-center">
+                  Group
+                  <Tooltip title="The group this certificate belongs to" arrow placement="top">
+                    <StyledHelpIcon />
+                  </Tooltip>
+                </span>
+              </div>
               <InputField
                 type="text"
                 id={`group-${index}`}
@@ -388,7 +417,26 @@ function CreateCertificates({ onOperationProgress }) {
                 className="text-buttonTextColor placeholder-textSecondary"
               />
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <div className="mb-2">
+                <span className="text-sm text-buttonTextColor font-medium flex items-center">
+                  Login Password (Optional)
+                  <Tooltip title="Optional password for certificate authentication" arrow placement="top">
+                    <StyledHelpIcon />
+                  </Tooltip>
+                </span>
+              </div>
+              <InputField
+                type="password"
+                id={`password-${index}`}
+                label="Password (Optional)"
+                value={field.password || ''}
+                onChange={(e) => handleCertFieldChange(index, 'password', e.target.value)}
+                placeholder="Enter password"
+                className="text-buttonTextColor placeholder-textSecondary"
+              />
+            </div>
+            <div className="flex items-center gap-4 mt-8">
               <FormControlLabel
                 control={
                   <StyledSwitch
@@ -397,7 +445,7 @@ function CreateCertificates({ onOperationProgress }) {
                   />
                 }
                 label={
-                  <span className="text-sm text-white">
+                  <span className="text-sm text-buttonTextColor">
                     Admin
                   </span>
                 }
@@ -421,6 +469,14 @@ function CreateCertificates({ onOperationProgress }) {
           <div className="space-y-4">
             <div className="flex gap-4">
               <div className="flex-1">
+                <div className="mb-2">
+                  <span className="text-sm text-buttonTextColor font-medium flex items-center">
+                    Base Name
+                    <Tooltip title="The prefix used for all generated certificates (e.g. 'user')" arrow placement="top">
+                      <StyledHelpIcon />
+                    </Tooltip>
+                  </span>
+                </div>
                 <InputField
                   type="text"
                   id="batchName"
@@ -432,6 +488,14 @@ function CreateCertificates({ onOperationProgress }) {
                 />
               </div>
               <div className="flex-1">
+                <div className="mb-2">
+                  <span className="text-sm text-buttonTextColor font-medium flex items-center">
+                    Group
+                    <Tooltip title="The group all certificates will belong to" arrow placement="top">
+                      <StyledHelpIcon />
+                    </Tooltip>
+                  </span>
+                </div>
                 <InputField
                   type="text"
                   id="batchGroup"
@@ -443,6 +507,14 @@ function CreateCertificates({ onOperationProgress }) {
                 />
               </div>
               <div className="flex-1">
+                <div className="mb-2">
+                  <span className="text-sm text-buttonTextColor font-medium flex items-center">
+                    Suffix Type
+                    <Tooltip title="How to number the certificates (e.g. 1,2,3 or a,b,c)" arrow placement="top">
+                      <StyledHelpIcon />
+                    </Tooltip>
+                  </span>
+                </div>
                 <InputField
                   type="select"
                   id="prefixType"
@@ -454,6 +526,14 @@ function CreateCertificates({ onOperationProgress }) {
                 />
               </div>
               <div className="flex-1">
+                <div className="mb-2">
+                  <span className="text-sm text-buttonTextColor font-medium flex items-center">
+                    Number of Certificates
+                    <Tooltip title="How many certificates to generate in this batch" arrow placement="top">
+                      <StyledHelpIcon />
+                    </Tooltip>
+                  </span>
+                </div>
                 <InputField
                   type="number"
                   id="count"
@@ -467,7 +547,7 @@ function CreateCertificates({ onOperationProgress }) {
             </div>
             
             {/* Certificate Name Preview */}
-            <div className="text-sm text-gray-400 italic">
+            <div className="text-sm text-textSecondary italic">
               Preview: {getCertificatePreview()}
             </div>
           </div>
