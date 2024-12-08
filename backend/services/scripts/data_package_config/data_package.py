@@ -12,6 +12,7 @@ from xml.dom import minidom
 import zipfile
 import tempfile
 import uuid  # Add this to the imports at the top
+from backend.services.scripts.takserver.check_status import TakServerStatus
 
 class DataPackage:
     def __init__(self):
@@ -20,6 +21,7 @@ class DataPackage:
         self.os_detector = OSDetector()
         self.docker_manager = DockerManager()
         self.current_process = None
+        self.tak_status = TakServerStatus()
 
     def stop(self):
         """Stop the current configuration process"""
@@ -249,70 +251,18 @@ class DataPackage:
         return version
     def check_docker_running(self):
         """
-        Checks if Docker is running and attempts to start it if not.
-        Uses DockerManager's check_docker_status() method to determine Docker's status.
+        Checks if Docker is running.
         """
         self.run_command.emit_log_output("Checking if Docker is running...", 'data-package')
         self.check_stop()
 
-        docker_status = self.docker_manager.check_docker_status()  # Use DockerManager's check method
+        docker_status = self.docker_manager.check_docker_status()
         if docker_status:
             self.run_command.emit_log_output("Docker is running.", 'data-package')
+            return True
         else:
-            self.run_command.emit_log_output("Docker is installed but not running. Attempting to start Docker...", 'data-package')
-            self.start_docker()
-    def start_docker(self):
-        """
-        Attempt to start Docker based on the OS platform using DockerManager's start_docker method.
-        """
-        self.run_command.emit_log_output("Attempting to start Docker...", 'data-package')
-        self.check_stop()
-
-        docker_start_result = self.docker_manager.start_docker()  # Use DockerManager's start_docker()
-
-        # Handle the result of the start_docker method
-        if 'error' in docker_start_result:
-            self.run_command.emit_log_output(docker_start_result['error'], 'data-package')
-            raise SystemExit("Failed to start Docker. Please start it manually.")
-        else:
-            self.run_command.emit_log_output(docker_start_result['status'], 'data-package')
-
-        self.run_command.emit_log_output("Docker started successfully.", 'data-package')
-
-    def check_takserver_running(self):
-        self.run_command.emit_log_output("Starting TAKServer and TAKServer-DB containers...", 'data-package')
-
-        # Read the version from version.txt
-        version = self.read_version_txt()
-
-        # Check if TAKServer and TAKServer-DB containers are running
-        takserver_container_name = f"takserver-{version}"
-        takserver_db_container_name = f"tak-database-{version}"
-
-        check_takserver_command = ['docker', 'ps', '-q', '--filter', f"name=^{takserver_container_name}"]
-        self.run_command.emit_log_output(f"Executing command: {' '.join(check_takserver_command)}", 'data-package')
-        takserver_running = self.run_command.run_command(check_takserver_command, namespace='data-package', capture_output=True).stdout.strip()
-
-        check_takserver_db_command = ['docker', 'ps', '-q', '--filter', f"name=^{takserver_db_container_name}"]
-        self.run_command.emit_log_output(f"Executing command: {' '.join(check_takserver_db_command)}", 'data-package')
-        takserver_db_running = self.run_command.run_command(check_takserver_db_command, namespace='data-package', capture_output=True).stdout.strip()
-
-        if not takserver_running:
-            self.run_command.emit_log_output(f"{takserver_container_name} is not running. Attempting to start it...", 'data-package')
-            start_takserver_command = ['docker', 'start', takserver_container_name]
-            self.run_command.run_command(start_takserver_command, namespace='data-package', capture_output=True)
-
-        if not takserver_db_running:
-            self.run_command.emit_log_output(f"{takserver_db_container_name} is not running. Attempting to start it...", 'data-package')
-            start_takserver_db_command = ['docker', 'start', takserver_db_container_name]
-            self.run_command.run_command(start_takserver_db_command, namespace='data-package', capture_output=True)
-
-        self.run_command.emit_log_output("TAKServer containers started successfully. Waiting for containers to stabilize...", 'data-package')
-
-        # Wait for 8 seconds to allow containers to start
-        eventlet.sleep(3)
-        
-        return takserver_container_name
+            self.run_command.emit_log_output("Docker is not running.", 'data-package')
+            return False
 
     def list_cert_files(self, container_name):
         """
@@ -380,18 +330,27 @@ class DataPackage:
         Returns list of certificate filenames.
         """
         try:
-            # Check if Docker is running and start if needed
-            self.check_docker_running()
+            # Only check Docker status without starting it
+            docker_status = self.docker_manager.check_docker_status()
+            if not docker_status:
+                return []  # Return empty list if Docker is not running
             
-            # Check TAKServer containers and get container name
-            container_name = self.check_takserver_running()
+            # Check TAKServer status using TakServerStatus class
+            tak_status = self.tak_status.get_status()
+            if not tak_status['running']:
+                return []  # Return empty list if TAKServer is not running
+            
+            # Get container name from status
+            version = self.read_version_txt()
+            container_name = f"takserver-{version}"
             
             # List certificate files from container
             return self.list_cert_files(container_name)
+                
         except Exception as e:
             error_msg = f"Error getting certificate files: {str(e)}"
             socketio.emit('terminal_output', {'data': error_msg}, namespace='/data-package')
-            raise
+            return []  # Return empty list on any error
 
     def create_zip_file(self, temp_dir, zip_name):
         """

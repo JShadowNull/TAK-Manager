@@ -17,11 +17,6 @@ installations = {}
 
 data_package_bp = Blueprint('data_package', __name__)
 
-# Route to render the Docker management page
-@data_package_bp.route('/configure-data-package')
-def data_package_page():
-    return render_template('data_package/data_package.html')
-
 # Route to handle the form submission from the frontend
 @data_package_bp.route('/submit-preferences', methods=['POST'])
 def submit_preferences():

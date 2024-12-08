@@ -28,6 +28,25 @@ function DataPackage() {
   const terminalRef = useRef(null);
   const socketRef = useRef(null);
 
+  // Add Docker and TAK server status states
+  const [dockerStatus, setDockerStatus] = useState({
+    isInstalled: false,
+    isRunning: false,
+    error: null
+  });
+  const [takServerStatus, setTakServerStatus] = useState({
+    isInstalled: false,
+    isRunning: false,
+    error: null
+  });
+  const [showStatusCheck, setShowStatusCheck] = useState(true);
+  const [isStartingDocker, setIsStartingDocker] = useState(false);
+  const [checkStep, setCheckStep] = useState('docker-install'); // docker-install, docker-running, tak-install, tak-running
+  const dockerManagerSocketRef = useRef(null);
+  const dockerStatusSocketRef = useRef(null);
+  const takStatusSocketRef = useRef(null);
+  const dataPackageSocketRef = useRef(null);
+
   // Add form validation
   const validateForm = useCallback(() => {
     let isValid = true;
@@ -405,8 +424,298 @@ function DataPackage() {
     });
   }, []);
 
+  // Function to close all sockets
+  const closeAllSockets = useCallback(() => {
+    if (dockerStatusSocketRef.current) {
+      dockerStatusSocketRef.current.disconnect();
+      dockerStatusSocketRef.current = null;
+    }
+    if (dockerManagerSocketRef.current) {
+      dockerManagerSocketRef.current.disconnect();
+      dockerManagerSocketRef.current = null;
+    }
+    if (takStatusSocketRef.current) {
+      takStatusSocketRef.current.disconnect();
+      takStatusSocketRef.current = null;
+    }
+    if (dataPackageSocketRef.current) {
+      dataPackageSocketRef.current.disconnect();
+      dataPackageSocketRef.current = null;
+    }
+  }, []);
+
+  // Handle popup close
+  const handlePopupClose = useCallback(() => {
+    setShowStatusCheck(false);
+    closeAllSockets();
+  }, [closeAllSockets]);
+
+  // Only check initial Docker status
+  useEffect(() => {
+    if (!showStatusCheck) return;
+
+    dockerStatusSocketRef.current = io('/docker-status', {
+      transports: ['websocket'],
+      path: '/socket.io'
+    });
+
+    dockerStatusSocketRef.current.on('connect', () => {
+      console.log('Connected to Docker status service');
+    });
+
+    dockerStatusSocketRef.current.on('docker_status', (status) => {
+      setDockerStatus(status);
+      if (!status.isInstalled) {
+        setCheckStep('docker-install');
+      } else if (!status.isRunning) {
+        setCheckStep('docker-running');
+      } else {
+        setCheckStep('tak-running');
+        initializeTakStatusCheck();
+      }
+    });
+
+    return () => {
+      if (dockerStatusSocketRef.current) {
+        dockerStatusSocketRef.current.disconnect();
+        dockerStatusSocketRef.current = null;
+      }
+    };
+  }, [showStatusCheck]);
+
+  // Initialize TAK status check
+  const initializeTakStatusCheck = useCallback(() => {
+    if (takStatusSocketRef.current) {
+      takStatusSocketRef.current.disconnect();
+    }
+
+    takStatusSocketRef.current = io('/takserver-status', {
+      transports: ['websocket'],
+      path: '/socket.io'
+    });
+
+    takStatusSocketRef.current.on('connect', () => {
+      console.log('Connected to TAK server status service');
+      takStatusSocketRef.current.emit('check_status');
+    });
+
+    takStatusSocketRef.current.on('takserver_status', (status) => {
+      const newStatus = {
+        isInstalled: status.isInstalled,
+        isRunning: status.isRunning,
+        error: status.error
+      };
+      setTakServerStatus(newStatus);
+      
+      if (!status.isInstalled) {
+        setCheckStep('tak-install');
+      } else if (!status.isRunning) {
+        setCheckStep('tak-running');
+      } else {
+        setShowStatusCheck(false);
+        // Initialize data package socket here instead of using handlePopupClose
+        if (dataPackageSocketRef.current) {
+          dataPackageSocketRef.current.disconnect();
+        }
+        dataPackageSocketRef.current = io('/data-package', {
+          transports: ['websocket'],
+          path: '/socket.io'
+        });
+
+        dataPackageSocketRef.current.on('connect', () => {
+          console.log('Connected to data package service');
+          dataPackageSocketRef.current.emit('get_certificate_files');
+        });
+
+        dataPackageSocketRef.current.on('certificate_files', (data) => {
+          if (data.files && Array.isArray(data.files)) {
+            const certOptions = data.files.map(file => ({
+              value: `cert/${file}`,
+              text: file
+            }));
+
+            setPreferences(prev => {
+              const newPreferences = { ...prev };
+              const certKeys = Object.keys(newPreferences).filter(key => 
+                key.toLowerCase().includes('certificate') || 
+                key.toLowerCase().includes('ca')
+              );
+              
+              certKeys.forEach(key => {
+                if (newPreferences[key]) {
+                  newPreferences[key] = {
+                    ...newPreferences[key],
+                    type: 'select',
+                    options: certOptions,
+                    value: certOptions.some(opt => opt.value === newPreferences[key].value) 
+                      ? newPreferences[key].value 
+                      : ''
+                  };
+                }
+              });
+              return newPreferences;
+            });
+          }
+        });
+      }
+    });
+  }, []);
+
+  // Only start Docker when user explicitly clicks the button
+  const handleStartDocker = () => {
+    setIsStartingDocker(true);
+    
+    // Only connect to Docker manager when starting Docker
+    if (!dockerManagerSocketRef.current) {
+      dockerManagerSocketRef.current = io('/docker-manager', {
+        transports: ['websocket'],
+        path: '/socket.io'
+      });
+
+      dockerManagerSocketRef.current.on('connect', () => {
+        console.log('Connected to Docker manager service');
+        // Only emit start_docker after connection is established
+        dockerManagerSocketRef.current.emit('start_docker');
+      });
+
+      dockerManagerSocketRef.current.on('docker_started', () => {
+        setIsStartingDocker(false);
+        setCheckStep('tak-running');
+        initializeTakStatusCheck();
+        // Disconnect Docker manager socket after Docker is started
+        dockerManagerSocketRef.current.disconnect();
+        dockerManagerSocketRef.current = null;
+      });
+    }
+  };
+
+  const handleStartTakServer = async () => {
+    try {
+      const response = await fetch('/api/takserver/takserver-start', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to start TAK Server');
+      }
+      
+      // Request updated status after starting
+      if (takStatusSocketRef.current) {
+        takStatusSocketRef.current.emit('check_status');
+      }
+    } catch (error) {
+      console.error('Error starting TAK Server:', error);
+    }
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      closeAllSockets();
+    };
+  }, [closeAllSockets]);
+
   return (
     <div className="flex flex-col gap-8 pt-14">
+      {/* Status Check Popup */}
+      <Popup
+        id="status-check-popup"
+        title={
+          checkStep === 'docker-install' ? "Docker Required" :
+          checkStep === 'docker-running' ? "Docker Not Running" :
+          checkStep === 'tak-install' ? "TAK Server Required" :
+          "TAK Server Not Running"
+        }
+        isVisible={showStatusCheck}
+        onClose={handlePopupClose}
+        variant="standard"
+        blurSidebar={false}
+        buttons={
+          checkStep === 'docker-install' ? (
+            <a
+              href="https://www.docker.com/products/docker-desktop/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
+            >
+              Download Docker Desktop
+            </a>
+          ) : checkStep === 'docker-running' ? (
+            <button
+              onClick={handleStartDocker}
+              disabled={isStartingDocker}
+              className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200 flex items-center gap-2"
+            >
+              {isStartingDocker ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-buttonTextColor border-t-transparent"/>
+                  Starting Docker...
+                </>
+              ) : (
+                'Start Docker'
+              )}
+            </button>
+          ) : checkStep === 'tak-install' ? (
+            <button
+              onClick={() => setShowStatusCheck(false)}
+              className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
+            >
+              Install TAK Server
+            </button>
+          ) : (
+            <button
+              onClick={handleStartTakServer}
+              className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
+            >
+              Start TAK Server
+            </button>
+          )
+        }
+      >
+        <div className="text-center">
+          {checkStep === 'docker-install' ? (
+            <>
+              <p className="text-yellow-500 font-semibold">
+                Docker Desktop is required
+              </p>
+              <p className="text-sm text-gray-300">
+                TAK Server requires Docker Desktop to run. Please install Docker Desktop to continue.
+              </p>
+            </>
+          ) : checkStep === 'docker-running' ? (
+            <>
+              <p className="text-yellow-500 font-semibold">
+                Docker Desktop is not running
+              </p>
+              <p className="text-sm text-gray-300">
+                Docker Desktop must be running to use TAK Server. Click the button below to start Docker.
+              </p>
+            </>
+          ) : checkStep === 'tak-install' ? (
+            <>
+              <p className="text-yellow-500 font-semibold">
+                TAK Server is not installed
+              </p>
+              <p className="text-sm text-gray-300">
+                Please install TAK Server to continue.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-yellow-500 font-semibold">
+                TAK Server is not running
+              </p>
+              <p className="text-sm text-gray-300">
+                Click the button below to start TAK Server.
+              </p>
+            </>
+          )}
+        </div>
+      </Popup>
+
       {/* Data Package Name Section */}
       <div className="border border-accentBoarder bg-cardBg p-4 rounded-lg w-full">
         <div className="flex justify-between items-center">
