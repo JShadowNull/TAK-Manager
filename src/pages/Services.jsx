@@ -30,86 +30,168 @@ function Services() {
   const [containers, setContainers] = useState([]);
   const [pendingContainerActions, setPendingContainerActions] = useState({});
   const [dockerSocket, setDockerSocket] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
 
+  // Socket connection and cleanup
   useEffect(() => {
-    // Connect to the Docker Manager namespace via Socket.IO
-    const socket = io('/docker-manager', { transports: ['websocket'] });
-    setDockerSocket(socket);
+    let socket = null;
+    let refreshInterval = null;
+    let isComponentMounted = true;
 
-    // Socket event listeners
-    socket.on('docker_status', (data) => {
-      setIsDockerRunning(data.docker_running);
-      setDockerStatus(data.docker_running ? 'Docker is running' : 'Docker is stopped');
-      if (data.docker_running) {
-        socket.emit('list_containers');
-      }
-    });
+    const connectSocket = () => {
+      try {
+        // Connect to the Docker Manager namespace via Socket.IO
+        socket = io('/docker-manager', { 
+          transports: ['websocket'],
+          reconnection: true,
+          reconnectionAttempts: 5,
+          reconnectionDelay: 1000
+        });
 
-    socket.on('containers', (data) => {
-      console.log('Received containers update:', data.containers);
-      setContainers(data.containers || []);
-      
-      // Clear pending actions for any containers that have reached their target state
-      if (data.containers) {
-        setPendingContainerActions(prev => {
-          const newPending = { ...prev };
-          data.containers.forEach(container => {
-            const pendingAction = newPending[container.name];
-            const status = container.status.toLowerCase();
+        socket.on('connect', () => {
+          console.log('Socket connected');
+          if (isComponentMounted) {
+            setIsConnected(true);
+            setDockerSocket(socket);
+            // Request initial Docker status only after connection
+            socket.emit('check_docker_status');
+          }
+        });
+
+        socket.on('connect_error', (error) => {
+          console.error('Socket connection error:', error);
+          if (isComponentMounted) {
+            setIsConnected(false);
+          }
+        });
+
+        socket.on('disconnect', () => {
+          console.log('Socket disconnected');
+          if (isComponentMounted) {
+            setIsConnected(false);
+          }
+        });
+
+        // Socket event listeners
+        socket.on('docker_status', (data) => {
+          if (!isComponentMounted) return;
+          setIsDockerRunning(data.docker_running);
+          setDockerStatus(data.docker_running ? 'Docker is running' : 'Docker is stopped');
+          if (data.docker_running) {
+            socket.emit('list_containers');
+          }
+        });
+
+        socket.on('containers', (data) => {
+          if (!isComponentMounted) return;
+          console.log('Received containers update:', data.containers);
+          setContainers(data.containers || []);
+          
+          // Clear pending actions for any containers that have reached their target state
+          if (data.containers) {
+            setPendingContainerActions(prev => {
+              const newPending = { ...prev };
+              data.containers.forEach(container => {
+                const pendingAction = newPending[container.name];
+                const status = container.status.toLowerCase();
+                
+                if (pendingAction === 'start' && isContainerRunning(status)) {
+                  delete newPending[container.name];
+                } else if (pendingAction === 'stop' && status.includes('exited')) {
+                  delete newPending[container.name];
+                }
+              });
+              return newPending;
+            });
+          }
+        });
+
+        socket.on('container_status_update', (data) => {
+          if (!isComponentMounted) return;
+          console.log('Received status update:', data);
+          
+          setContainers(prevContainers => 
+            prevContainers.map(container => 
+              container.name === data.container_name 
+                ? { ...container, status: data.status }
+                : container
+            )
+          );
+
+          const status = data.status.toLowerCase();
+          setPendingContainerActions(prev => {
+            const newPending = { ...prev };
+            const pendingAction = newPending[data.container_name];
             
             if (pendingAction === 'start' && isContainerRunning(status)) {
-              delete newPending[container.name];
+              delete newPending[data.container_name];
             } else if (pendingAction === 'stop' && status.includes('exited')) {
-              delete newPending[container.name];
+              delete newPending[data.container_name];
             }
+            
+            return newPending;
           });
-          return newPending;
         });
+      } catch (error) {
+        console.error('Error setting up socket connection:', error);
       }
-    });
-
-    socket.on('container_status_update', (data) => {
-      console.log('Received status update:', data);
-      
-      setContainers(prevContainers => 
-        prevContainers.map(container => 
-          container.name === data.container_name 
-            ? { ...container, status: data.status }
-            : container
-        )
-      );
-
-      // Only clear pending action if the container has reached its target state
-      const status = data.status.toLowerCase();
-      setPendingContainerActions(prev => {
-        const newPending = { ...prev };
-        const pendingAction = newPending[data.container_name];
-        
-        if (pendingAction === 'start' && isContainerRunning(status)) {
-          delete newPending[data.container_name];
-        } else if (pendingAction === 'stop' && status.includes('exited')) {
-          delete newPending[data.container_name];
-        }
-        
-        return newPending;
-      });
-    });
-
-    // Request initial Docker status
-    socket.emit('check_docker_status');
-
-    // Set up periodic container list refresh
-    const refreshInterval = setInterval(() => {
-      if (isDockerRunning) {
-        socket.emit('list_containers');
-      }
-    }, 5000);
-
-    return () => {
-      socket.disconnect();
-      clearInterval(refreshInterval);
     };
-  }, [isDockerRunning]);
+
+    // Set up periodic container list refresh only when connected
+    const setupRefreshInterval = () => {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
+      refreshInterval = setInterval(() => {
+        if (isConnected && isDockerRunning) {
+          socket?.emit('list_containers');
+        }
+      }, 5000);
+    };
+
+    // Initial connection
+    connectSocket();
+    setupRefreshInterval();
+
+    // Cleanup function
+    return () => {
+      console.log('Cleaning up Services component...');
+      isComponentMounted = false;
+      
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
+
+      if (socket) {
+        // Remove all listeners before disconnecting
+        const events = [
+          'connect',
+          'connect_error',
+          'disconnect',
+          'docker_status',
+          'containers',
+          'container_status_update'
+        ];
+        
+        events.forEach(event => {
+          socket.off(event);
+        });
+
+        // Only disconnect if socket is actually connected
+        if (socket.connected) {
+          socket.disconnect();
+        }
+      }
+
+      // Reset states
+      setDockerSocket(null);
+      setContainers([]);
+      setPendingContainerActions({});
+      setDockerStatus('Checking Docker status...');
+      setIsDockerRunning(false);
+      setIsConnected(false);
+    };
+  }, []); // Empty dependency array since we handle isDockerRunning inside the effect
 
   const handleDockerToggle = (e) => {
     const isChecked = e.target.checked;
