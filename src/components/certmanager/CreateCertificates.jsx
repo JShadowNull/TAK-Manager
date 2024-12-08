@@ -109,7 +109,10 @@ function CreateCertificates({ onOperationProgress }) {
       ? generateAlphabeticSequence(previewCount)
       : Array.from({ length: previewCount }, (_, i) => (i + 1).toString());
 
-    const preview = suffixes.map(suffix => `${batchName}-${batchGroup}-${suffix}`);
+    // Use the first group for the preview if multiple groups are specified
+    const primaryGroup = batchGroup.split(',')[0].trim() || '__ANON__';
+    
+    const preview = suffixes.map(suffix => `${batchName}-${primaryGroup}-${suffix}`);
     if (count > 5) {
       preview.push('...');
     }
@@ -234,23 +237,30 @@ function CreateCertificates({ onOperationProgress }) {
 
   const formatCertificateData = () => {
     if (isBatchMode) {
-      // For batch mode, send batch parameters directly
+      // For batch mode, split groups by comma and trim
+      const groups = batchGroup
+        .split(',')
+        .map(g => g.trim())
+        .filter(g => g); // Remove empty strings
+      
       return {
         name: batchName,
-        group: batchGroup || '__ANON__',
+        group: groups.length ? groups : ['__ANON__'],
         prefixType: prefixType,
         count: count,
         isAdmin: false,
         includeGroupInName: true
       };
     } else {
-      // For single/custom mode, send array of certificates
+      // For single/custom mode, split groups by comma for each certificate
       return {
         certificates: certFields
           .filter(field => field.name.trim())
           .map(field => ({
             username: field.name.trim(),
-            groups: field.group ? [field.group] : ['__ANON__'],
+            groups: field.group
+              ? field.group.split(',').map(g => g.trim()).filter(g => g)
+              : ['__ANON__'],
             is_admin: field.isAdmin,
             password: field.password || undefined
           }))
@@ -401,8 +411,8 @@ function CreateCertificates({ onOperationProgress }) {
             <div className="flex-1">
               <div className="mb-2">
                 <span className="text-sm text-buttonTextColor font-medium flex items-center">
-                  Group
-                  <Tooltip title="The group this certificate belongs to" arrow placement="top">
+                  Groups
+                  <Tooltip title="The groups this certificate belongs to (separate multiple groups with commas)" arrow placement="top">
                     <StyledHelpIcon />
                   </Tooltip>
                 </span>
@@ -410,10 +420,10 @@ function CreateCertificates({ onOperationProgress }) {
               <InputField
                 type="text"
                 id={`group-${index}`}
-                label="Group"
+                label="Groups"
                 value={field.group}
                 onChange={(e) => handleCertFieldChange(index, 'group', e.target.value)}
-                placeholder="Enter group name"
+                placeholder="Enter group names (comma-separated)"
                 className="text-buttonTextColor placeholder-textSecondary"
               />
             </div>
@@ -490,8 +500,8 @@ function CreateCertificates({ onOperationProgress }) {
               <div className="flex-1">
                 <div className="mb-2">
                   <span className="text-sm text-buttonTextColor font-medium flex items-center">
-                    Group
-                    <Tooltip title="The group all certificates will belong to" arrow placement="top">
+                    Groups
+                    <Tooltip title="The groups all certificates will belong to (separate multiple groups with commas)" arrow placement="top">
                       <StyledHelpIcon />
                     </Tooltip>
                   </span>
@@ -499,10 +509,10 @@ function CreateCertificates({ onOperationProgress }) {
                 <InputField
                   type="text"
                   id="batchGroup"
-                  label="Group"
+                  label="Groups"
                   value={batchGroup}
                   onChange={(e) => setBatchGroup(e.target.value)}
-                  placeholder="Enter group name"
+                  placeholder="Enter group names (comma-separated)"
                   className="text-buttonTextColor placeholder-textSecondary"
                 />
               </div>
