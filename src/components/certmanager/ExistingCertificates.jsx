@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import CustomScrollbar from '../CustomScrollbar';
 import InputField from '../InputField';
+import { Chip } from '@mui/material';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import CircularProgress from '@mui/material/CircularProgress';
 
 function ExistingCertificates({
   isLoading,
@@ -184,38 +187,27 @@ function ExistingCertificates({
     cert.identifier.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Trashcan SVG icon component
-  const TrashIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-      <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
-      <path fillRule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
-    </svg>
-  );
-
-  // Loading spinner component
+  // Loading spinner component using MUI
   const LoadingSpinner = () => (
-    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-    </svg>
+    <CircularProgress size={20} thickness={4} sx={{ color: 'inherit' }} />
   );
 
   return (
     <div className="border border-accentBoarder bg-cardBg p-4 rounded-lg">
       <div className="flex items-center mb-4 gap-4">
-        <h3 className="text-base font-bold whitespace-nowrap">Existing Certificates</h3>
+        <h3 className="text-base font-bold text-textPrimary">Existing Certificates</h3>
         <div className="flex-1 mx-4">
           <InputField
             type="text"
             placeholder="Search certificates..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full"
+            className="w-full bg-primaryBg border-accentBoarder"
           />
         </div>
         <div className="flex gap-2 items-center">
           <button
-            className="text-buttonTextColor rounded-lg px-3 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-blue-500 transition-all duration-200"
+            className="text-buttonTextColor rounded-lg px-3 py-2 text-sm border border-buttonBorder bg-buttonColor hover:bg-buttonHoverColor transition-all duration-200"
             onClick={handleSelectAll}
           >
             {selectedCerts.size === filteredCertificates.length && filteredCertificates.length > 0 
@@ -225,7 +217,7 @@ function ExistingCertificates({
           {selectedCerts.size > 0 && (
             <button
               className={`text-buttonTextColor rounded-lg px-3 py-2 text-sm border border-buttonBorder bg-buttonColor 
-                ${selectedCerts.size === deletingCerts.size ? 'opacity-50 cursor-not-allowed' : 'hover:text-black hover:shadow-md hover:border-black hover:bg-red-500'} 
+                ${selectedCerts.size === deletingCerts.size ? 'opacity-50 cursor-not-allowed' : 'hover:bg-buttonHoverColor'} 
                 transition-all duration-200`}
               onClick={handleDeleteSelected}
               disabled={selectedCerts.size === deletingCerts.size}
@@ -241,7 +233,7 @@ function ExistingCertificates({
             </button>
           )}
           <button
-            className="text-buttonTextColor rounded-lg px-3 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-blue-500 transition-all duration-200"
+            className="text-buttonTextColor rounded-lg px-3 py-2 text-sm border border-buttonBorder bg-buttonColor hover:bg-buttonHoverColor transition-all duration-200"
             onClick={onCreateDataPackage}
           >
             Create Data Packages
@@ -253,59 +245,57 @@ function ExistingCertificates({
         <CustomScrollbar>
           <div className="space-y-2">
             {filteredCertificates.length === 0 ? (
-              <div className="text-center text-gray-400 py-4">
+              <div className="text-center text-textSecondary py-4">
                 {searchTerm ? 'No matching certificates found' : 'No certificates found'}
               </div>
             ) : (
               filteredCertificates.map((cert) => (
-                <div key={cert.identifier} className="flex justify-between items-center p-2 border border-accentBoarder rounded bg-primaryBg">
+                <div 
+                  key={cert.identifier} 
+                  className="flex items-center justify-between p-3 border border-accentBoarder rounded-lg bg-primaryBg hover:bg-buttonColor transition-all duration-200"
+                >
                   <div className="flex items-center gap-4 flex-1">
                     <input
                       type="checkbox"
                       checked={selectedCerts.has(cert.identifier)}
                       onChange={() => handleSelectCert(cert.identifier)}
-                      className="w-4 h-4 rounded border-gray-300"
+                      className="w-4 h-4 rounded border-accentBoarder bg-primaryBg"
                       disabled={deletingCerts.has(cert.identifier)}
                     />
-                    <div className="flex flex-col flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-textPrimary font-medium">{cert.identifier}</span>
-                        {cert.role === 'ROLE_ADMIN' && (
-                          <span className="text-sm text-blue-500 font-medium">(Admin)</span>
-                        )}
-                        {cert.passwordHashed && (
-                          <span className="text-sm text-green-500" title="User has password set">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                              <path d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2zm3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
-                            </svg>
-                          </span>
-                        )}
-                      </div>
-                      {cert.groups && cert.groups.length > 0 && (
-                        <div className="text-sm text-gray-400 flex gap-1 flex-wrap mt-1">
-                          {cert.groups.map((group, index) => (
-                            <span 
-                              key={index}
-                              className="bg-gray-700 text-gray-200 px-2 py-0.5 rounded-full text-xs"
-                            >
-                              {group}
-                            </span>
-                          ))}
-                        </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-textPrimary font-medium">{cert.identifier}</span>
+                      {cert.role === 'ROLE_ADMIN' && (
+                        <span className="text-sm text-accentBlue">(Admin)</span>
                       )}
+                      {cert.groups.map((group, index) => (
+                        <Chip
+                          key={index}
+                          label={group}
+                          size="small"
+                          sx={{
+                            backgroundColor: 'rgba(4, 28, 47, 1.000)',
+                            color: 'rgba(208, 219, 229, 1.000)',
+                            height: '20px',
+                            fontSize: '0.75rem',
+                            '& .MuiChip-label': {
+                              padding: '0 8px',
+                            },
+                          }}
+                        />
+                      ))}
                     </div>
                   </div>
                   <button
-                    className={`text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor ml-4
-                      ${deletingCerts.has(cert.identifier) 
-                        ? 'opacity-50 cursor-not-allowed' 
-                        : 'hover:text-black hover:shadow-md hover:border-black hover:bg-red-500'} 
-                      transition-all duration-200`}
+                    className={`p-2 rounded-lg text-buttonTextColor hover:text-textPrimary hover:bg-buttonColor transition-all duration-200
+                      ${deletingCerts.has(cert.identifier) ? 'opacity-50 cursor-not-allowed' : ''}`}
                     onClick={() => deleteCertificate(cert.identifier)}
                     disabled={deletingCerts.has(cert.identifier)}
                     title={deletingCerts.has(cert.identifier) ? "Deleting..." : "Delete certificate"}
                   >
-                    {deletingCerts.has(cert.identifier) ? <LoadingSpinner /> : <TrashIcon />}
+                    {deletingCerts.has(cert.identifier) ? 
+                      <LoadingSpinner /> : 
+                      <DeleteOutlineIcon sx={{ fontSize: 20 }} />
+                    }
                   </button>
                 </div>
               ))

@@ -21,6 +21,7 @@
     "@fortawesome/free-solid-svg-icons": "^6.7.1",
     "@fortawesome/react-fontawesome": "^0.2.2",
     "@heroicons/react": "^2.1.5",
+    "@mui/icons-material": "^6.1.10",
     "@mui/material": "^6.1.10",
     "chart.js": "^4.4.2",
     "chartjs-adapter-date-fns": "^2.0.1",
