@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import io from 'socket.io-client';
 import Popup from '../components/Popup';
 import ApplicationPreferences from '../components/ApplicationPreferences';
@@ -9,6 +10,7 @@ import { COT_STREAM_ITEMS } from '../components/CotStreams';
 import { APP_PREFERENCES } from '../components/ApplicationPreferences';
 
 function DataPackage() {
+  const navigate = useNavigate();
   // State management
   const [preferences, setPreferences] = useState({});
   const [isConfiguring, setIsConfiguring] = useState(false);
@@ -660,7 +662,10 @@ function DataPackage() {
             </button>
           ) : checkStep === 'tak-install' ? (
             <button
-              onClick={() => setShowStatusCheck(false)}
+              onClick={() => {
+                setShowStatusCheck(false);
+                navigate('/takserver');
+              }}
               className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
             >
               Install TAK Server
