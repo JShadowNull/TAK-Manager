@@ -28,6 +28,7 @@ def create_app():
     from backend.routes.data_package_route import data_package_bp
     from backend.routes.transfer_route import transfer_bp
     from backend.routes.takserver_routes import takserver_bp
+    from backend.routes.ota_routes import ota_bp
 
     # Register API routes with /api prefix
     app.register_blueprint(dashboard_bp, url_prefix='/api')
@@ -37,5 +38,6 @@ def create_app():
     app.register_blueprint(data_package_bp, url_prefix='/api')
     app.register_blueprint(transfer_bp, url_prefix='/api')
     app.register_blueprint(takserver_bp, url_prefix='/api/takserver')
+    app.register_blueprint(ota_bp, url_prefix='/api/ota')
 
     return app

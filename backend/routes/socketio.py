@@ -53,27 +53,27 @@ class TakServerInstallerNamespace(Namespace):
 socketio.on_namespace(TakServerInstallerNamespace('/takserver-installer'))
 
 # OTA Update Socket
-from backend.services.scripts.ota.ota_updates import OTAUpdate
 class OTAUpdateNamespace(Namespace):
     def __init__(self, namespace=None):
         super().__init__(namespace)
-        self.ota_update = None
+        self.operation_in_progress = False
 
     def on_connect(self):
         print('Client connected to /ota-update namespace')
+        self.emit_status()
 
     def on_disconnect(self):
         print('Client disconnected from /ota-update namespace')
 
-    def on_start_ota_update(self, data):
-        ota_zip_path = data.get('ota_zip_path')
-        if not ota_zip_path:
-            socketio.emit('error', {'message': 'OTA zip path is required'}, namespace='/ota-update')
-            return
+    def emit_status(self):
+        """Emit current OTA update status"""
+        socketio.emit('ota_status', {
+            'isUpdating': self.operation_in_progress
+        }, namespace='/ota-update')
 
-        self.ota_update = OTAUpdate(ota_zip_path)
-        thread = socketio.start_background_task(self.ota_update.main)
-        thread_manager.add_thread(thread)
+    def on_check_status(self):
+        """Handle status check request"""
+        self.emit_status()
 
 # Register the OTA update namespace
 socketio.on_namespace(OTAUpdateNamespace('/ota-update'))

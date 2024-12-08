@@ -103,8 +103,8 @@ class OTAUpdate:
 
         self.run_command.emit_log_output("TAKServer containers started successfully. Waiting for containers to stabilize...", 'ota-update')
 
-        # Wait for 15 seconds to allow containers to start
-        eventlet.sleep(15)
+        # Wait for 8 seconds to allow containers to start
+        eventlet.sleep(8)
         
     def read_version_txt(self):
         """
@@ -422,6 +422,7 @@ class OTAUpdate:
             raise
 
     def main(self):
+        """Main OTA update process"""
         try:
             socketio.emit('installation_started', namespace='/ota-update')
             self.install_rosetta_on_mac()
@@ -436,7 +437,25 @@ class OTAUpdate:
             self.run_generate_inf_script()
             self.restart_takserver_containers()
             socketio.emit('installation_complete', {'status': 'success'}, namespace='/ota-update')
+            return True
         except Exception as e:
             self.run_command.emit_log_output(f"Installation failed: {str(e)}", 'ota-update')
             socketio.emit('installation_failed', {'error': str(e)}, namespace='/ota-update')
-            raise
+            return False
+
+    def update(self):
+        """ OTA update process"""
+        try:
+            socketio.emit('ota_update_started', namespace='/ota-update')
+            self.check_docker_running()
+            self.check_takserver_running()
+            self.check_and_remove_existing_plugin_folder()
+            self.extract_and_prepare_plugins(self.ota_zip_path)
+            self.run_generate_inf_script()
+            self.restart_takserver_containers()
+            socketio.emit('ota_update_complete', {'status': 'success'}, namespace='/ota-update')
+            return True
+        except Exception as e:
+            self.run_command.emit_log_output(f"OTA update failed: {str(e)}", 'ota-update')
+            socketio.emit('ota_update_failed', {'error': str(e)}, namespace='/ota-update')
+            return False
