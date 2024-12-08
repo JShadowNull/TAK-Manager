@@ -29,7 +29,8 @@ def create_app():
     from backend.routes.transfer_route import transfer_bp
     from backend.routes.takserver_routes import takserver_bp
     from backend.routes.ota_routes import ota_bp
-
+    from backend.routes.certmanager_routes import certmanager_routes
+    
     # Register API routes with /api prefix
     app.register_blueprint(dashboard_bp, url_prefix='/api')
     app.register_blueprint(docker_bp, url_prefix='/api')
@@ -39,5 +40,5 @@ def create_app():
     app.register_blueprint(transfer_bp, url_prefix='/api')
     app.register_blueprint(takserver_bp, url_prefix='/api/takserver')
     app.register_blueprint(ota_bp, url_prefix='/api/ota')
-
+    app.register_blueprint(certmanager_routes, url_prefix='/api/certmanager')
     return app
