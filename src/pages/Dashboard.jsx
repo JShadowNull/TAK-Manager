@@ -34,54 +34,62 @@ function Dashboard() {
   const cpuChart = useRef(null);
   const ramChart = useRef(null);
   const [isScrolling, setIsScrolling] = useState(false);
+  const socketRef = useRef(null);
+  const ipSocketRef = useRef(null);
 
   useEffect(() => {
     // Initialize Socket.IO connections
-    const servicesSocket = io('/services-monitor', { 
+    socketRef.current = io('/services-monitor', { 
       transports: ['websocket']
     });
 
-    const ipSocket = io('/ip-fetcher', { 
+    ipSocketRef.current = io('/ip-fetcher', { 
       transports: ['websocket']
     });
 
     // Create charts
     createCharts();
 
-    // Socket event listeners
-    servicesSocket.on('connect', () => {
-      console.log('Services socket connected');
+    // Services monitor socket event listeners
+    socketRef.current.on('connect', () => {
+      console.log('Services monitor socket connected');
     });
 
-    servicesSocket.on('connect_error', (error) => {
-      console.error('Services socket connection error:', error);
+    socketRef.current.on('connect_error', (error) => {
+      console.error('Services monitor socket connection error:', error);
     });
 
-    servicesSocket.on('cpu_usage', (data) => {
+    socketRef.current.on('cpu_usage', (data) => {
       updateChart(cpuChart.current, data.cpu_usage, 'cpu');
       saveChartData('cpuData', cpuChart.current.data.datasets[0].data);
     });
 
-    servicesSocket.on('ram_usage', (data) => {
+    socketRef.current.on('ram_usage', (data) => {
       updateChart(ramChart.current, data.ram_usage, 'ram');
       saveChartData('ramData', ramChart.current.data.datasets[0].data);
     });
 
-    servicesSocket.on('services', (data) => {
+    socketRef.current.on('services', (data) => {
       updateServicesList(data.services);
     });
 
-    ipSocket.on('connect', () => {
+    // IP fetcher socket event listeners
+    ipSocketRef.current.on('connect', () => {
       console.log('IP socket connected');
-      ipSocket.emit('get_ip_address');
     });
 
-    ipSocket.on('ip_address_update', (data) => {
+    ipSocketRef.current.on('connect_error', (error) => {
+      console.error('IP socket connection error:', error);
+    });
+
+    ipSocketRef.current.on('ip_address_update', (data) => {
+      console.log('Received IP update:', data.ip_address);
       updateIpAddress(data.ip_address);
     });
 
     // Cleanup function
     return () => {
+      // Cleanup charts
       if (cpuChart.current) {
         cpuChart.current.destroy();
         cpuChart.current = null;
@@ -90,8 +98,20 @@ function Dashboard() {
         ramChart.current.destroy();
         ramChart.current = null;
       }
-      servicesSocket.disconnect();
-      ipSocket.disconnect();
+
+      // Cleanup sockets
+      if (socketRef.current) {
+        console.log('Disconnecting services monitor socket');
+        socketRef.current.removeAllListeners();
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+      if (ipSocketRef.current) {
+        console.log('Disconnecting IP fetcher socket');
+        ipSocketRef.current.removeAllListeners();
+        ipSocketRef.current.disconnect();
+        ipSocketRef.current = null;
+      }
     };
   }, []);
 

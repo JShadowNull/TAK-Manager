@@ -72,7 +72,6 @@ class CertManager:
             for user in root.findall('.//ns:User', ns):
                 cert_info = {
                     'identifier': user.get('identifier'),
-                    'fingerprint': user.get('fingerprint'),
                     'passwordHashed': user.get('passwordHashed') == 'true',
                     'role': user.get('role'),
                     'groups': []
@@ -83,6 +82,7 @@ class CertManager:
                 
                 certificates.append(cert_info)
             
+            # Emit certificates data without fingerprints
             socketio.emit('certificates_data', 
                 {'certificates': certificates}, 
                 namespace='/cert-manager'
@@ -158,13 +158,55 @@ class CertManager:
     def delete_user_certificates(self, username):
         """Delete all certificate files associated with a given username."""
         try:
+            # Emit deletion started event
+            socketio.emit('cert_operation', {
+                'type': 'delete',
+                'status': 'started',
+                'username': username,
+                'message': f'Starting deletion of certificates for user {username}'
+            }, namespace='/cert-manager')
+
             cert_dir = self.get_cert_directory()
             if not os.path.exists(cert_dir):
-                self.run_command.emit_log_output(
-                    f"Certificate directory not found at: {cert_dir}",
-                    'cert-manager'
-                )
+                socketio.emit('cert_operation', {
+                    'type': 'delete',
+                    'status': 'failed',
+                    'username': username,
+                    'message': f'Certificate directory not found at: {cert_dir}'
+                }, namespace='/cert-manager')
                 return False
+
+            # First unregister the user from UserManager
+            container_name = self.get_container_name()
+            command = f"java -jar /opt/tak/utils/UserManager.jar usermod -D {username}"
+            
+            # Emit unregistering status
+            socketio.emit('cert_operation', {
+                'type': 'delete',
+                'status': 'in_progress',
+                'username': username,
+                'message': f'Unregistering user {username}'
+            }, namespace='/cert-manager')
+            
+            if not self.run_command.run_command(
+                ["docker", "exec", container_name, "bash", "-c", command],
+                namespace='cert-manager'
+            ):
+                socketio.emit('cert_operation', {
+                    'type': 'delete',
+                    'status': 'failed',
+                    'username': username,
+                    'message': f'Failed to unregister user {username}'
+                }, namespace='/cert-manager')
+                return False
+
+            # Emit deleting files status
+            socketio.emit('cert_operation', {
+                'type': 'delete',
+                'status': 'in_progress',
+                'username': username,
+                'message': f'Deleting certificate files for user {username}'
+            }, namespace='/cert-manager')
 
             cert_extensions = [
                 '-trusted.pem',
@@ -183,30 +225,44 @@ class CertManager:
                         os.remove(file_path)
                         deleted_files.append(file)
                     except Exception as e:
-                        self.run_command.emit_log_output(
-                            f"Error deleting file {file}: {str(e)}",
-                            'cert-manager'
-                        )
+                        socketio.emit('cert_operation', {
+                            'type': 'delete',
+                            'status': 'failed',
+                            'username': username,
+                            'message': f'Error deleting file {file}: {str(e)}'
+                        }, namespace='/cert-manager')
                         return False
 
             if deleted_files:
-                self.run_command.emit_log_output(
-                    f"Successfully deleted certificates for user {username}: {', '.join(deleted_files)}",
-                    'cert-manager'
-                )
+                success_message = f"Successfully deleted certificates for user {username}: {', '.join(deleted_files)}"
+                socketio.emit('cert_operation', {
+                    'type': 'delete',
+                    'status': 'completed',
+                    'username': username,
+                    'message': success_message
+                }, namespace='/cert-manager')
+                self.run_command.emit_log_output(success_message, 'cert-manager')
                 return True
             
-            self.run_command.emit_log_output(
-                f"No certificate files found for user {username}",
-                'cert-manager'
-            )
-            return False
+            no_files_message = f"No certificate files found for user {username}"
+            socketio.emit('cert_operation', {
+                'type': 'delete',
+                'status': 'completed',
+                'username': username,
+                'message': no_files_message
+            }, namespace='/cert-manager')
+            self.run_command.emit_log_output(no_files_message, 'cert-manager')
+            return True
 
         except Exception as e:
-            self.run_command.emit_log_output(
-                f"Error deleting certificates for user {username}: {str(e)}",
-                'cert-manager'
-            )
+            error_message = f"Error deleting certificates for user {username}: {str(e)}"
+            socketio.emit('cert_operation', {
+                'type': 'delete',
+                'status': 'failed',
+                'username': username,
+                'message': error_message
+            }, namespace='/cert-manager')
+            self.run_command.emit_log_output(error_message, 'cert-manager')
             return False
 
     # Main Interface Methods

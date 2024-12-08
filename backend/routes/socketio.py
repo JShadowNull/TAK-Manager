@@ -80,22 +80,28 @@ socketio.on_namespace(OTAUpdateNamespace('/ota-update'))
 
 # Get IP Address Socket
 from backend.services.helpers.get_ip import IPFetcher
+
 class IPFetcherNamespace(Namespace):
     def __init__(self, namespace=None):
         super().__init__(namespace)
-        self.ip_fetcher = None
+        self.ip_fetcher = IPFetcher()
+        self.monitor_thread = None
 
     def on_connect(self):
         print('Client connected to /ip-fetcher namespace')
+        if not self.monitor_thread:
+            self.monitor_thread = socketio.start_background_task(self.ip_fetcher.monitor_ip)
+            thread_manager.add_thread(self.monitor_thread)
 
     def on_disconnect(self):
         print('Client disconnected from /ip-fetcher namespace')
+        if self.ip_fetcher:
+            self.ip_fetcher.stop_monitoring()
 
     def on_get_ip_address(self):
-        print("Received request to get IP address")  # Add this line
-        self.ip_fetcher = IPFetcher()
-        thread = socketio.start_background_task(self.ip_fetcher.emit_ip_address)
-        thread_manager.add_thread(thread)
+        """Handle manual IP address request"""
+        ip_address = self.ip_fetcher.get_ip_address()
+        socketio.emit('ip_address_update', {'ip_address': ip_address}, namespace='/ip-fetcher')
 
 # Register the IP fetcher namespace
 socketio.on_namespace(IPFetcherNamespace('/ip-fetcher'))
@@ -182,15 +188,24 @@ class DockerManagerNamespace(Namespace):
 socketio.on_namespace(DockerManagerNamespace('/docker-manager'))
 
 # Services Monitor Namespace
+from backend.services.scripts.system.system_monitor import SystemMonitor
+
 class ServicesMonitorNamespace(Namespace):
     def __init__(self, namespace=None):
         super().__init__(namespace)
+        self.system_monitor = SystemMonitor()
+        self.monitor_thread = None
 
     def on_connect(self):
         print('Client connected to /services-monitor namespace')
+        if not self.monitor_thread:
+            self.monitor_thread = socketio.start_background_task(self.system_monitor.monitor_system)
+            thread_manager.add_thread(self.monitor_thread)
 
     def on_disconnect(self):
         print('Client disconnected from /services-monitor namespace')
+        if self.system_monitor:
+            self.system_monitor.stop_monitoring()
 
 # Register the services monitor namespace
 from backend.services.scripts.data_package_config.data_package import DataPackage

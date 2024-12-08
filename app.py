@@ -6,7 +6,6 @@ import multiprocessing
 import webbrowser
 import logging
 import os
-from flask import Flask
 from backend.routes.socketio import socketio
 from backend.services.scripts.system.thread_manager import thread_manager
 from backend.services.helpers.os_detector import OSDetector  # Import OSDetector
@@ -30,17 +29,9 @@ class API:
 def start_flask():
     """Start the Flask server using SocketIO with eventlet."""
     from backend import create_app
-    from backend.routes.socketio import socketio, DockerManagerNamespace
 
     # Create the Flask app instance
     app = create_app()
-
-    # Start the system monitor with the app instance
-    from backend.services.scripts.system.system_monitor import start_system_monitor
-    start_system_monitor(app)
-
-    # Start the background task to monitor Docker status and containers
-    socketio.start_background_task(DockerManagerNamespace('/docker-manager').monitor_docker_status)
 
     # Run the Flask server
     socketio.run(app, host='127.0.0.1', port=5000, debug=True, use_reloader=False)

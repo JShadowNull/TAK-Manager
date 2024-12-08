@@ -8,6 +8,7 @@ class IPFetcher:
     def __init__(self):
         self.os_detector = OSDetector()
         self.run_command = RunCommand()
+        self.monitoring = False
 
     def get_ip_address(self):
         """
@@ -45,9 +46,19 @@ class IPFetcher:
         else:
             return 'Unavailable'
 
-    def emit_ip_address(self):
-        while True:
-            ip_address = self.get_ip_address()
-            print(f"Emitting IP address: {ip_address}")  # Add this line
-            socketio.emit('ip_address_update', {'ip_address': ip_address}, namespace='/ip-fetcher')
-            eventlet.sleep(2)
+    def monitor_ip(self):
+        """Monitor and emit IP address updates"""
+        self.monitoring = True
+        while self.monitoring:
+            try:
+                ip_address = self.get_ip_address()
+                print(f"Emitting IP address: {ip_address}")
+                socketio.emit('ip_address_update', {'ip_address': ip_address}, namespace='/ip-fetcher')
+                eventlet.sleep(2)
+            except Exception as e:
+                print(f"Error monitoring IP: {e}")
+                eventlet.sleep(2)
+
+    def stop_monitoring(self):
+        """Stop the IP monitoring"""
+        self.monitoring = False
