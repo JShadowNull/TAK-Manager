@@ -6,9 +6,10 @@ import React from 'react';
  * - Search input with centered text and search icon
  * - Select dropdown for certificates
  * - Checkbox with custom styling for preferences
+ * - Number input with plus/minus buttons
  * 
  * @param {string} id - Unique identifier for the input
- * @param {string} type - Input type ('text', 'search', 'select', 'checkbox')
+ * @param {string} type - Input type ('text', 'search', 'select', 'checkbox', 'number')
  * @param {string} placeholder - Placeholder text for text inputs
  * @param {string|boolean} value - Current input value
  * @param {function} onChange - Handler for value changes
@@ -18,20 +19,94 @@ import React from 'react';
  * @param {boolean} checked - Checkbox checked state
  * @param {boolean} disabled - Whether input is disabled
  * @param {boolean} isPreferenceCheckbox - Whether to use custom preference checkbox styling
+ * @param {number} min - Minimum value for number input
+ * @param {number} max - Maximum value for number input
  */
 const InputField = ({ 
   id, 
   type = "text",
   placeholder, 
   value, 
-  onChange, 
+  onChange,
+  onBlur,
   className = "",
   options = [],
   isCertificateDropdown = false,
   checked,
   disabled,
   isPreferenceCheckbox = false,
+  min,
+  max,
 }) => {
+  // Number input with plus/minus buttons
+  if (type === 'number') {
+    const handleIncrement = () => {
+      if (max === undefined || parseInt(value) < max) {
+        onChange({ target: { value: (parseInt(value) + 1).toString() } });
+      }
+    };
+
+    const handleDecrement = () => {
+      if (min === undefined || parseInt(value) > min) {
+        onChange({ target: { value: (parseInt(value) - 1).toString() } });
+      }
+    };
+
+    return (
+      <div className="flex items-center justify-end space-x-2">
+        <button
+          type="button"
+          onClick={handleDecrement}
+          disabled={disabled || (min !== undefined && parseInt(value) <= min)}
+          className={`
+            p-1 rounded-lg border border-buttonBorder bg-buttonColor
+            hover:bg-blue-500 hover:text-white transition-colors duration-200
+            ${disabled || (min !== undefined && parseInt(value) <= min) ? 'opacity-50 cursor-not-allowed' : ''}
+          `}
+        >
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+          </svg>
+        </button>
+        <input
+          type="text"
+          id={id}
+          value={value}
+          onChange={(e) => {
+            const newValue = e.target.value.replace(/[^0-9]/g, '');
+            if (newValue === '' || (min !== undefined && parseInt(newValue) < min) || (max !== undefined && parseInt(newValue) > max)) {
+              return;
+            }
+            onChange({ target: { value: newValue } });
+          }}
+          onBlur={onBlur}
+          disabled={disabled}
+          className={`
+            w-16 text-center bg-buttonColor text-sm border border-buttonBorder 
+            p-2 rounded-lg text-buttonTextColor
+            focus:outline-none focus:ring-2 focus:ring-blue-500
+            ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
+            ${className}
+          `}
+        />
+        <button
+          type="button"
+          onClick={handleIncrement}
+          disabled={disabled || (max !== undefined && parseInt(value) >= max)}
+          className={`
+            p-1 rounded-lg border border-buttonBorder bg-buttonColor
+            hover:bg-blue-500 hover:text-white transition-colors duration-200
+            ${disabled || (max !== undefined && parseInt(value) >= max) ? 'opacity-50 cursor-not-allowed' : ''}
+          `}
+        >
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+          </svg>
+        </button>
+      </div>
+    );
+  }
+
   // Search input with centered text and search icon
   if (type === 'search') {
     return (
@@ -133,6 +208,7 @@ const InputField = ({
         placeholder={placeholder}
         value={value}
         onChange={onChange}
+        onBlur={onBlur}
         disabled={disabled}
         className={`
           w-full bg-buttonColor text-sm border border-buttonBorder 

@@ -12,16 +12,13 @@ from xml.dom import minidom
 import zipfile
 import tempfile
 import uuid  # Add this to the imports at the top
-from backend.services.scripts.takserver.check_status import TakServerStatus
 
 class DataPackage:
     def __init__(self):
         self.run_command = RunCommand()
         self.stop_event = threading.Event()
         self.os_detector = OSDetector()
-        self.docker_manager = DockerManager()
         self.current_process = None
-        self.tak_status = TakServerStatus()
 
     def stop(self):
         """Stop the current configuration process"""
@@ -54,30 +51,44 @@ class DataPackage:
         cot_streams.set('name', 'cot_streams')  # Set attributes individually to control order
         cot_streams.set('version', '1')
         
-        # COT stream specific entries (maintain order)
-        cot_entries = [
-            ('count', 'Integer'),
-            ('description0', 'String'),
-            ('enabled0', 'Boolean'),
-            ('connectString0', 'String'),
-            ('caLocation0', 'String'),
-            ('certificateLocation0', 'String'),
-            ('clientPassword0', 'String'),
-            ('caPassword0', 'String')
+        # Get the count of CoT streams
+        stream_count = int(preferences_data.get('count', 1))
+        
+        # Add count entry first
+        count_entry = ET.SubElement(cot_streams, 'entry')
+        count_entry.set('key', 'count')
+        count_entry.set('class', 'class java.lang.Integer')
+        count_entry.text = str(stream_count)
+        
+        # Base entries for each stream with default values
+        base_entries = [
+            ('description', 'String', ''),
+            ('enabled', 'Boolean', 'False'),
+            ('connectString', 'String', ''),
+            ('caLocation', 'String', ''),
+            ('certificateLocation', 'String', ''),
+            ('clientPassword', 'String', ''),
+            ('caPassword', 'String', '')
         ]
         
-        # Add COT stream entries
-        for key, class_type in cot_entries:
-            if key in preferences_data:
+        # Add entries for each stream
+        for i in range(stream_count):
+            for base_key, class_type, default_value in base_entries:
+                key = f"{base_key}{i}"
                 entry = ET.SubElement(cot_streams, 'entry')
-                # Set attributes in desired order
                 entry.set('key', key)
                 entry.set('class', f"class java.lang.{class_type}")
-                # Prefix caLocation and certificateLocation with 'cert/'
-                if key in ['caLocation0', 'certificateLocation0']:
-                    entry.text = f'cert/{preferences_data[key]}'
+                
+                # Get value from preferences or use default
+                value = preferences_data.get(key, default_value)
+                
+                # Handle certificate paths
+                if base_key in ['caLocation', 'certificateLocation'] and value:
+                    # Remove any existing 'cert/' prefix to avoid duplication
+                    clean_value = value.replace('cert/', '')
+                    entry.text = f'cert/{clean_value}'
                 else:
-                    entry.text = str(preferences_data[key])
+                    entry.text = str(value)
         
         # Create the main preferences section
         main_pref = ET.SubElement(preferences, 'preference')
@@ -170,13 +181,25 @@ class DataPackage:
         
         self.run_command.emit_log_output(f'Manifest file created at: {manifest_path}', namespace='data-package')
         
+    def get_takserver_container_name(self):
+        """Get the TAK Server container name based on version"""
+        try:
+            version = self.read_version_txt()
+            return f"takserver-{version}"
+        except Exception as e:
+            self.run_command.emit_log_output(
+                f"Error getting container name: {str(e)}", 
+                'data-package'
+            )
+            raise
+
     def copy_certificates_from_container(self, temp_dir, ca_cert_name, client_cert_name):
         """
         Copies the specified certificates from the container to the temporary directory.
         Only copies certificates if valid names are provided.
         """
         self.check_stop()
-        container_name = self.check_takserver_running()
+        container_name = self.get_takserver_container_name()
 
         # Create cert directory in temp directory
         cert_dir = os.path.join(temp_dir, 'cert')
@@ -249,21 +272,6 @@ class DataPackage:
                      {'data': f'Read version: {version} from version.txt'}, 
                      namespace='/data-package')
         return version
-    def check_docker_running(self):
-        """
-        Checks if Docker is running.
-        """
-        self.run_command.emit_log_output("Checking if Docker is running...", 'data-package')
-        self.check_stop()
-
-        docker_status = self.docker_manager.check_docker_status()
-        if docker_status:
-            self.run_command.emit_log_output("Docker is running.", 'data-package')
-            return True
-        else:
-            self.run_command.emit_log_output("Docker is not running.", 'data-package')
-            return False
-
     def list_cert_files(self, container_name):
         """
         Lists certificate files in the specified container's /opt/tak/certs/files directory.
@@ -323,23 +331,13 @@ class DataPackage:
             error_msg = f"Error listing certificate files: {str(e)}"
             socketio.emit('terminal_output', {'data': error_msg}, namespace='/data-package')
             raise Exception(error_msg)
-
+        
     def get_certificate_files(self):
         """
         Main function that checks Docker and TAKServer status and returns certificate files.
         Returns list of certificate filenames.
         """
         try:
-            # Only check Docker status without starting it
-            docker_status = self.docker_manager.check_docker_status()
-            if not docker_status:
-                return []  # Return empty list if Docker is not running
-            
-            # Check TAKServer status using TakServerStatus class
-            tak_status = self.tak_status.get_status()
-            if not tak_status['running']:
-                return []  # Return empty list if TAKServer is not running
-            
             # Get container name from status
             version = self.read_version_txt()
             container_name = f"takserver-{version}"

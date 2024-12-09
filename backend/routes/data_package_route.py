@@ -80,6 +80,42 @@ def stop_data_package():
         error_msg = f"Error stopping configuration: {str(e)}"
         return jsonify({"error": error_msg}), 500
 
+def normalize_preferences(preferences):
+    """
+    Normalize preferences data to ensure consistent format for multiple CoT streams.
+    """
+    normalized = {}
+    stream_count = int(preferences.get('count', {}).get('value', 1))
+    
+    # Set count
+    normalized['count'] = {'value': stream_count}
+    
+    # Base fields for each stream
+    stream_fields = [
+        'description',
+        'enabled',
+        'connectString',
+        'caLocation',
+        'certificateLocation',
+        'clientPassword',
+        'caPassword'
+    ]
+    
+    # Process each stream
+    for i in range(stream_count):
+        for field in stream_fields:
+            key = f"{field}{i}"
+            if key in preferences:
+                normalized[key] = preferences[key]
+            else:
+                # Set default values for missing fields
+                if field == 'enabled':
+                    normalized[key] = {'value': False}
+                else:
+                    normalized[key] = {'value': ''}
+    
+    return normalized
+
 @data_package_bp.route('/save-preferences', methods=['POST'])
 def save_preferences():
     try:
@@ -88,6 +124,10 @@ def save_preferences():
             return jsonify({"error": "No preferences data provided"}), 400
             
         preferences = data['preferences']
+        
+        # Normalize preferences before saving
+        normalized_preferences = normalize_preferences(preferences)
+        
         data_package = DataPackage()
         working_dir = Path(data_package.get_default_working_directory())
         temp_dir = working_dir / '.temp'
@@ -95,7 +135,7 @@ def save_preferences():
         
         prefs_file = temp_dir / 'data_package_preferences.json'
         with open(prefs_file, 'w') as f:
-            json.dump(preferences, f, indent=2)
+            json.dump(normalized_preferences, f, indent=2)
         
         return jsonify({"message": "Preferences saved successfully"}), 200
     except Exception as e:
@@ -117,11 +157,18 @@ def load_preferences():
             try:
                 with open(prefs_file, 'r') as f:
                     preferences = json.load(f)
-                return jsonify({"preferences": preferences}), 200
+                    # Normalize loaded preferences
+                    normalized_preferences = normalize_preferences(preferences)
+                return jsonify({"preferences": normalized_preferences}), 200
             except json.JSONDecodeError as e:
                 print(f"Invalid JSON in preferences file: {str(e)}")
-                return jsonify({"preferences": {}}), 200
-        return jsonify({"preferences": {}}), 200
+                # Return default preferences with one stream
+                default_preferences = normalize_preferences({'count': {'value': 1}})
+                return jsonify({"preferences": default_preferences}), 200
+        
+        # Return default preferences with one stream if no file exists
+        default_preferences = normalize_preferences({'count': {'value': 1}})
+        return jsonify({"preferences": default_preferences}), 200
     except Exception as e:
         print(f"Error loading preferences: {str(e)}")
         return jsonify({"error": f"Failed to load preferences: {str(e)}"}), 500

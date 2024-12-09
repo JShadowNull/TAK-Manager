@@ -977,7 +977,7 @@ function ApplicationPreferences({ preferences, searchTerm, onPreferenceChange, o
   );
 
   return (
-    <div className="divide-y divide-accentBoarder">
+    <div className="divide-y divide-accentBoarder w-full p-4">
       {filteredPreferences.map((pref) => (
         <div key={pref.label} className="py-2 first:pt-0 last:pb-0">
           <PreferenceItem

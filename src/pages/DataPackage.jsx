@@ -52,33 +52,98 @@ function DataPackage() {
   // Add form validation
   const validateForm = useCallback(() => {
     let isValid = true;
-    let hasCaCert = false;
-    let hasClientCert = false;
+    const streamValidation = {};
+    const streamCount = parseInt(preferences.count?.value || "1", 10);
+    const validationMessages = [];
 
     if (!zipFileName.trim()) {
       isValid = false;
+      validationMessages.push("Zip file name is required");
     }
 
+    // Initialize validation state for each stream
+    for (let i = 0; i < streamCount; i++) {
+      streamValidation[i] = {
+        hasCaCert: false,
+        hasClientCert: false,
+        isEnabled: false,
+        hasRequiredFields: true
+      };
+    }
+
+    // First pass: collect all stream information
     Object.entries(preferences).forEach(([key, pref]) => {
-      if (!pref.enabled) return;
+      for (let i = 0; i < streamCount; i++) {
+        // Check enabled state
+        if (key === `description${i}` && pref.enabled) {
+          streamValidation[i].isEnabled = true;
+        }
 
-      if (key === 'caLocation0') {
-        hasCaCert = Boolean(pref.value && pref.value !== 'cert/');
-      } else if (key === 'certificateLocation0') {
-        hasClientCert = Boolean(pref.value && pref.value !== 'cert/');
-      }
+        // Check certificates
+        if (key === `caLocation${i}`) {
+          const hasCert = Boolean(pref.value && pref.value !== 'cert/' && pref.value !== '');
+          streamValidation[i].hasCaCert = hasCert;
+          console.log(`Stream ${i} CA cert:`, pref.value, 'isValid:', hasCert);
+        }
+        if (key === `certificateLocation${i}`) {
+          const hasCert = Boolean(pref.value && pref.value !== 'cert/' && pref.value !== '');
+          streamValidation[i].hasClientCert = hasCert;
+          console.log(`Stream ${i} Client cert:`, pref.value, 'isValid:', hasCert);
+        }
 
-      if (!pref.value && pref.type !== 'checkbox') {
-        isValid = false;
+        // Check required fields if enabled
+        if (streamValidation[i].isEnabled) {
+          if (key === `description${i}` && (!pref.value || pref.value.trim() === '')) {
+            streamValidation[i].hasRequiredFields = false;
+          }
+          if (key === `connectString${i}` && (!pref.value || pref.value.trim() === '')) {
+            streamValidation[i].hasRequiredFields = false;
+          }
+        }
       }
     });
 
-    if ((hasCaCert || hasClientCert) && !(hasCaCert && hasClientCert)) {
-      isValid = false;
-    }
+    console.log('Stream validation state:', streamValidation);
+
+    // Validate each stream
+    Object.entries(streamValidation).forEach(([streamIndex, validation]) => {
+      if (!validation.isEnabled) {
+        console.log(`Stream ${streamIndex} is not enabled, skipping validation`);
+        return;
+      }
+
+      const streamNum = parseInt(streamIndex) + 1;
+      console.log(`Validating Stream ${streamNum}:`, validation);
+      
+      // Check required fields
+      if (!validation.hasRequiredFields) {
+        isValid = false;
+        validationMessages.push(`Stream ${streamNum} has empty required fields`);
+      }
+
+      // For enabled streams, both certificates must be present or neither
+      if (validation.hasCaCert !== validation.hasClientCert) {
+        isValid = false;
+        validationMessages.push(`Stream ${streamNum} requires both CA and client certificates`);
+      }
+    });
+
+    console.log('Final validation state:', {
+      isValid,
+      messages: validationMessages,
+      streamValidation
+    });
 
     setIsFormValid(isValid);
+    return validationMessages;
   }, [zipFileName, preferences]);
+
+  // Add form validation effect
+  const [validationMessages, setValidationMessages] = useState([]);
+  useEffect(() => {
+    const messages = validateForm();
+    setValidationMessages(messages);
+  }, [validateForm, preferences, zipFileName]);
 
   // Add preference management
   const handlePreferenceChange = useCallback((label, value) => {
@@ -285,11 +350,6 @@ function DataPackage() {
       }
     };
   }, []);
-
-  // Add form validation effect
-  useEffect(() => {
-    validateForm();
-  }, [validateForm, preferences, zipFileName]);
 
   // Terminal output handling
   const appendToTerminalOutput = (text) => {
@@ -758,9 +818,9 @@ function DataPackage() {
             </button>
           </div>
         </div>
-        <div className="h-[400px]">
+        <div className="h-[400px] overflow-x-hidden w-full">
           <CustomScrollbar>
-            <div className="space-y-4 cot-streams-container">
+            <div className="space-y-4 cot-streams-container w-full">
               <CotStreams
                 preferences={preferences}
                 onPreferenceChange={handlePreferenceChange}
@@ -822,17 +882,32 @@ function DataPackage() {
 
       {/* Configure Button */}
       <div className="flex justify-center mt-4">
-        <button
-          id="configure-data-package-btn"
-          className={`text-buttonTextColor rounded-lg p-2 text-sm border-1 border-buttonBorder bg-buttonColor hover:text-black hover:shadow-soft hover:border-black hover:shadow-black hover:bg-green-500 ${!isFormValid ? 'opacity-50 cursor-not-allowed' : ''}`}
-          onClick={() => {
-            setShowPopup(true);
-            startInstallation();
-          }}
-          disabled={!isFormValid}
-        >
-          Create Data Package
-        </button>
+        <div className="relative group">
+          <button
+            id="configure-data-package-btn"
+            className={`text-buttonTextColor rounded-lg p-2 text-sm border-1 border-buttonBorder bg-buttonColor hover:text-black hover:shadow-soft hover:border-black hover:shadow-black hover:bg-green-500 ${!isFormValid ? 'opacity-50 cursor-not-allowed' : ''}`}
+            onClick={() => {
+              setShowPopup(true);
+              startInstallation();
+            }}
+            disabled={!isFormValid}
+          >
+            Create Data Package
+          </button>
+          {!isFormValid && validationMessages.length > 0 && (
+            <div className="absolute bottom-full mb-2 hidden group-hover:block w-64 bg-gray-900 text-white text-sm rounded-lg p-2 shadow-lg">
+              <div className="font-semibold mb-1">Please fix the following:</div>
+              <ul className="list-disc pl-4">
+                {validationMessages.map((message, index) => (
+                  <li key={index}>{message}</li>
+                ))}
+              </ul>
+              <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1/2">
+                <div className="border-8 border-transparent border-t-gray-900"></div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Popup Modal */}
