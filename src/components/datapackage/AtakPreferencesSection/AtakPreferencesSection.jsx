@@ -51,24 +51,15 @@ const AtakPreferencesSection = ({
   };
 
   return (
-    <div className="p-4 bg-backgroundPrimary rounded-lg">
-      <div className="flex justify-between items-center mb-4">
-        <div className="text-xl">ATAK Preferences</div>
-        <div className="space-x-2">
-          <button 
-            onClick={handleSelectAll}
-            className="px-4 py-2 bg-buttonColor text-buttonTextColor rounded-lg hover:bg-blue-500 transition-colors"
-          >
-            Select All
-          </button>
-          <button 
-            onClick={handleUnselectAll}
-            className="px-4 py-2 bg-buttonColor text-buttonTextColor rounded-lg hover:bg-blue-500 transition-colors"
-          >
-            Unselect All
-          </button>
-        </div>
-      </div>
+    <div className="p-4 bg-backgroundPrimary">
+      <button 
+        className="hidden atak-prefs-select-all"
+        onClick={handleSelectAll}
+      />
+      <button 
+        className="hidden atak-prefs-unselect-all"
+        onClick={handleUnselectAll}
+      />
 
       <div className="divide-y divide-accentBoarder">
         {ATAK_PREFERENCES.map((item) => {

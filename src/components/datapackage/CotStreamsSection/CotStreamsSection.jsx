@@ -63,28 +63,15 @@ const CotStreamsSection = ({
   };
 
   return (
-    <div className="p-4 bg-backgroundPrimary rounded-lg border border-accentBoarder">
-      <div className="flex justify-between items-center mb-4">
-        <div className="text-base text-medium">CoT Streams</div>
-        <div className="space-x-2">
-          <button 
-            onClick={handleSelectAll}
-            className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor 
-              hover:text-black hover:shadow-md hover:accentBoarder hover:bg-selectedColor
-              transition-all duration-200"
-          >
-            Select All
-          </button>
-          <button 
-            onClick={handleUnselectAll}
-            className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor 
-              hover:text-black hover:shadow-md hover:accentBoarder hover:bg-selectedColor
-              transition-all duration-200"
-          >
-            Unselect All
-          </button>
-        </div>
-      </div>
+    <div className="p-4 bg-backgroundPrimary">
+      <button 
+        className="hidden cot-streams-select-all"
+        onClick={handleSelectAll}
+      />
+      <button 
+        className="hidden cot-streams-unselect-all"
+        onClick={handleUnselectAll}
+      />
 
       <div className="divide-y divide-accentBoarder">
         {items.map((item) => {

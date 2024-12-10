@@ -176,34 +176,86 @@ function DataPackage() {
   return (
     <div className="flex flex-col gap-8 p-4 pt-14">
       {/* Zip Name Section */}
-      <ZipNameSection 
-        zipName={zipFileName}
-        onZipNameChange={setZipFileName}
-      />
+      <div className="rounded-lg border border-accentBoarder">
+        <ZipNameSection 
+          zipName={zipFileName}
+          onZipNameChange={setZipFileName}
+        />
+      </div>
 
       {/* CoT Streams Section */}
-      <div className="h-[400px] overflow-x-hidden">
-        <CustomScrollbar>
-          <CotStreamsSection
-            preferences={preferences}
-            onPreferenceChange={handlePreferenceChange}
-            onEnableChange={handlePreferenceEnable}
-            onValidationChange={handleValidationChange}
-            certOptions={certOptions}
-          />
-        </CustomScrollbar>
+      <div className="h-[400px] overflow-x-hidden relative border border-accentBoarder rounded-lg">
+        <div className="absolute inset-x-0 top-0 z-20 bg-backgroundPrimary">
+          <div className="p-4 flex justify-between items-center">
+            <div className="text-base text-medium">CoT Streams</div>
+            <div className="space-x-2">
+              <button 
+                onClick={() => document.querySelector('.cot-streams-select-all')?.click()}
+                className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor 
+                  hover:text-black hover:shadow-md hover:accentBoarder hover:bg-selectedColor
+                  transition-all duration-200"
+              >
+                Select All
+              </button>
+              <button 
+                onClick={() => document.querySelector('.cot-streams-unselect-all')?.click()}
+                className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor 
+                  hover:text-black hover:shadow-md hover:accentBoarder hover:bg-selectedColor
+                  transition-all duration-200"
+              >
+                Unselect All
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="h-full pt-16">
+          <CustomScrollbar>
+            <CotStreamsSection
+              preferences={preferences}
+              onPreferenceChange={handlePreferenceChange}
+              onEnableChange={handlePreferenceEnable}
+              onValidationChange={handleValidationChange}
+              certOptions={certOptions}
+            />
+          </CustomScrollbar>
+        </div>
       </div>
 
       {/* ATAK Preferences Section */}
-      <div className="h-[400px] overflow-x-hidden">
-        <CustomScrollbar>
-          <AtakPreferencesSection
-            preferences={preferences}
-            onPreferenceChange={handlePreferenceChange}
-            onEnableChange={handlePreferenceEnable}
-            onValidationChange={handleValidationChange}
-          />
-        </CustomScrollbar>
+      <div className="h-[400px] overflow-x-hidden relative border border-accentBoarder rounded-lg">
+        <div className="absolute inset-x-0 top-0 z-20 bg-backgroundPrimary">
+          <div className="p-4 flex justify-between items-center">
+            <div className="text-base text-medium">ATAK Preferences</div>
+            <div className="space-x-2">
+              <button 
+                onClick={() => document.querySelector('.atak-prefs-select-all')?.click()}
+                className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor 
+                  hover:text-black hover:shadow-md hover:accentBoarder hover:bg-selectedColor
+                  transition-all duration-200"
+              >
+                Select All
+              </button>
+              <button 
+                onClick={() => document.querySelector('.atak-prefs-unselect-all')?.click()}
+                className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor 
+                  hover:text-black hover:shadow-md hover:accentBoarder hover:bg-selectedColor
+                  transition-all duration-200"
+              >
+                Unselect All
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="h-full pt-16">
+          <CustomScrollbar>
+            <AtakPreferencesSection
+              preferences={preferences}
+              onPreferenceChange={handlePreferenceChange}
+              onEnableChange={handlePreferenceEnable}
+              onValidationChange={handleValidationChange}
+            />
+          </CustomScrollbar>
+        </div>
       </div>
 
       {/* Generate Button */}

@@ -3,7 +3,7 @@ import InputField from '../../InputField';
 
 const ZipNameSection = ({ zipName, onZipNameChange }) => {
   return (
-    <div className="p-4 bg-backgroundPrimary rounded-lg border border-accentBoarder">
+    <div className="p-4 bg-backgroundPrimary">
       <div className="text-base text-medium mb-4">Zip File Name</div>
       <InputField
         type="text"
