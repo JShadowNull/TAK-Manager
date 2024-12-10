@@ -52,7 +52,8 @@ export const generateCotStreamItems = (count) => {
     value: count.toString(),
     min: 1,
     max: 10,
-    required: true
+    required: true,
+    enabled: true
   }];
 
   for (let i = 0; i < count; i++) {
@@ -70,6 +71,7 @@ export const generateCotStreamItems = (count) => {
         label: `enabled${i}`,
         input_type: "checkbox",
         checked: true,
+        value: true,
         enabled: true,
         required: true
       },
@@ -79,7 +81,7 @@ export const generateCotStreamItems = (count) => {
         input_type: "text",
         value: "192.168.1.20:8089:ssl",
         enabled: true,
-        required: true,
+        required: true
       },
       {
         name: `Path to the CA certificate for CoT stream ${i + 1}`,
@@ -129,6 +131,28 @@ function CotStreams({ preferences, onPreferenceChange, onEnableChange, onValidat
   const count = parseInt(preferences.count?.value || "1", 10);
   const items = generateCotStreamItems(count);
 
+  // Initialize all preferences as enabled by default
+  useEffect(() => {
+    items.forEach((item) => {
+      const pref = preferences[item.label];
+      
+      if (!pref) {
+        // For new preferences, set both value and enabled state
+        onPreferenceChange(item.label, item.input_type === 'checkbox' ? true : (item.value || ''));
+        onEnableChange(item.label, true);
+      } else {
+        // For existing preferences, ensure they're enabled if not explicitly set
+        if (pref.enabled === undefined) {
+          onEnableChange(item.label, true);
+        }
+        // Initialize value if undefined
+        if (pref.value === undefined) {
+          onPreferenceChange(item.label, item.input_type === 'checkbox' ? true : (item.value || ''));
+        }
+      }
+    });
+  }, [count]);
+
   // Validate all streams whenever preferences change
   useEffect(() => {
     let allErrors = {};
@@ -162,14 +186,9 @@ function CotStreams({ preferences, onPreferenceChange, onEnableChange, onValidat
         const isCertLocationField = item.label.toLowerCase().includes('location');
         const pref = preferences[item.label] || {};
         
-        // Set default enabled state if not already set
-        if (pref.enabled === undefined) {
-          pref.enabled = item.enabled || false;
-        }
-
-        // For certificate fields, ensure options are set
-        const fieldOptions = isCertLocationField ? certOptions : item.options || [];
-
+        // Always default to enabled unless explicitly disabled
+        const isPreferenceEnabled = pref.enabled !== undefined ? pref.enabled : true;
+        
         // Get the current value, using preference value if available
         const fieldValue = pref.value !== undefined ? pref.value : item.value;
         
@@ -187,8 +206,8 @@ function CotStreams({ preferences, onPreferenceChange, onEnableChange, onValidat
               input_type={isCertLocationField ? 'select' : item.input_type}
               value={fieldValue}
               checked={item.input_type === 'checkbox' ? pref.value : undefined}
-              options={fieldOptions}
-              isEnabled={pref.enabled}
+              options={isCertLocationField ? certOptions : item.options || []}
+              isPreferenceEnabled={isPreferenceEnabled}
               required={isRequired}
               placeholder={item.placeholder}
               onChange={(e) => {
@@ -197,7 +216,7 @@ function CotStreams({ preferences, onPreferenceChange, onEnableChange, onValidat
                   : e.target.value;
                 onPreferenceChange(item.label, value);
               }}
-              onEnableChange={(enabled) => onEnableChange(item.label, enabled)}
+              onPreferenceEnableChange={(enabled) => onEnableChange(item.label, enabled)}
               isCertificateDropdown={isCertLocationField}
               min={item.min}
               max={item.max}

@@ -90,6 +90,10 @@ def normalize_preferences(preferences):
     # Set count
     normalized['count'] = {'value': stream_count}
     
+    # Preserve zip file name if present
+    if '#zip_file_name' in preferences:
+        normalized['#zip_file_name'] = preferences['#zip_file_name']
+    
     # Base fields for each stream
     stream_fields = [
         'description',
@@ -103,6 +107,13 @@ def normalize_preferences(preferences):
     
     # Process each stream
     for i in range(stream_count):
+        # Preserve certificate markers for each stream
+        cert_markers = [f'#ca_cert_name{i}', f'#client_cert_name{i}']
+        for marker in cert_markers:
+            if marker in preferences:
+                normalized[marker] = preferences[marker]
+        
+        # Process regular fields
         for field in stream_fields:
             key = f"{field}{i}"
             if key in preferences:
@@ -110,7 +121,7 @@ def normalize_preferences(preferences):
             else:
                 # Set default values for missing fields
                 if field == 'enabled':
-                    normalized[key] = {'value': False}
+                    normalized[key] = {'value': True}  # Default to enabled
                 else:
                     normalized[key] = {'value': ''}
     

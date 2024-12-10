@@ -142,7 +142,7 @@ class DataPackage:
         """
         return str(uuid.uuid4())
 
-    def create_manifest_file(self, temp_dir, zip_name, ca_cert_name, client_cert_name):
+    def create_manifest_file(self, temp_dir, zip_name, ca_certs, client_certs):
         """
         Creates a clean manifest file in the temporary directory.
         Only includes certificate entries if valid certificate names are provided.
@@ -164,10 +164,12 @@ class DataPackage:
     <Contents>"""
         
         # Only add certificate entries if valid names are provided
-        if ca_cert_name and ca_cert_name.strip():
-            manifest_content += f'\n        <Content ignore="false" zipEntry="cert/{ca_cert_name}"/>'
-        if client_cert_name and client_cert_name.strip():
-            manifest_content += f'\n        <Content ignore="false" zipEntry="cert/{client_cert_name}"/>'
+        if ca_certs:
+            for ca_cert in ca_certs:
+                manifest_content += f'\n        <Content ignore="false" zipEntry="cert/{ca_cert}"/>'
+        if client_certs:
+            for client_cert in client_certs:
+                manifest_content += f'\n        <Content ignore="false" zipEntry="cert/{client_cert}"/>'
         
         # Always add the initial.pref entry
         manifest_content += f'\n        <Content ignore="false" zipEntry="initial.pref"/>'
@@ -193,7 +195,7 @@ class DataPackage:
             )
             raise
 
-    def copy_certificates_from_container(self, temp_dir, ca_cert_name, client_cert_name):
+    def copy_certificates_from_container(self, temp_dir, ca_certs, client_certs):
         """
         Copies the specified certificates from the container to the temporary directory.
         Only copies certificates if valid names are provided.
@@ -206,21 +208,23 @@ class DataPackage:
         os.makedirs(cert_dir, exist_ok=True)
 
         # Only copy certificates if valid names are provided
-        if ca_cert_name and ca_cert_name.strip():
-            ca_cert_src = f"/opt/tak/certs/files/{ca_cert_name}"
-            ca_cert_dest = os.path.join(cert_dir, ca_cert_name)
-            copy_ca_cert_command = [
-                'docker', 'cp', f"{container_name}:{ca_cert_src}", ca_cert_dest
-            ]
-            self.run_command.run_command(copy_ca_cert_command, namespace='data-package')
+        if ca_certs:
+            for ca_cert in ca_certs:
+                ca_cert_src = f"/opt/tak/certs/files/{ca_cert}"
+                ca_cert_dest = os.path.join(cert_dir, ca_cert)
+                copy_ca_cert_command = [
+                    'docker', 'cp', f"{container_name}:{ca_cert_src}", ca_cert_dest
+                ]
+                self.run_command.run_command(copy_ca_cert_command, namespace='data-package')
 
-        if client_cert_name and client_cert_name.strip():
-            client_cert_src = f"/opt/tak/certs/files/{client_cert_name}"
-            client_cert_dest = os.path.join(cert_dir, client_cert_name)
-            copy_client_cert_command = [
-                'docker', 'cp', f"{container_name}:{client_cert_src}", client_cert_dest
-            ]
-            self.run_command.run_command(copy_client_cert_command, namespace='data-package')
+        if client_certs:
+            for client_cert in client_certs:
+                client_cert_src = f"/opt/tak/certs/files/{client_cert}"
+                client_cert_dest = os.path.join(cert_dir, client_cert)
+                copy_client_cert_command = [
+                    'docker', 'cp', f"{container_name}:{client_cert_src}", client_cert_dest
+                ]
+                self.run_command.run_command(copy_client_cert_command, namespace='data-package')
 
         self.run_command.emit_log_output(f'Copied certificates to {cert_dir}', namespace='data-package')
 
@@ -404,10 +408,21 @@ class DataPackage:
                 socketio.emit('installation_started', namespace='/data-package')
                 socketio.emit('terminal_output', {'data': 'Starting data package configuration...'}, namespace='/data-package')
 
-                # Get file names from preferences, without default values
+                # Get zip name from preferences
                 zip_name = preferences_data.get('#zip_file_name', 'data_package')
-                ca_cert_name = preferences_data.get('#ca_cert_name')  # Remove default
-                client_cert_name = preferences_data.get('#client_cert_name')  # Remove default
+                
+                # Extract certificate names for all streams
+                stream_count = int(preferences_data.get('count', 1))
+                ca_certs = []
+                client_certs = []
+                
+                for i in range(stream_count):
+                    ca_cert = preferences_data.get(f'#ca_cert_name{i}')
+                    client_cert = preferences_data.get(f'#client_cert_name{i}')
+                    if ca_cert:
+                        ca_certs.append(ca_cert)
+                    if client_cert:
+                        client_certs.append(client_cert)
                 
                 # Remove special markers from preferences
                 preferences_data = {k: v for k, v in preferences_data.items() if not k.startswith('#')}
@@ -415,12 +430,12 @@ class DataPackage:
                 # Generate config file in temp directory
                 self.generate_config_pref(preferences_data, temp_dir)
                 
-                # Create manifest file in temp directory
-                self.create_manifest_file(temp_dir, zip_name, ca_cert_name, client_cert_name)
+                # Create manifest file in temp directory with all certificates
+                self.create_manifest_file(temp_dir, zip_name, ca_certs, client_certs)
                 
-                # Only copy certificates if they are actually present in preferences
-                if ca_cert_name or client_cert_name:
-                    self.copy_certificates_from_container(temp_dir, ca_cert_name, client_cert_name)
+                # Copy all certificates if any are present
+                if ca_certs or client_certs:
+                    self.copy_certificates_from_container(temp_dir, ca_certs, client_certs)
                 
                 # Create final zip file from temp directory
                 self.create_zip_file(temp_dir, zip_name)
