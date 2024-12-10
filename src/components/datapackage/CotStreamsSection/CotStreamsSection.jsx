@@ -1,16 +1,87 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
+import io from 'socket.io-client';
 import PreferenceItem from '../shared/PreferenceItem';
 import { generateCotStreamItems, validateCotStream } from './cotStreamConfig';
 
-const CotStreamsSection = ({ 
+const CotStreamsSection = memo(({ 
   preferences, 
   onPreferenceChange, 
   onEnableChange, 
-  onValidationChange,
-  certOptions = []
+  onValidationChange
 }) => {
+  const [certOptions, setCertOptions] = useState([]);
   const count = parseInt(preferences.count?.value || "1", 10);
   const items = generateCotStreamItems(count);
+  const socketRef = useRef(null);
+  const renderCount = useRef(0);
+
+  // Debug re-renders
+  useEffect(() => {
+    renderCount.current += 1;
+    console.log('CotStreamsSection: Rendering, count:', renderCount.current);
+  });
+
+  // Socket connection for certificate options
+  useEffect(() => {
+    console.log('CotStreamsSection: Setting up socket connection');
+    const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const socket = io('/data-package', {
+      transports: ['websocket'],
+      path: '/socket.io'
+    });
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      console.log('CotStreamsSection: Socket connected');
+      socket.emit('get_certificate_files');
+    });
+
+    socket.on('disconnect', () => {
+      console.log('CotStreamsSection: Socket disconnected');
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('CotStreamsSection: Socket connection error:', error);
+    });
+
+    socket.on('certificate_files', (data) => {
+      console.log('CotStreamsSection: Received certificate files');
+      if (data.files && Array.isArray(data.files)) {
+        const options = data.files.map(file => ({
+          value: `cert/${file}`,
+          text: file
+        }));
+        setCertOptions(options);
+      }
+    });
+
+    return () => {
+      console.log('CotStreamsSection: Cleaning up socket connection');
+      if (socketRef.current) {
+        console.log('CotStreamsSection: Socket exists, removing listeners');
+        socket.off('connect');
+        socket.off('disconnect');
+        socket.off('connect_error');
+        socket.off('certificate_files');
+        socket.removeAllListeners();
+        socket.disconnect();
+        socketRef.current = null;
+        console.log('CotStreamsSection: Socket cleanup complete');
+      }
+    };
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    items.forEach((item) => {
+      onEnableChange(item.label, true);
+    });
+  }, [items, onEnableChange]);
+
+  const handleUnselectAll = useCallback(() => {
+    items.forEach((item) => {
+      onEnableChange(item.label, false);
+    });
+  }, [items, onEnableChange]);
 
   // Initialize all preferences as enabled by default
   useEffect(() => {
@@ -49,18 +120,6 @@ const CotStreamsSection = ({
       onValidationChange('cot_streams', allErrors);
     }
   }, [preferences, count, onValidationChange]);
-
-  const handleSelectAll = () => {
-    items.forEach((item) => {
-      onEnableChange(item.label, true);
-    });
-  };
-
-  const handleUnselectAll = () => {
-    items.forEach((item) => {
-      onEnableChange(item.label, false);
-    });
-  };
 
   return (
     <div className="p-4 bg-backgroundPrimary">
@@ -119,6 +178,8 @@ const CotStreamsSection = ({
       </div>
     </div>
   );
-};
+});
+
+CotStreamsSection.displayName = 'CotStreamsSection';
 
 export default CotStreamsSection; 

@@ -108,6 +108,12 @@ function Sidebar() {
             <li key={path} className="mb-2">
               <Link
                 to={path}
+                onClick={(e) => {
+                  if (isActive && path === '/data-package') {
+                    e.preventDefault(); // Prevent navigation if already on data-package
+                    return;
+                  }
+                }}
                 className={`flex items-center p-2 rounded-lg ${
                   isActive 
                     ? 'bg-selectedColor text-selectedTextColor' 

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import io from 'socket.io-client';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import Popup from '../components/Popup';
 import CustomScrollbar from '../components/CustomScrollbar';
 import ZipNameSection from '../components/datapackage/ZipNameSection/ZipNameSection';
@@ -7,22 +7,27 @@ import CotStreamsSection from '../components/datapackage/CotStreamsSection/CotSt
 import AtakPreferencesSection from '../components/datapackage/AtakPreferencesSection/AtakPreferencesSection';
 
 function DataPackage() {
+  const location = useLocation();
+  const renderCount = useRef(0);
+  
   // State management
   const [preferences, setPreferences] = useState({});
   const [zipFileName, setZipFileName] = useState('');
   const [isFormValid, setIsFormValid] = useState(false);
   const [validationMessages, setValidationMessages] = useState([]);
-  const [certOptions, setCertOptions] = useState([]);
-  
-  // Socket and terminal state
   const [isConfiguring, setIsConfiguring] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
   const [terminalOutput, setTerminalOutput] = useState([]);
-  const socketRef = useRef(null);
   const terminalRef = useRef(null);
 
-  // Common handlers for preferences
-  const handlePreferenceChange = (label, value) => {
+  // Debug re-renders
+  useEffect(() => {
+    renderCount.current += 1;
+    console.log('DataPackage: Component rendering, path:', location.pathname, 'render count:', renderCount.current);
+  });
+
+  // Common handlers for preferences - memoized to prevent unnecessary re-renders
+  const handlePreferenceChange = useCallback((label, value) => {
     setPreferences(prev => ({
       ...prev,
       [label]: {
@@ -30,9 +35,9 @@ function DataPackage() {
         value
       }
     }));
-  };
+  }, []);
 
-  const handlePreferenceEnable = (label, enabled) => {
+  const handlePreferenceEnable = useCallback((label, enabled) => {
     setPreferences(prev => ({
       ...prev,
       [label]: {
@@ -40,56 +45,56 @@ function DataPackage() {
         enabled
       }
     }));
-  };
-
-  // Certificate fetching
-  useEffect(() => {
-    socketRef.current = io('/data-package', {
-      transports: ['websocket']
-    });
-
-    socketRef.current.on('connect', () => {
-      console.log('Connected to data-package namespace');
-      socketRef.current.emit('get_certificate_files');
-    });
-
-    socketRef.current.on('certificate_files', (data) => {
-      if (data.files && Array.isArray(data.files)) {
-        const options = data.files.map(file => ({
-          value: `cert/${file}`,
-          text: file
-        }));
-        setCertOptions(options);
-      }
-    });
-
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-      }
-    };
   }, []);
 
-  // Validation handling
-  const handleValidationChange = (section, errors) => {
-    const messages = [];
+  // Enhanced validation handling
+  const handleValidationChange = useCallback((section, errors) => {
+    setValidationMessages(prevMessages => {
+      const messages = [];
 
-    // Add zip file validation
-    if (!zipFileName.trim()) {
-      messages.push("Zip file name is required");
-    }
+      // Zip file validation with more detail
+      if (!zipFileName.trim()) {
+        messages.push("❌ Zip File Name: Required - Please enter a name for your data package");
+      } else if (zipFileName.includes('.zip')) {
+        messages.push("❌ Zip File Name: Should not include .zip extension - it will be added automatically");
+      }
 
-    // Add section-specific errors
-    Object.values(errors).forEach(error => {
-      messages.push(error);
+      // Group validation messages by section
+      if (section === 'cot_streams') {
+        Object.entries(errors).forEach(([key, error]) => {
+          const streamMatch = key.match(/(\d+)/);
+          if (streamMatch) {
+            const streamNumber = parseInt(streamMatch[1]) + 1;
+            messages.push(`❌ Stream ${streamNumber}: ${error}`);
+          }
+        });
+      }
+
+      if (section === 'atak_preferences') {
+        Object.entries(errors).forEach(([key, error]) => {
+          messages.push(`❌ ATAK Preference: ${error}`);
+        });
+      }
+
+      const isValid = messages.length === 0;
+      if (isValid !== isFormValid) {
+        setIsFormValid(isValid);
+      }
+
+      return messages;
     });
+  }, [zipFileName, isFormValid]);
 
-    setValidationMessages(messages);
-    setIsFormValid(messages.length === 0);
-  };
+  // Terminal output handling
+  const appendToTerminalOutput = useCallback((text) => {
+    setTerminalOutput(prev => [...prev, text]);
+    if (terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }
+  }, []);
 
   // Generate data package
-  const handleGenerateDataPackage = async () => {
+  const handleGenerateDataPackage = useCallback(async () => {
     if (!isFormValid) return;
 
     setShowPopup(true);
@@ -163,15 +168,7 @@ function DataPackage() {
       setIsConfiguring(false);
       appendToTerminalOutput(`Error: ${error.message}`);
     }
-  };
-
-  // Terminal output handling
-  const appendToTerminalOutput = (text) => {
-    setTerminalOutput(prev => [...prev, text]);
-    if (terminalRef.current) {
-      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
-    }
-  };
+  }, [isFormValid, zipFileName, preferences, appendToTerminalOutput]);
 
   return (
     <div className="flex flex-col gap-8 p-4 pt-14">
@@ -215,7 +212,6 @@ function DataPackage() {
               onPreferenceChange={handlePreferenceChange}
               onEnableChange={handlePreferenceEnable}
               onValidationChange={handleValidationChange}
-              certOptions={certOptions}
             />
           </CustomScrollbar>
         </div>
@@ -258,7 +254,7 @@ function DataPackage() {
         </div>
       </div>
 
-      {/* Generate Button */}
+      {/* Generate Button with original styling but enhanced messages */}
       <div className="flex justify-center mt-4">
         <div className="relative group">
           <button
@@ -274,11 +270,16 @@ function DataPackage() {
             Generate Data Package
           </button>
           {!isFormValid && validationMessages.length > 0 && (
-            <div className="absolute bottom-full mb-2 hidden group-hover:block w-64 bg-gray-900 text-white text-sm rounded-lg p-2 shadow-lg">
+            <div className="absolute bottom-full mb-2 hidden group-hover:block w-96 bg-gray-900 text-white text-sm rounded-lg p-2 shadow-lg">
               <div className="font-semibold mb-1">Please fix the following:</div>
-              <ul className="list-disc pl-4">
+              <ul className="list-disc pl-4 max-h-60 overflow-y-auto">
                 {validationMessages.map((message, index) => (
-                  <li key={index}>{message}</li>
+                  <li 
+                    key={index}
+                    className={message.startsWith('❌') ? 'text-red-300' : ''}
+                  >
+                    {message}
+                  </li>
                 ))}
               </ul>
             </div>
