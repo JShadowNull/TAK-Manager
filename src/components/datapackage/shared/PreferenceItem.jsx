@@ -1,5 +1,5 @@
 import React from 'react';
-import InputField from './InputField';
+import InputField from '../../InputField';
 
 const PreferenceItem = ({
   name,

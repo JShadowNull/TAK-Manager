@@ -1,5 +1,5 @@
 import React from 'react';
-import InputField from '../shared/InputField';
+import InputField from '../../InputField';
 
 const ZipNameSection = ({ zipName, onZipNameChange }) => {
   return (
