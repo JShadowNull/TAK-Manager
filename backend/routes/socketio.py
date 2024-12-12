@@ -247,8 +247,10 @@ class TransferNamespace(Namespace):
 
     def on_disconnect(self):
         print('Client disconnected from /transfer namespace')
-        self.rapid_file_transfer.stop_monitoring()
-        self.rapid_file_transfer.stop_transfer()
+        # Only stop monitoring if explicitly requested, not on disconnect
+        if self.rapid_file_transfer.is_transfer_running:
+            self.rapid_file_transfer.stop_monitoring()
+            self.rapid_file_transfer.stop_transfer()
 
     def start_monitoring(self):
         if not self.rapid_file_transfer.monitoring:
@@ -293,7 +295,10 @@ class TransferNamespace(Namespace):
                 self.rapid_file_transfer.transfer_tasks[device_id] = transfer_thread
 
     def on_stop_transfer(self):
+        # Stop transfer but keep monitoring active
         self.rapid_file_transfer.stop_transfer()
+        self.rapid_file_transfer.is_transfer_running = False
+        # Don't stop monitoring here, keep it running for device detection
 
     def on_get_connected_devices(self):
         devices = self.rapid_file_transfer.get_connected_devices()

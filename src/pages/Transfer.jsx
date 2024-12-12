@@ -1,73 +1,29 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
-
-// Add the missing SVG for file upload
-const UploadIcon = () => (
-  <svg className="mx-auto h-4 w-4 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
-    />
-  </svg>
-);
-
-// Add the delete icon for file list
-const DeleteIcon = () => (
-  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/>
-  </svg>
-);
-
-// Update the Button component to match the template exactly
-const Button = ({ text, hoverColor = "green", type = "button", additionalClasses = "", onClick, disabled }) => (
-  <button 
-    type={type}
-    onClick={onClick}
-    disabled={disabled}
-    className={`
-      text-buttonTextColor 
-      rounded-lg 
-      p-2 
-      text-sm 
-      border-1 
-      border-buttonBorder 
-      bg-buttonColor 
-      hover:text-black 
-      hover:shadow-soft 
-      hover:border-black 
-      hover:shadow-black 
-      hover:bg-${hoverColor}-500 
-      transition-colors
-      ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
-      ${additionalClasses}
-    `.replace(/\s+/g, ' ').trim()}
-  >
-    {text}
-  </button>
-);
+import AdbInstallation from '../components/transfer/AdbInstallation';
+import { FileUpload } from '../components/transfer/FileUpload';
+import { TransferStatus } from '../components/transfer/TransferStatus';
+import { TransferLog } from '../components/transfer/TransferLog';
 
 function Transfer() {
   // State management
   const [files, setFiles] = useState([]);
   const [deviceStatus, setDeviceStatus] = useState({ text: 'Waiting for device...', isConnected: false });
   const [isTransferRunning, setIsTransferRunning] = useState(false);
-  const [progressBars, setProgressBars] = useState({});
+  const [deviceProgress, setDeviceProgress] = useState({});
   const [logs, setLogs] = useState([]);
-
-  // Additional state
+  const [uploadingFiles, setUploadingFiles] = useState(new Set());
   const [adbInstallation, setAdbInstallation] = useState({
     isInstalling: false,
-    currentStep: 1,
+    currentStep: 0,
     isComplete: false,
-    isSuccess: true
+    isSuccess: true,
+    terminalOutput: []
   });
-  const [deviceProgress, setDeviceProgress] = useState({});
 
   // Refs
   const socketRef = useRef(null);
   const fileInputRef = useRef(null);
-  const transferLogRef = useRef(null);
 
   useEffect(() => {
     // Initialize socket connection
@@ -80,6 +36,7 @@ function Transfer() {
       socketRef.current.emit('get_transfer_status');
     });
 
+    // Update device list and handle progress bars
     socketRef.current.on('connected_devices', (data) => {
       if (data.devices?.length > 0) {
         const deviceList = data.devices.map(device => device.id).join(', ');
@@ -87,304 +44,337 @@ function Transfer() {
           text: `Connected devices: ${deviceList}`,
           isConnected: true
         });
+
+        // Handle progress bars for all devices
+        setDeviceProgress(prev => {
+          const newProgress = { ...prev };
+          const connectedDeviceIds = data.devices.map(d => d.id);
+          
+          // Remove completed progress bars for disconnected devices
+          // and remove failed progress bars for reconnected devices
+          Object.keys(newProgress).forEach(deviceId => {
+            if (!connectedDeviceIds.includes(deviceId)) {
+              // Remove if device is disconnected and transfer was completed
+              if (newProgress[deviceId].status === 'completed') {
+                delete newProgress[deviceId];
+              }
+            } else {
+              // If device is connected and was previously failed, remove it
+              if (newProgress[deviceId]?.status === 'failed') {
+                delete newProgress[deviceId];
+              }
+            }
+          });
+          
+          return newProgress;
+        });
       } else {
         setDeviceStatus({
           text: 'Waiting for device...',
           isConnected: false
         });
+        
+        // Only clean up completed transfers when no devices are connected
+        setDeviceProgress(prev => {
+          const newProgress = { ...prev };
+          Object.keys(newProgress).forEach(deviceId => {
+            if (newProgress[deviceId].status === 'completed') {
+              delete newProgress[deviceId];
+            }
+          });
+          return newProgress;
+        });
       }
+    });
+
+    // Handle individual device progress updates
+    socketRef.current.on('transfer_progress', (data) => {
+      const { device_id, current_file, file_progress, overall_progress, status, current_file_number, total_files } = data;
+      
+      setDeviceProgress(prev => {
+        // Don't update if the device is already in failed state
+        if (prev[device_id]?.status === 'failed') {
+          return prev;
+        }
+        
+        return {
+          ...prev,
+          [device_id]: {
+            progress: overall_progress,
+            status,
+            currentFile: current_file,
+            fileProgress: file_progress,
+            fileNumber: current_file_number,
+            totalFiles: total_files
+          }
+        };
+      });
+
+      if (status === 'completed') {
+        addLog(`Transfer completed for device ${device_id}`);
+      }
+    });
+
+    // Handle transfer status updates
+    socketRef.current.on('transfer_status', (data) => {
+      setIsTransferRunning(data.isRunning);
+      
+      if (data.status === 'starting') {
+        addLog('Transfer started');
+      } else if (data.status === 'stopped') {
+        addLog('Transfer stopped');
+        setDeviceProgress({});
+      } else if (data.status === 'failed' && data.device_id) {
+        // Update the specific device's progress to show failed state
+        setDeviceProgress(prev => ({
+          ...prev,
+          [data.device_id]: {
+            ...prev[data.device_id],
+            status: 'failed',
+            currentFile: data.current_file,
+            // Preserve the last progress percentage
+            progress: prev[data.device_id]?.progress || 0
+          }
+        }));
+        addLog(`Transfer failed for device ${data.device_id}`);
+      }
+    });
+
+    // Add terminal output handler
+    socketRef.current.on('terminal_output', (data) => {
+      // Add to transfer log
+      addLog(data.data);
+      
+      // Also update ADB installation logs if needed
+      setAdbInstallation(prev => ({
+        ...prev,
+        terminalOutput: [...prev.terminalOutput, data.data]
+      }));
+    });
+
+    // Add installation status handlers
+    socketRef.current.on('installation_started', () => {
+      setAdbInstallation(prev => ({
+        ...prev,
+        isInstalling: true,
+        currentStep: 2,
+        terminalOutput: [...prev.terminalOutput, "Installation started..."]
+      }));
+    });
+
+    socketRef.current.on('installation_complete', () => {
+      setAdbInstallation(prev => ({
+        ...prev,
+        isInstalling: false,
+        isComplete: true,
+        isSuccess: true,
+        currentStep: 3,
+        terminalOutput: [...prev.terminalOutput, "Installation completed successfully"]
+      }));
+    });
+
+    socketRef.current.on('installation_failed', (data) => {
+      setAdbInstallation(prev => ({
+        ...prev,
+        isInstalling: false,
+        isComplete: true,
+        isSuccess: false,
+        currentStep: 4,
+        terminalOutput: [...prev.terminalOutput, `Installation failed: ${data.error}`]
+      }));
     });
 
     // Cleanup
     return () => {
-      if (isTransferRunning) {
-        socketRef.current.emit('stop_transfer');
-        socketRef.current.emit('stop_monitoring');
+      if (socketRef.current) {
+        socketRef.current.disconnect();
       }
-      socketRef.current.disconnect();
     };
   }, []);
 
+  // Add separate useEffect for handling new devices during active transfer
+  useEffect(() => {
+    if (isTransferRunning && socketRef.current) {
+      socketRef.current.on('connected_devices', (data) => {
+        if (data.devices?.length > 0) {
+          const connectedDeviceIds = data.devices.map(d => d.id);
+          
+          // Initialize progress for newly connected devices
+          setDeviceProgress(prev => {
+            const newProgress = { ...prev };
+            connectedDeviceIds.forEach(deviceId => {
+              if (!newProgress[deviceId]) {
+                newProgress[deviceId] = {
+                  status: 'preparing',
+                  progress: 0,
+                  currentFile: '',
+                  fileProgress: 0,
+                  fileNumber: 0,
+                  totalFiles: 0
+                };
+              }
+            });
+            return newProgress;
+          });
+        }
+      });
+    }
+  }, [isTransferRunning]);
+
   const handleFileUpload = (uploadedFiles) => {
     Array.from(uploadedFiles).forEach(file => {
+      // Check if file is already in uploadingFiles
+      if (uploadingFiles.has(file.name)) {
+        addLog(`File ${file.name} is already being uploaded`);
+        return;
+      }
+
+      // Add file to uploading state
+      setUploadingFiles(prev => new Set([...prev, file.name]));
+      
       const formData = new FormData();
       formData.append('file', file);
 
-      fetch('/upload_file', {
+      fetch('/transfer/upload_file', {
         method: 'POST',
         body: formData
       })
-      .then(response => response.json())
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+      })
       .then(data => {
         if (data.status === 'success') {
-          setFiles(prev => [...prev, file.name]);
+          setFiles(prev => prev.includes(file.name) ? prev : [...prev, file.name]);
           addLog(`Uploaded ${file.name} successfully`);
+        } else {
+          throw new Error(data.error || 'Upload failed');
         }
       })
-      .catch(error => addLog(`Error uploading ${file.name}: ${error}`));
+      .catch(error => {
+        addLog(`Error uploading ${file.name}: ${error.message}`);
+        console.error('Upload error:', error);
+      })
+      .finally(() => {
+        // Remove file from uploading state
+        setUploadingFiles(prev => {
+          const next = new Set(prev);
+          next.delete(file.name);
+          return next;
+        });
+        // Reset file input value
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      });
     });
   };
 
   const addLog = (message) => {
     setLogs(prev => [...prev, message]);
-    if (transferLogRef.current) {
-      transferLogRef.current.scrollTop = transferLogRef.current.scrollHeight;
+  };
+
+  // Add function to remove failed transfer progress
+  const removeFailedTransfer = (deviceId) => {
+    setDeviceProgress(prev => {
+      const newProgress = { ...prev };
+      delete newProgress[deviceId];
+      return newProgress;
+    });
+  };
+
+  // Start transfer for all connected devices
+  const startTransfer = () => {
+    setIsTransferRunning(true);
+    socketRef.current.emit('start_transfer');
+    addLog('Starting file transfer...');
+  };
+
+  // Stop transfer for all devices
+  const stopTransfer = () => {
+    setIsTransferRunning(false);
+    socketRef.current.emit('stop_transfer');
+    addLog('Stopping transfer...');
+    
+    setTimeout(() => {
+      setDeviceProgress({});
+      setDeviceStatus({ text: 'Waiting for device...', isConnected: false });
+      
+      // Instead of disconnecting and reconnecting the socket,
+      // just re-request the device list
+      if (socketRef.current) {
+        socketRef.current.emit('get_connected_devices');
+        socketRef.current.emit('get_transfer_status');
+      }
+    }, 1000);
+  };
+
+  // Add a function to handle file deletion
+  const handleFileDelete = async (filename) => {
+    try {
+      const response = await fetch('/transfer/delete_file', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ filename })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.status === 'success') {
+        setFiles(prev => prev.filter(f => f !== filename));
+        setUploadingFiles(prev => {
+          const next = new Set(prev);
+          next.delete(filename);
+          return next;
+        });
+        // Reset file input value after successful deletion
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        addLog(`Deleted ${filename} successfully`);
+      } else {
+        throw new Error(data.error || 'Delete failed');
+      }
+    } catch (error) {
+      addLog(`Error deleting ${filename}: ${error.message}`);
+      console.error('Delete error:', error);
     }
   };
 
-  const updateDeviceProgress = (data) => {
-    const { device_id, status, progress, overall_progress, current_file, file_progress, current_file_number, total_files } = data;
-    
-    setDeviceProgress(prev => ({
-      ...prev,
-      [device_id]: {
-        progress: overall_progress !== undefined ? overall_progress : progress,
-        status,
-        currentFile: current_file,
-        fileProgress: file_progress,
-        fileNumber: current_file_number,
-        totalFiles: total_files
-      }
-    }));
-  };
-
   return (
-    <div className="flex flex-col gap-6 p-8">
-      {/* File Upload Section - Update styling */}
-      <div className="bg-cardBg p-6 rounded-lg shadow-lg text-white border-1 border-accentBoarder">
-        <h2 className="text-base mb-4">File Upload</h2>
-        <div className="flex flex-col gap-4">
-          <div 
-            className="border-2 border-dashed border-gray-400 rounded-lg p-6 text-center"
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.currentTarget.classList.add('border-green-500');
-            }}
-            onDragLeave={(e) => {
-              e.preventDefault();
-              e.currentTarget.classList.remove('border-green-500');
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              e.currentTarget.classList.remove('border-green-500');
-              handleFileUpload(e.dataTransfer.files);
-            }}
-          >
-            <input
-              id="file-input"  // Add id for label
-              type="file"
-              ref={fileInputRef}
-              className="hidden"
-              multiple
-              accept=".zip,.jpg,.jpeg,.png,.tif,.tiff,.p12,.apk,.sid"
-              onChange={(e) => handleFileUpload(e.target.files)}
-            />
-            <label htmlFor="file-input" className="cursor-pointer">
-              <UploadIcon />
-              <p className="mt-1">Drop files here or click to select</p>
-              <p className="text-sm text-gray-400">
-                Supported files: .zip, .jpg, .jpeg, .png, .tif, .tiff, .p12, .apk, .sid
-              </p>
-            </label>
-          </div>
+    <div className="flex flex-col gap-8 pt-14">
+      <FileUpload 
+        files={files}
+        uploadingFiles={uploadingFiles}
+        onFileUpload={handleFileUpload}
+        onDeleteFile={handleFileDelete}
+        disabled={isTransferRunning}
+      />
 
-          {/* Update file list styling */}
-          {files.length > 0 && (
-            <div id="file-list" className="space-y-2 text-buttonTextColor rounded-lg p-2 text-sm border-1 border-buttonBorder bg-buttonColor">
-              {files.map((filename) => (
-                <div key={filename} className="flex justify-between items-center p-2 rounded-lg">
-                  <span className="text-buttonTextColor">{filename}</span>
-                  <button
-                    onClick={() => setFiles(prev => prev.filter(f => f !== filename))}
-                    className="text-red-500 hover:text-red-700 hover:shadow-soft"
-                    data-filename={filename}
-                  >
-                    <DeleteIcon />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      <TransferStatus
+        deviceStatus={deviceStatus}
+        deviceProgress={deviceProgress}
+        isTransferRunning={isTransferRunning}
+        filesExist={files.length > 0}
+        onRemoveFailed={removeFailedTransfer}
+        onStartTransfer={startTransfer}
+        onStopTransfer={stopTransfer}
+      />
 
-      {/* Transfer Status Section - Update button styling */}
-      <div className="bg-cardBg p-6 rounded-lg shadow-lg text-white border-1 border-accentBoarder">
-        <h2 className="text-base mb-4">Transfer Status</h2>
-        <div className="space-y-4">
-          <div className="flex items-center gap-4">
-            <span className="text-sm">Device Status:</span>
-            <span className={`text-sm ${deviceStatus.isConnected ? 'text-green-500' : 'text-yellow-500'}`}>
-              {deviceStatus.text}
-            </span>
-          </div>
-          
-          {/* Device Progress Container */}
-          <div className="space-y-4">
-            {Object.entries(deviceProgress).map(([deviceId, progress]) => (
-              <div key={deviceId} className="device-progress bg-buttonColor border-1 border-buttonBorder rounded-lg p-4">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-medium text-white">Device: {deviceId}</span>
-                  <span className="text-sm font-medium text-white">
-                    {progress.progress}%
-                    {progress.fileProgress !== undefined && 
-                      ` (File ${progress.fileNumber}/${progress.totalFiles}: ${progress.fileProgress}%)`}
-                  </span>
-                </div>
-                <div className="relative w-full h-2 bg-primaryBg rounded-full overflow-hidden">
-                  <div 
-                    className={`absolute top-0 left-0 h-full rounded-full transition-all duration-300 ease-in-out ${
-                      progress.status === 'completed' ? 'bg-green-500' :
-                      progress.status === 'failed' ? 'bg-red-500' :
-                      progress.status === 'transferring' ? 'bg-blue-500' :
-                      'bg-yellow-500'
-                    } ${progress.status === 'connecting' ? 'animate-pulse' : ''}`}
-                    style={{ width: `${progress.progress}%` }}
-                  />
-                </div>
-                <div className="flex flex-col gap-1 mt-2">
-                  <span className="text-sm text-textSecondary">
-                    {progress.currentFile}
-                  </span>
-                  <span className="text-sm text-textSecondary">
-                    {progress.status}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
+      <TransferLog logs={logs} />
 
-          {/* Update button styling */}
-          <div className="flex gap-4">
-            <Button
-              text="Start Transfer"
-              hoverColor="green"
-              onClick={() => {
-                setIsTransferRunning(true);
-                socketRef.current.emit('start_transfer');
-                addLog('Starting file transfer...');
-              }}
-              disabled={isTransferRunning}
-              additionalClasses={isTransferRunning ? 'hidden' : ''}
-            />
-            <Button
-              text="Stop Transfer"
-              hoverColor="red"
-              onClick={() => {
-                setIsTransferRunning(false);
-                socketRef.current.emit('stop_monitoring');
-                socketRef.current.emit('stop_transfer');
-                setTimeout(() => window.location.reload(), 1500);
-              }}
-              disabled={!isTransferRunning}
-              additionalClasses={!isTransferRunning ? 'hidden' : ''}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Transfer Log Section - Update title styling */}
-      <div className="bg-cardBg p-6 rounded-lg shadow-lg text-white border-1 border-accentBoarder">
-        <h2 className="text-base mb-4">Transfer Log</h2>
-        <div 
-          ref={transferLogRef}
-          className="list-none space-y-2 overflow-y-auto text-textSecondary text-sm border border-accentBoarder h-64 p-2 rounded-lg mt-4"
-        >
-          {logs.map((log, index) => (
-            <div key={index} className="select-text">{log}</div>
-          ))}
-        </div>
-      </div>
-
-      {/* ADB Installation Modal - Update modal styling */}
-      {adbInstallation.currentStep > 0 && (
-        <div className="fixed inset-y-0 right-0 left-64 flex items-center justify-center z-50">
-          {/* Background Overlay with Blur Effect - adjusted to match sidebar width */}
-          <div className="fixed inset-y-0 right-0 left-64 bg-black bg-opacity-50 backdrop-filter backdrop-blur-sm"></div>
-          
-          {/* Popup Content */}
-          <div className="bg-cardBg border-1 border-accentBoarder p-6 rounded-lg shadow-lg max-w-lg w-full text-white relative z-10 flex flex-col items-center mx-4">
-            <div className="popup-content text-sm overflow-y-auto max-w-full p-2 max-h-96 flex-grow flex justify-center items-start">
-              <div className="w-full max-w-lg">
-                {/* Step 1: Not Installed */}
-                {adbInstallation.currentStep === 1 && (
-                  <div className="text-center">
-                    <h3 className="text-lg mb-4">ADB Not Installed</h3>
-                    <p className="mb-4">Android Debug Bridge (ADB) is required for device communication.</p>
-                    <div className="flex justify-center space-x-2 w-full">
-                      <Button
-                        text="Return to Dashboard"
-                        hoverColor="gray"
-                        onClick={() => window.location.href = '/'}
-                      />
-                      <Button
-                        text="Install ADB"
-                        hoverColor="blue"
-                        onClick={() => {
-                          setAdbInstallation(prev => ({ ...prev, isInstalling: true, currentStep: 2 }));
-                          fetch('/install_adb', { method: 'POST' });
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Step 2: Installing */}
-                {adbInstallation.currentStep === 2 && (
-                  <div className="text-center">
-                    <h3 className="text-lg mb-4">Installing ADB</h3>
-                    <div id="adb-terminal-output" className="list-none space-y-2 overflow-y-auto text-textSecondary text-sm border border-accentBoarder h-64 p-2 rounded-lg mt-4">
-                      {/* Terminal output would go here */}
-                    </div>
-                    {!adbInstallation.isInstalling && (
-                      <div className="flex justify-center mt-4 space-x-2 w-full">
-                        <Button
-                          text="Next"
-                          hoverColor="blue"
-                          onClick={() => setAdbInstallation(prev => ({
-                            ...prev,
-                            currentStep: prev.isSuccess ? 3 : 4
-                          }))}
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Step 3: Success */}
-                {adbInstallation.currentStep === 3 && (
-                  <div className="text-center">
-                    <h3 className="text-lg mb-4">Installation Complete</h3>
-                    <p className="mb-4">ADB has been successfully installed.</p>
-                    <div className="flex justify-center mt-4 space-x-2 w-full">
-                      <Button
-                        text="Close"
-                        hoverColor="green"
-                        onClick={() => window.location.reload()}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Step 4: Failed */}
-                {adbInstallation.currentStep === 4 && (
-                  <div className="text-center">
-                    <h3 className="text-lg mb-4">Installation Failed</h3>
-                    <p className="mb-4">Failed to install ADB. Please try again or contact support.</p>
-                    <div className="flex justify-center mt-4 space-x-2 w-full">
-                      <Button
-                        text="Return to Dashboard"
-                        hoverColor="red"
-                        onClick={() => window.location.href = '/'}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <AdbInstallation 
+        adbInstallation={adbInstallation}
+        setAdbInstallation={setAdbInstallation}
+        socketRef={socketRef}
+      />
     </div>
   );
 }

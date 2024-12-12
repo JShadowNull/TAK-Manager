@@ -287,9 +287,13 @@ class RapidFileTransfer:
                 self.device_states[device_id] = new_state
                 self.last_device_update[device_id] = current_time
 
+                # Get device name for better identification
+                device_name = self.get_device_name(device_id)
+                device_display = f"{device_name} ({device_id})"
+
                 if new_state == 'device':
                     socketio.emit('terminal_output', {
-                        'data': f'Device connected: {device_id}'
+                        'data': f'📱 Device connected: {device_display}'
                     }, namespace='/transfer')
                     self.connected_devices[device_id] = {
                         'status': 'idle',
@@ -297,7 +301,7 @@ class RapidFileTransfer:
                     }
                 elif new_state in ['offline', 'unauthorized']:
                     socketio.emit('terminal_output', {
-                        'data': f'Device disconnected: {device_id}'
+                        'data': f'📱 Device disconnected: {device_display}'
                     }, namespace='/transfer')
                     self.connected_devices.pop(device_id, None)
                     if device_id in self.transfer_tasks:
@@ -305,24 +309,24 @@ class RapidFileTransfer:
                     # Clear transferred files tracking when device disconnects
                     self.transferred_files.pop(device_id, None)
 
-            # Update connected devices list
-            current_devices = self.get_connected_devices()
-            socketio.emit('connected_devices', {
-                'devices': current_devices,
-                'isTransferRunning': self.is_transfer_running
-            }, namespace='/transfer')
+                # Update connected devices list
+                current_devices = self.get_connected_devices()
+                socketio.emit('connected_devices', {
+                    'devices': current_devices,
+                    'isTransferRunning': self.is_transfer_running
+                }, namespace='/transfer')
 
-            # Start transfer if there are new files to transfer
-            if self.is_transfer_running and new_state == 'device':
-                all_files = set(os.listdir(self.temp_dir))
-                transferred = self.transferred_files.get(device_id, set())
-                if device_id not in self.transfer_tasks and (all_files - transferred):
-                    socketio.emit('transfer_status', {
-                        'isRunning': True,
-                        'device_id': device_id,
-                        'status': 'preparing'
-                    }, namespace='/transfer')
-                    self.start_transfer(device_id)
+                # Start transfer if there are new files to transfer
+                if self.is_transfer_running and new_state == 'device':
+                    all_files = set(os.listdir(self.temp_dir))
+                    transferred = self.transferred_files.get(device_id, set())
+                    if device_id not in self.transfer_tasks and (all_files - transferred):
+                        socketio.emit('transfer_status', {
+                            'isRunning': True,
+                            'device_id': device_id,
+                            'status': 'preparing'
+                        }, namespace='/transfer')
+                        self.start_transfer(device_id)
 
         except Exception as e:
             socketio.emit('terminal_output', {

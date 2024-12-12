@@ -171,7 +171,7 @@ function DataPackage() {
   }, [isFormValid, zipFileName, preferences, appendToTerminalOutput]);
 
   return (
-    <div className="flex flex-col gap-8 p-4 pt-14">
+    <div className="flex flex-col gap-8 pt-14">
       {/* Zip Name Section */}
       <div className="rounded-lg border border-accentBoarder">
         <ZipNameSection 
