@@ -4,7 +4,9 @@
 export default {
   content: [
     "./src/**/*.{js,jsx,ts,tsx}",
-    "./src/**/*.html"
+    "./src/**/*.html",
+    "./.storybook/**/*.{js,jsx,ts,tsx}",
+    "./src/stories/**/*.{js,jsx,ts,tsx}"
   ],
   theme: {
     extend: {

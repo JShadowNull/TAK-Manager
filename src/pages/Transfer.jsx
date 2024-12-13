@@ -4,6 +4,7 @@ import AdbInstallation from '../components/transfer/AdbInstallation';
 import { FileUpload } from '../components/transfer/FileUpload';
 import { TransferStatus } from '../components/transfer/TransferStatus';
 import { TransferLog } from '../components/transfer/TransferLog';
+import { DeviceProgress } from '../components/transfer/TransferStatus/DeviceProgress';
 
 function Transfer() {
   // State management
@@ -32,56 +33,159 @@ function Transfer() {
     // Socket event handlers
     socketRef.current.on('connect', () => {
       addLog('Connected to server');
+      // Get current state when connecting/reconnecting
       socketRef.current.emit('get_connected_devices');
       socketRef.current.emit('get_transfer_status');
+      
+      // Get current files if transfer is running
+      fetch('/transfer/get_files')
+        .then(response => response.json())
+        .then(data => {
+          if (data.status === 'success') {
+            setFiles(data.files);
+          }
+        })
+        .catch(error => {
+          console.error('Error getting files:', error);
+        });
     });
 
     // Update device list and handle progress bars
     socketRef.current.on('connected_devices', (data) => {
       if (data.devices?.length > 0) {
         const deviceList = data.devices.map(device => device.id).join(', ');
+        const connectedDeviceIds = new Set(data.devices.map(device => device.id));
+        
         setDeviceStatus({
           text: `Connected devices: ${deviceList}`,
-          isConnected: true
+          isConnected: true,
+          devices: data.devices.reduce((acc, device) => {
+            acc[device.id] = device;
+            return acc;
+          }, {})
         });
 
-        // Handle progress bars for all devices
+        // Clean up progress for disconnected devices
         setDeviceProgress(prev => {
           const newProgress = { ...prev };
-          const connectedDeviceIds = data.devices.map(d => d.id);
-          
-          // Remove completed progress bars for disconnected devices
-          // and remove failed progress bars for reconnected devices
+          // Remove progress entries for devices that are no longer connected
+          // unless they have failed status
           Object.keys(newProgress).forEach(deviceId => {
-            if (!connectedDeviceIds.includes(deviceId)) {
-              // Remove if device is disconnected and transfer was completed
-              if (newProgress[deviceId].status === 'completed') {
-                delete newProgress[deviceId];
-              }
-            } else {
-              // If device is connected and was previously failed, remove it
-              if (newProgress[deviceId]?.status === 'failed') {
-                delete newProgress[deviceId];
-              }
-            }
-          });
-          
-          return newProgress;
-        });
-      } else {
-        setDeviceStatus({
-          text: 'Waiting for device...',
-          isConnected: false
-        });
-        
-        // Only clean up completed transfers when no devices are connected
-        setDeviceProgress(prev => {
-          const newProgress = { ...prev };
-          Object.keys(newProgress).forEach(deviceId => {
-            if (newProgress[deviceId].status === 'completed') {
+            if (!connectedDeviceIds.has(deviceId) && newProgress[deviceId].status !== 'failed') {
               delete newProgress[deviceId];
             }
           });
+          
+          // Initialize progress for new devices if transfer is running
+          data.devices.forEach(device => {
+            if (data.isTransferRunning && !newProgress[device.id]) {
+              newProgress[device.id] = {
+                progress: 0,
+                status: device.status || 'preparing',
+                currentFile: '',
+                fileProgress: 0,
+                fileNumber: 0,
+                totalFiles: 0
+              };
+            }
+          });
+
+          return newProgress;
+        });
+
+        // Update transfer running state based on server response
+        if (data.isTransferRunning) {
+          setIsTransferRunning(true);
+        }
+      } else {
+        // No devices connected
+        setDeviceStatus({
+          text: 'Waiting for device...',
+          isConnected: false,
+          devices: {}
+        });
+
+        // Clean up all progress except failed ones
+        setDeviceProgress(prev => {
+          const newProgress = { ...prev };
+          Object.keys(newProgress).forEach(deviceId => {
+            if (newProgress[deviceId].status !== 'failed') {
+              delete newProgress[deviceId];
+            }
+          });
+          return newProgress;
+        });
+      }
+    });
+
+    // Handle transfer status updates
+    socketRef.current.on('transfer_status', (data) => {
+      // Update isTransferRunning based on server status
+      if (data.isRunning !== undefined) {
+        setIsTransferRunning(data.isRunning);
+      }
+
+      if (data.status === 'starting') {
+        addLog('Transfer started');
+        // Initialize progress containers for all connected devices
+        const connectedDevices = Object.keys(deviceStatus.devices || {});
+        const initialProgress = {};
+        connectedDevices.forEach(deviceId => {
+          initialProgress[deviceId] = {
+            progress: 0,
+            status: 'preparing',
+            currentFile: '',
+            fileProgress: 0,
+            fileNumber: 0,
+            totalFiles: data.totalFiles || 0
+          };
+        });
+        setDeviceProgress(initialProgress);
+      } else if (data.status === 'stopped') {
+        addLog('Transfer stopped');
+      } else if (data.device_id) {
+        setDeviceProgress(prev => {
+          const newProgress = { ...prev };
+          const currentDevice = prev[data.device_id] || {};
+          
+          // Don't update if device is already in this status
+          if (currentDevice?.status === data.status) {
+            return prev;
+          }
+          
+          switch (data.status) {
+            case 'failed':
+              newProgress[data.device_id] = {
+                ...currentDevice,
+                status: 'failed',
+                currentFile: data.current_file || currentDevice.currentFile,
+                progress: data.progress ?? currentDevice.progress ?? 0,
+                fileProgress: currentDevice.fileProgress || 0,
+                fileNumber: currentDevice.fileNumber || 0,
+                totalFiles: currentDevice.totalFiles || 0
+              };
+              break;
+
+            case 'completed':
+              newProgress[data.device_id] = {
+                ...currentDevice,
+                status: 'completed',
+                currentFile: '',
+                progress: 100,
+                fileProgress: 100,
+                fileNumber: currentDevice.totalFiles,
+                totalFiles: currentDevice.totalFiles
+              };
+              addLog(`Transfer completed for device ${data.device_id}`);
+              break;
+
+            default:
+              newProgress[data.device_id] = {
+                ...currentDevice,
+                status: data.status
+              };
+          }
+          
           return newProgress;
         });
       }
@@ -92,52 +196,27 @@ function Transfer() {
       const { device_id, current_file, file_progress, overall_progress, status, current_file_number, total_files } = data;
       
       setDeviceProgress(prev => {
-        // Don't update if the device is already in failed state
-        if (prev[device_id]?.status === 'failed') {
+        // Don't update if the device is in a terminal state (failed/completed)
+        if (['failed', 'completed'].includes(prev[device_id]?.status)) {
           return prev;
         }
         
-        return {
+        // Create new progress object with all current values
+        const newProgress = {
           ...prev,
           [device_id]: {
-            progress: overall_progress,
-            status,
+            ...prev[device_id],
             currentFile: current_file,
             fileProgress: file_progress,
             fileNumber: current_file_number,
-            totalFiles: total_files
+            totalFiles: total_files,
+            status: status,
+            progress: overall_progress
           }
         };
+        
+        return newProgress;
       });
-
-      if (status === 'completed') {
-        addLog(`Transfer completed for device ${device_id}`);
-      }
-    });
-
-    // Handle transfer status updates
-    socketRef.current.on('transfer_status', (data) => {
-      setIsTransferRunning(data.isRunning);
-      
-      if (data.status === 'starting') {
-        addLog('Transfer started');
-      } else if (data.status === 'stopped') {
-        addLog('Transfer stopped');
-        setDeviceProgress({});
-      } else if (data.status === 'failed' && data.device_id) {
-        // Update the specific device's progress to show failed state
-        setDeviceProgress(prev => ({
-          ...prev,
-          [data.device_id]: {
-            ...prev[data.device_id],
-            status: 'failed',
-            currentFile: data.current_file,
-            // Preserve the last progress percentage
-            progress: prev[data.device_id]?.progress || 0
-          }
-        }));
-        addLog(`Transfer failed for device ${data.device_id}`);
-      }
     });
 
     // Add terminal output handler
@@ -187,7 +266,25 @@ function Transfer() {
     // Cleanup
     return () => {
       if (socketRef.current) {
-        socketRef.current.disconnect();
+        // Create a promise that resolves when we get the transfer status
+        const getTransferStatus = new Promise((resolve) => {
+          socketRef.current.once('transfer_status', (data) => {
+            resolve(data.isRunning);
+          });
+          socketRef.current.emit('get_transfer_status');
+        });
+
+        // Wait for status and then handle cleanup
+        getTransferStatus.then(isRunning => {
+          if (!isRunning) {
+            fetch('/transfer/cleanup', {
+              method: 'POST',
+            }).catch(error => {
+              console.error('Error cleaning up temp directory:', error);
+            });
+          }
+          socketRef.current.disconnect();
+        });
       }
     };
   }, []);
@@ -287,28 +384,16 @@ function Transfer() {
 
   // Start transfer for all connected devices
   const startTransfer = () => {
-    setIsTransferRunning(true);
+    setIsTransferRunning(true);  // Only set by explicit start
     socketRef.current.emit('start_transfer');
     addLog('Starting file transfer...');
   };
 
   // Stop transfer for all devices
   const stopTransfer = () => {
-    setIsTransferRunning(false);
+    setIsTransferRunning(false);  // Only set by explicit stop
     socketRef.current.emit('stop_transfer');
     addLog('Stopping transfer...');
-    
-    setTimeout(() => {
-      setDeviceProgress({});
-      setDeviceStatus({ text: 'Waiting for device...', isConnected: false });
-      
-      // Instead of disconnecting and reconnecting the socket,
-      // just re-request the device list
-      if (socketRef.current) {
-        socketRef.current.emit('get_connected_devices');
-        socketRef.current.emit('get_transfer_status');
-      }
-    }, 1000);
   };
 
   // Add a function to handle file deletion

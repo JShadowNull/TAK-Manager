@@ -10,6 +10,11 @@ export const TransferStatus = ({
   onStartTransfer,
   onStopTransfer
 }) => {
+  // Get connected device IDs from deviceStatus
+  const connectedDevices = new Set(
+    deviceStatus.devices ? Object.keys(deviceStatus.devices) : []
+  );
+
   return (
     <div className="bg-cardBg p-6 rounded-lg shadow-lg text-white border-1 border-accentBoarder">
       <h2 className="text-base mb-4">Transfer Status</h2>
@@ -29,6 +34,8 @@ export const TransferStatus = ({
               deviceId={deviceId}
               progress={progress}
               onRemoveFailed={onRemoveFailed}
+              isTransferRunning={isTransferRunning}
+              isDeviceConnected={connectedDevices.has(deviceId)}
             />
           ))}
         </div>

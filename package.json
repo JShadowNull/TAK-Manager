@@ -9,7 +9,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "build:css": "tailwindcss -i ./src/styles/tailwind.css -o ./src/styles/styles.css",
-    "watch:css": "tailwindcss -i ./src/styles/tailwind.css -o ./src/styles/styles.css --watch"
+    "watch:css": "tailwindcss -i ./src/styles/tailwind.css -o ./src/styles/styles.css --watch",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "keywords": [],
   "author": "",
@@ -38,6 +40,14 @@
     "tailwindcss-filters": "^3.0.0"
   },
   "devDependencies": {
+    "@chromatic-com/storybook": "^3.2.2",
+    "@storybook/addon-essentials": "^8.4.7",
+    "@storybook/addon-interactions": "^8.4.7",
+    "@storybook/addon-onboarding": "^8.4.7",
+    "@storybook/blocks": "^8.4.7",
+    "@storybook/react": "^8.4.7",
+    "@storybook/react-vite": "^8.4.7",
+    "@storybook/test": "^8.4.7",
     "@types/react": "^18.2.64",
     "@types/react-dom": "^18.2.21",
     "@vitejs/plugin-react": "^4.3.4",
@@ -46,6 +56,7 @@
     "postcss-import": "^16.1.0",
     "postcss-loader": "^8.1.1",
     "prop-types": "^15.8.1",
+    "storybook": "^8.4.7",
     "vite": "^5.1.6",
     "vite-plugin-css": "^1.0.4"
   }

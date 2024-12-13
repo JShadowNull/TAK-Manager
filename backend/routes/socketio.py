@@ -244,13 +244,15 @@ class TransferNamespace(Namespace):
         # Start monitoring automatically when client connects
         if not self.rapid_file_transfer.monitoring:
             self.start_monitoring()
+        
+        # Get current state
+        self.on_get_connected_devices()
+        self.on_get_transfer_status()
 
     def on_disconnect(self):
         print('Client disconnected from /transfer namespace')
-        # Only stop monitoring if explicitly requested, not on disconnect
-        if self.rapid_file_transfer.is_transfer_running:
-            self.rapid_file_transfer.stop_monitoring()
-            self.rapid_file_transfer.stop_transfer()
+        # Do not stop monitoring or cleanup here
+        # Let the cleanup endpoint handle it based on transfer status
 
     def start_monitoring(self):
         if not self.rapid_file_transfer.monitoring:
@@ -259,6 +261,23 @@ class TransferNamespace(Namespace):
                 self.rapid_file_transfer.monitor_devices
             )
             thread_manager.add_thread(monitor_thread)
+
+    def on_get_connected_devices(self):
+        """Handle request for current device list"""
+        current_devices = [
+            {
+                'id': did,
+                'name': data['name'],
+                'status': data['status']
+            }
+            for did, data in self.rapid_file_transfer.device_states.items()
+            if data['state'] == 'device'
+        ]
+        
+        socketio.emit('connected_devices', {
+            'devices': current_devices,
+            'isTransferRunning': self.rapid_file_transfer.is_transfer_running
+        }, namespace='/transfer')
 
     def on_start_transfer(self):
         # Set transfer running state first
@@ -283,44 +302,24 @@ class TransferNamespace(Namespace):
             self.start_monitoring()
         
         # Start transfer for any currently connected devices
-        devices = self.rapid_file_transfer.get_connected_devices()
-        for device in devices:
-            device_id = device['id']
-            if device_id not in self.rapid_file_transfer.transfer_tasks:
-                transfer_thread = socketio.start_background_task(
-                    self.rapid_file_transfer.start_transfer,
-                    device_id
-                )
-                thread_manager.add_thread(transfer_thread)
-                self.rapid_file_transfer.transfer_tasks[device_id] = transfer_thread
+        current_devices = [
+            device_id for device_id, data in self.rapid_file_transfer.device_states.items()
+            if data['state'] == 'device'
+        ]
+        
+        for device_id in current_devices:
+            transfer_thread = socketio.start_background_task(
+                self.rapid_file_transfer.start_transfer,
+                device_id
+            )
+            thread_manager.add_thread(transfer_thread)
 
     def on_stop_transfer(self):
-        # Stop transfer but keep monitoring active
         self.rapid_file_transfer.stop_transfer()
-        self.rapid_file_transfer.is_transfer_running = False
-        # Don't stop monitoring here, keep it running for device detection
-
-    def on_get_connected_devices(self):
-        devices = self.rapid_file_transfer.get_connected_devices()
-        socketio.emit('connected_devices', {'devices': devices}, namespace='/transfer')
 
     def on_get_transfer_status(self):
-        socketio.emit('transfer_status', {
-            'isRunning': self.rapid_file_transfer.is_transfer_running
-        }, namespace='/transfer')
-
-    def on_transfer_progress(self, data):
-        device_id = data.get('device_id')
-        filename = data.get('filename')
-        progress = data.get('progress', 0)
-        status = data.get('status', 'unknown')
-        
-        socketio.emit('transfer_progress', {
-            'device_id': device_id,
-            'filename': filename,
-            'progress': progress,
-            'status': status
-        }, namespace='/transfer')
+        """Handle transfer status request"""
+        self.rapid_file_transfer.get_transfer_status()
 
 # Register the transfer namespace
 socketio.on_namespace(TransferNamespace('/transfer'))

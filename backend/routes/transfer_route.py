@@ -1,7 +1,7 @@
 # Path: backend/routes/transfer_route.py
 
 
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, request, jsonify
 import os
 from werkzeug.utils import secure_filename
 from backend.services.scripts.transfer.transfer import RapidFileTransfer
@@ -33,15 +33,23 @@ def install_adb():
     """Route to install ADB if not installed"""    
     try:
         if not rapid_file_transfer.check_adb_installed():
-            success = rapid_file_transfer.install_adb()
-            if success:
+            # Try to install ADB
+            try:
+                rapid_file_transfer.install_adb()
+                # Verify installation was successful
+                if rapid_file_transfer.check_adb_installed():
+                    return jsonify({
+                        'status': 'ADB installed successfully',
+                        'success': True
+                    }), 200
+                else:
+                    return jsonify({
+                        'status': 'Failed to install ADB',
+                        'success': False
+                    }), 500
+            except Exception as install_error:
                 return jsonify({
-                    'status': 'ADB installed successfully',
-                    'success': True
-                }), 200
-            else:
-                return jsonify({
-                    'status': 'Failed to install ADB',
+                    'status': f'ADB installation failed: {str(install_error)}',
                     'success': False
                 }), 500
         else:
@@ -51,7 +59,7 @@ def install_adb():
             }), 200
     except Exception as e:
         return jsonify({
-            'status': f'Error installing ADB: {str(e)}',
+            'status': f'Error during ADB installation process: {str(e)}',
             'success': False
         }), 500
 
@@ -125,6 +133,58 @@ def delete_file():
         return jsonify({
             'status': 'success',
             'message': f'File {filename} deleted successfully'
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+@transfer_bp.route('/cleanup', methods=['POST'])
+def cleanup_temp():
+    """Clean up temporary directory and states only if transfer is not running"""
+    try:
+        # Only clean up if transfer is not running
+        if not rapid_file_transfer.is_transfer_running:
+            # Remove all files in temp directory
+            for filename in os.listdir(rapid_file_transfer.temp_dir):
+                file_path = os.path.join(rapid_file_transfer.temp_dir, filename)
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+            
+            # Reset all states
+            rapid_file_transfer.device_progress.clear()
+            rapid_file_transfer.transferred_files.clear()
+            rapid_file_transfer.device_states.clear()
+                    
+            return jsonify({
+                'status': 'success',
+                'message': 'Temporary directory and states cleaned up successfully'
+            }), 200
+        else:
+            return jsonify({
+                'status': 'skipped',
+                'message': 'Cleanup skipped - transfer is running'
+            }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+@transfer_bp.route('/get_files', methods=['GET'])
+def get_files():
+    """Get list of files in temporary directory"""
+    try:
+        files = []
+        if os.path.exists(rapid_file_transfer.temp_dir):
+            files = [f for f in os.listdir(rapid_file_transfer.temp_dir) 
+                    if os.path.isfile(os.path.join(rapid_file_transfer.temp_dir, f))]
+        
+        return jsonify({
+            'status': 'success',
+            'files': files
         }), 200
         
     except Exception as e:

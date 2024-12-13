@@ -29,3 +29,7 @@ node_modules/
 .DS_Store
 Thumbs.db
 *storybook.log
+# Storybook
+storybook-static/
+.storybook/
+src/stories/
