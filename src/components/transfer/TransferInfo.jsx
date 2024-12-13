@@ -1,0 +1,146 @@
+import * as React from 'react';
+import Box from '@mui/material/Box';
+import Stepper from '@mui/material/Stepper';
+import Step from '@mui/material/Step';
+import StepLabel from '@mui/material/StepLabel';
+import StepContent from '@mui/material/StepContent';
+import Paper from '@mui/material/Paper';
+import Typography from '@mui/material/Typography';
+import CustomScrollbar from '../../components/CustomScrollbar';
+import Button from '../shared/Button';
+
+const defaultSteps = [
+  {
+    label: 'Enable Developer Options',
+    description: [
+      'Open Settings on your Android device',
+      'Scroll down and tap "About phone" (or "About device")',
+      'Find "Build number" (might be under "Software information")',
+      'Tap "Build number" 7 times quickly',
+      'You\'ll see a message saying "You are now a developer!"',
+      'Enter your PIN/pattern/password if prompted'
+    ]
+  },
+  {
+    label: 'Enable USB Debugging',
+    description: [
+      'Go back to Settings',
+      'Scroll down and tap "Developer options"',
+      'Turn on the "Developer options" toggle if not already on',
+      'Scroll down to find "USB debugging"',
+      'Turn on "USB debugging"',
+      'Tap "OK" on the warning message'
+    ]
+  },
+  {
+    label: 'Connect to Computer',
+    description: [
+      'Connect your Android device to your computer using a USB cable',
+      'On your device, look for a popup asking to "Allow USB debugging?"',
+      'Check "Always allow from this computer" (optional)',
+      'Tap "Allow"'
+    ]
+  },
+  {
+    label: 'Common Issues',
+    description: [
+      'Device Not Detected: Try different USB cable or port',
+      'Device Shows as "Unauthorized": Unplug and replug USB cable',
+      'Developer Options Disappears: Repeat Build number tapping process',
+      'Note: Keep USB debugging off when not in use for security'
+    ]
+  }
+];
+
+export const TransferInfo = ({ steps = defaultSteps }) => {
+  const [activeStep, setActiveStep] = React.useState(0);
+
+  const handleNext = () => {
+    setActiveStep((prevActiveStep) => prevActiveStep + 1);
+  };
+
+  const handleBack = () => {
+    setActiveStep((prevActiveStep) => prevActiveStep - 1);
+  };
+
+  const handleReset = () => {
+    setActiveStep(0);
+  };
+
+  return (
+    <div className="bg-cardBg p-4 rounded-lg shadow-lg text-white border-1 border-accentBoarder">
+      <h2 className="text-base font-bold mb-4">Setup Android Device for Rapid Transfer</h2>
+      <div className="h-[400px] bg-backgroundPrimary rounded-lg">
+        <CustomScrollbar>
+          <div className="p-4">
+            <Box>
+              <Stepper activeStep={activeStep} orientation="vertical" sx={{
+                '& .MuiStepLabel-label': { color: 'white' },
+                '& .MuiStepLabel-label.Mui-active': { color: '#3B82F6' },
+                '& .MuiStepIcon-root': { color: 'rgba(0, 8, 15, 1.000)' },
+                '& .MuiStepIcon-root.Mui-active': { color: 'rgba(106, 167, 248, 1.000)' },
+                '& .MuiStepIcon-root.Mui-completed': { color: '#3B82F6' },
+                '& .MuiStepContent-root': { borderLeft: '1px solid rgba(255, 255, 255, 0.12)' }
+              }}>
+                {steps.map((step, index) => (
+                  <Step key={step.label}>
+                    <StepLabel>
+                      <Typography sx={{ color: 'white' }}>{step.label}</Typography>
+                    </StepLabel>
+                    <StepContent>
+                      <div className="space-y-2 text-sm text-white">
+                        {step.description.map((item, itemIndex) => (
+                          <div key={itemIndex} className="flex items-start gap-2">
+                            <span className="min-w-[20px]">{itemIndex + 1}.</span>
+                            <span>{item}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-4 space-x-2">
+                        <Button
+                          variant="primary"
+                          onClick={handleNext}
+                        >
+                          {index === steps.length - 1 ? 'Finish' : 'Continue'}
+                        </Button>
+                        {index > 0 && (
+                          <Button
+                            variant="primary"
+                            onClick={handleBack}
+                          >
+                            Back
+                          </Button>
+                        )}
+                      </div>
+                    </StepContent>
+                  </Step>
+                ))}
+              </Stepper>
+              {activeStep === steps.length && (
+                <Paper 
+                  square 
+                  elevation={0} 
+                  sx={{ 
+                    p: 3, 
+                    bgcolor: 'transparent',
+                    color: 'white'
+                  }}
+                >
+                  <Typography>All steps completed - you're ready to transfer</Typography>
+                  <div className="mt-4">
+                    <Button
+                      variant="primary"
+                      onClick={handleReset}
+                    >
+                      Start Over
+                    </Button>
+                  </div>
+                </Paper>
+              )}
+            </Box>
+          </div>
+        </CustomScrollbar>
+      </div>
+    </div>
+  );
+}; 

@@ -4,6 +4,7 @@ import AdbInstallation from '../components/transfer/AdbInstallation';
 import { FileUpload } from '../components/transfer/FileUpload';
 import { TransferStatus } from '../components/transfer/TransferStatus';
 import { TransferLog } from '../components/transfer/TransferLog';
+import { TransferInfo } from '../components/transfer/TransferInfo';
 import { DeviceProgress } from '../components/transfer/TransferStatus/DeviceProgress';
 
 function Transfer() {
@@ -435,6 +436,8 @@ function Transfer() {
 
   return (
     <div className="flex flex-col gap-8 pt-14">
+      <TransferInfo />
+      
       <FileUpload 
         files={files}
         uploadingFiles={uploadingFiles}
