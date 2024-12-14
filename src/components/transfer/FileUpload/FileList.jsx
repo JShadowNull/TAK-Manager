@@ -20,7 +20,7 @@ export const FileList = ({ files, uploadingFiles, onDeleteFile, disabled }) => {
               {Array.from(uploadingFiles).map((filename) => (
                 <div 
                   key={`uploading-${filename}`} 
-                  className="flex justify-between items-center py-2 bg-buttonColor/50"
+                  className="flex justify-between items-center py-2"
                 >
                   <span className="text-buttonTextColor opacity-75">{filename}</span>
                   <div className="flex items-center gap-2">
