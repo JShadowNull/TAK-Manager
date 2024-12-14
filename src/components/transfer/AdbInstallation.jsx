@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import Popup from '../Popup';
-import Button from '../Button';
+import Button from '../shared/Button';
 
 function AdbInstallation({
   adbInstallation,
@@ -116,16 +116,18 @@ function AdbInstallation({
       return [
         <Button
           key="dashboard"
-          text="Return to Dashboard"
-          hoverColor="gray"
+          variant="secondary"
           onClick={() => window.location.href = '/'}
-        />,
+        >
+          Return to Dashboard
+        </Button>,
         <Button
           key="install"
-          text="Install ADB"
-          hoverColor="blue"
+          variant="primary"
           onClick={handleInstallAdb}
-        />
+        >
+          Install ADB
+        </Button>
       ];
     }
     return null;
