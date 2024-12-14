@@ -1,4 +1,5 @@
 import { CloseIcon } from '../../shared/icons/CloseIcon';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../shared/shadcn/tooltip';
 
 export const DeviceProgress = ({ deviceId, progress, onRemoveFailed, isTransferRunning, isDeviceConnected }) => {
   // Different visibility rules:
@@ -19,7 +20,7 @@ export const DeviceProgress = ({ deviceId, progress, onRemoveFailed, isTransferR
       case 'failed':
         return 'bg-red-500';
       case 'transferring':
-        return 'bg-blue-500';
+        return 'bg-selectedColor';
       default:
         return 'bg-yellow-500';
     }
@@ -42,16 +43,24 @@ export const DeviceProgress = ({ deviceId, progress, onRemoveFailed, isTransferR
             {getProgressText()}
           </span>
           {progress.status === 'failed' && (
-            <button
-              onClick={() => onRemoveFailed(deviceId)}
-              title="Remove failed transfer"
-            >
-              <CloseIcon 
-                color="#ef4444"
-                size="small"
-                onClick={() => onRemoveFailed(deviceId)}
-              />
-            </button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => onRemoveFailed(deviceId)}
+                    className="focus:outline-none"
+                  >
+                    <CloseIcon 
+                      color="#ef4444"
+                      size="small"
+                    />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Remove failed transfer from list</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
         </div>
       </div>

@@ -26,6 +26,8 @@ export default {
       control: 'select',
       options: ['button', 'submit', 'reset'],
     },
+    showHelpIcon: { control: 'boolean' },
+    tooltip: { control: 'text' },
   },
 };
 const Template = (args) => <Button {...args}>{args.children}</Button>;
@@ -80,4 +82,37 @@ SubmitButton.args = {
   children: 'Submit Form',
   type: 'submit',
   variant: 'primary',
+};
+
+export const WithTooltip = Template.bind({});
+WithTooltip.args = {
+  children: 'Button with Help',
+  variant: 'primary',
+  showHelpIcon: true,
+  tooltip: 'This is a helpful tooltip message',
+};
+
+export const SecondaryWithTooltip = Template.bind({});
+SecondaryWithTooltip.args = {
+  children: 'Secondary with Help',
+  variant: 'secondary',
+  showHelpIcon: true,
+  tooltip: 'Click this for secondary action',
+};
+
+export const DangerWithTooltip = Template.bind({});
+DangerWithTooltip.args = {
+  children: 'Danger with Help',
+  variant: 'danger',
+  showHelpIcon: true,
+  tooltip: 'Warning: This action cannot be undone',
+};
+
+export const DisabledWithTooltip = Template.bind({});
+DisabledWithTooltip.args = {
+  children: 'Disabled with Help',
+  variant: 'primary',
+  disabled: true,
+  showHelpIcon: true,
+  tooltip: 'This button is currently disabled',
 }; 

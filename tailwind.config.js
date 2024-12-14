@@ -8,6 +8,7 @@ export default {
     "./.storybook/**/*.{js,jsx,ts,tsx}",
     "./src/stories/**/*.{js,jsx,ts,tsx}"
   ],
+  darkMode: ["class"],
   theme: {
     extend: {
       colors: {
@@ -25,6 +26,39 @@ export default {
         buttonBorder: 'rgba(21, 39, 67, 1.000)',
         buttonHoverColor: 'rgba(4, 30, 51, 1.000)',
         buttonTextColor: 'rgba(208, 219, 229, 1.000)',
+        border: "hsl(var(--border))",
+        input: "hsl(var(--input))",
+        ring: "hsl(var(--ring))",
+        background: "hsl(var(--background))",
+        foreground: "hsl(var(--foreground))",
+        primary: {
+          DEFAULT: "hsl(var(--primary))",
+          foreground: "hsl(var(--primary-foreground))",
+        },
+        secondary: {
+          DEFAULT: "hsl(var(--secondary))",
+          foreground: "hsl(var(--secondary-foreground))",
+        },
+        destructive: {
+          DEFAULT: "hsl(var(--destructive))",
+          foreground: "hsl(var(--destructive-foreground))",
+        },
+        muted: {
+          DEFAULT: "hsl(var(--muted))",
+          foreground: "hsl(var(--muted-foreground))",
+        },
+        accent: {
+          DEFAULT: "hsl(var(--accent))",
+          foreground: "hsl(var(--accent-foreground))",
+        },
+        popover: {
+          DEFAULT: "hsl(var(--popover))",
+          foreground: "hsl(var(--popover-foreground))",
+        },
+        card: {
+          DEFAULT: "hsl(var(--card))",
+          foreground: "hsl(var(--card-foreground))",
+        },
       },
       boxShadow: {
         soft: '0 2px 10px rgba(0, 0, 0, 0.5)',
@@ -33,14 +67,31 @@ export default {
       borderRadius: {
         card: '12px',
         md: '6px',
+        lg: "var(--radius)",
+        sm: "calc(var(--radius) - 4px)",
       },
       borderWidth: {
         '1': '1px',
-      }
+      },
+      keyframes: {
+        "accordion-down": {
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
+        },
+        "accordion-up": {
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
+        },
+      },
+      animation: {
+        "accordion-down": "accordion-down 0.2s ease-out",
+        "accordion-up": "accordion-up 0.2s ease-out",
+      },
     },
   },
   plugins: [
     require('tailwindcss-filters'),
+    require("tailwindcss-animate")
   ],
 }
 
