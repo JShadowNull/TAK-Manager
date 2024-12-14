@@ -68,24 +68,47 @@ export const TransferInfo = ({ steps = defaultSteps }) => {
   };
 
   return (
-    <div className="bg-cardBg p-4 rounded-lg shadow-lg text-white border-1 border-accentBoarder">
-      <h2 className="text-base font-bold mb-4">Setup Android Device for Rapid Transfer</h2>
+    <div className="bg-cardBg p-4 rounded-lg shadow-lg text-white border border-accentBoarder">
+      <h2 className="text-base font-bold">Setup Android Device for Rapid Transfer</h2>
       <div className="h-[400px] bg-backgroundPrimary rounded-lg">
         <CustomScrollbar>
           <div className="p-4">
             <Box>
               <Stepper activeStep={activeStep} orientation="vertical" sx={{
-                '& .MuiStepLabel-label': { color: 'white' },
-                '& .MuiStepLabel-label.Mui-active': { color: '#3B82F6' },
-                '& .MuiStepIcon-root': { color: 'rgba(0, 8, 15, 1.000)' },
-                '& .MuiStepIcon-root.Mui-active': { color: 'rgba(106, 167, 248, 1.000)' },
-                '& .MuiStepIcon-root.Mui-completed': { color: '#3B82F6' },
-                '& .MuiStepContent-root': { borderLeft: '1px solid rgba(255, 255, 255, 0.12)' }
+                '& .MuiStepLabel-label': { 
+                  color: 'rgba(86, 119, 153, 1.000)',
+                  fontWeight: 500
+                },
+                '& .MuiStepLabel-label.Mui-active': { 
+                  color: 'rgba(106, 167, 248, 1.000)',
+                  fontWeight: 600
+                },
+                '& .MuiStepLabel-label.Mui-completed': { 
+                  color: 'rgba(106, 167, 248, 1.000)',
+                  fontWeight: 500
+                },
+                '& .MuiStepIcon-root': { 
+                  color: 'rgba(4, 28, 47, 1.000)',
+                  border: '1px solid rgba(21, 39, 67, 1.000)',
+                  borderRadius: '50%'
+                },
+                '& .MuiStepIcon-root.Mui-active': { 
+                  color: 'rgba(106, 167, 248, 1.000)',
+                  border: 'none'
+                },
+                '& .MuiStepIcon-root.Mui-completed': { 
+                  color: 'rgba(106, 167, 248, 1.000)',
+                  border: 'none'
+                },
+                '& .MuiStepContent-root': { 
+                  borderLeft: '1px solid rgba(21, 39, 67, 1.000)',
+                  marginLeft: '12px'
+                }
               }}>
                 {steps.map((step, index) => (
                   <Step key={step.label}>
                     <StepLabel>
-                      <Typography sx={{ color: 'white' }}>{step.label}</Typography>
+                      <Typography>{step.label}</Typography>
                     </StepLabel>
                     <StepContent>
                       <div className="space-y-2 text-sm text-white">
@@ -105,7 +128,7 @@ export const TransferInfo = ({ steps = defaultSteps }) => {
                         </Button>
                         {index > 0 && (
                           <Button
-                            variant="primary"
+                            variant="secondary"
                             onClick={handleBack}
                           >
                             Back
@@ -123,7 +146,7 @@ export const TransferInfo = ({ steps = defaultSteps }) => {
                   sx={{ 
                     p: 3, 
                     bgcolor: 'transparent',
-                    color: 'white'
+                    color: 'rgba(106, 167, 248, 1.000)'
                   }}
                 >
                   <Typography>All steps completed - you're ready to transfer</Typography>

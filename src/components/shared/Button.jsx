@@ -12,9 +12,9 @@ function Button({
   const baseStyles = 'rounded-lg px-4 py-2 text-sm border transition-all duration-200';
   
   const variants = {
-    primary: 'text-buttonTextColor border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:bg-selectedColor',
-    secondary: 'text-buttonTextColor border-buttonBorder bg-transparent hover:bg-buttonColor/10',
-    danger: 'text-red-500 border-red-500 bg-transparent hover:bg-red-500/10'
+    primary: 'text-buttonTextColor border-buttonBorder bg-buttonColor hover:border-transparent hover:text-black hover:shadow-md hover:bg-selectedColor',
+    secondary: 'text-buttonTextColor border-buttonBorder bg-transparent hover:bg-selectedColor hover:border-transparent hover:text-black hover:shadow-md',
+    danger: 'text-red-500 border-red-500 bg-transparent hover:bg-red-500 hover:border-transparent hover:text-black hover:shadow-md'
   };
 
   return (

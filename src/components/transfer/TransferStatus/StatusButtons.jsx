@@ -1,4 +1,4 @@
-import Button from '../../Button';
+import Button from '../../shared/Button';
 
 export const StatusButtons = ({ 
   isTransferRunning, 
@@ -9,19 +9,21 @@ export const StatusButtons = ({
   return (
     <div className="flex gap-4">
       <Button
-        text="Start Transfer"
-        hoverColor="green"
+        variant="primary"
         onClick={onStartTransfer}
         disabled={isTransferRunning || !filesExist}
-        additionalClasses={isTransferRunning ? 'hidden' : ''}
-      />
+        className={isTransferRunning ? 'hidden' : ''}
+      >
+        Start Transfer
+      </Button>
       <Button
-        text="Stop Transfer"
-        hoverColor="red"
+        variant="danger"
         onClick={onStopTransfer}
         disabled={!isTransferRunning}
-        additionalClasses={!isTransferRunning ? 'hidden' : ''}
-      />
+        className={!isTransferRunning ? 'hidden' : ''}
+      >
+        Stop Transfer
+      </Button>
     </div>
   );
 }; 
