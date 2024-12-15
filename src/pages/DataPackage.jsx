@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
-import Popup from '../components/Popup';
+import Popup from '../components/shared/Popup';
 import CustomScrollbar from '../components/CustomScrollbar';
 import ZipNameSection from '../components/datapackage/ZipNameSection/ZipNameSection';
 import CotStreamsSection from '../components/datapackage/CotStreamsSection/CotStreamsSection';
@@ -292,18 +292,18 @@ function DataPackage() {
         id="data-package-popup"
         title="Generating Data Package"
         isVisible={showPopup}
+        onClose={() => setShowPopup(false)}
+        variant="terminal"
         showTerminal={true}
         terminalOutput={terminalOutput}
         terminalRef={terminalRef}
-        onClose={() => setShowPopup(false)}
-        buttons={
-          <button
-            className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:bg-red-500 transition-colors"
-            onClick={() => setShowPopup(false)}
-          >
-            Close
-          </button>
-        }
+        isInProgress={isConfiguring}
+        isComplete={terminalOutput.length > 0 && !isConfiguring}
+        isSuccess={terminalOutput.length > 0 && !isConfiguring && !terminalOutput.some(line => line.toLowerCase().includes('error'))}
+        progressMessage="Generating data package configuration..."
+        successMessage="Data package generated successfully"
+        failureMessage="Failed to generate data package"
+        nextStepMessage="Your data package has been created successfully."
       />
     </div>
   );

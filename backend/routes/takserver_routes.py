@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request, current_app
 from werkzeug.utils import secure_filename
 from backend.services.scripts.takserver.takserver_installer import TakServerInstaller
 from backend.services.scripts.takserver.check_status import TakServerStatus
+from backend.services.scripts.takserver.takserver_handler import TakServerOperationHandler
 import threading
 import os
 import uuid
@@ -62,9 +63,6 @@ def install_takserver():
         file_path = os.path.join(temp_dir, filename)
         file.save(file_path)
 
-        # Generate installation ID
-        installation_id = str(uuid.uuid4())
-
         # Initialize installer with all parameters
         installer = TakServerInstaller(
             docker_zip_path=file_path,
@@ -78,18 +76,45 @@ def install_takserver():
         )
 
         # Store installer instance
+        installation_id = str(uuid.uuid4())
         installations[installation_id] = installer
 
-        # Start installation in thread
-        thread = threading.Thread(target=installer.main)
-        thread.start()
-        thread_manager.add_thread(thread)
+        # Create handler and start installation in managed thread
+        handler = TakServerOperationHandler(installer)
+        thread = thread_manager.spawn(handler.handle_installation)
 
         return jsonify({
             'message': 'TAK Server installation started',
             'installation_id': installation_id
         })
 
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@takserver_bp.route('/takserver-start', methods=['POST'])
+def start_takserver():
+    try:
+        handler = TakServerOperationHandler(tak_status_checker)
+        thread = thread_manager.spawn(handler.handle_start)
+        return jsonify({'message': 'TAK Server start initiated'})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@takserver_bp.route('/takserver-stop', methods=['POST'])
+def stop_takserver():
+    try:
+        handler = TakServerOperationHandler(tak_status_checker)
+        thread = thread_manager.spawn(handler.handle_stop)
+        return jsonify({'message': 'TAK Server stop initiated'})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@takserver_bp.route('/takserver-restart', methods=['POST'])
+def restart_takserver():
+    try:
+        handler = TakServerOperationHandler(tak_status_checker)
+        thread = thread_manager.spawn(handler.handle_restart)
+        return jsonify({'message': 'TAK Server restart initiated'})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -113,64 +138,3 @@ def rollback_takserver():
 
     except Exception as e:
         return jsonify({"error": f"Error during TAKServer rollback: {e}"}), 500
-
-@takserver_bp.route('/takserver-start', methods=['POST'])
-def start_takserver():
-    try:
-        # Get the status namespace instance
-        status_namespace = socketio.server.namespace_handlers.get('/takserver-status')
-        if status_namespace:
-            status_namespace.start_operation()  # Set the lock
-            
-        if tak_status_checker.start_containers():
-            if status_namespace:
-                status_namespace.end_operation()  # Release lock and update status
-            return jsonify({'message': 'TAKServer started successfully'})
-        else:
-            if status_namespace:
-                status_namespace.end_operation()
-            return jsonify({"error": "Failed to start TAKServer"}), 500
-    except Exception as e:
-        if status_namespace:
-            status_namespace.end_operation()
-        return jsonify({"error": f"Error starting TAKServer: {e}"}), 500
-
-@takserver_bp.route('/takserver-stop', methods=['POST'])
-def stop_takserver():
-    try:
-        status_namespace = socketio.server.namespace_handlers.get('/takserver-status')
-        if status_namespace:
-            status_namespace.start_operation()
-            
-        if tak_status_checker.stop_containers():
-            if status_namespace:
-                status_namespace.end_operation()
-            return jsonify({'message': 'TAKServer stopped successfully'})
-        else:
-            if status_namespace:
-                status_namespace.end_operation()
-            return jsonify({"error": "Failed to stop TAKServer"}), 500
-    except Exception as e:
-        if status_namespace:
-            status_namespace.end_operation()
-        return jsonify({"error": f"Error stopping TAKServer: {e}"}), 500
-
-@takserver_bp.route('/takserver-restart', methods=['POST'])
-def restart_takserver():
-    try:
-        status_namespace = socketio.server.namespace_handlers.get('/takserver-status')
-        if status_namespace:
-            status_namespace.start_operation()
-            
-        if tak_status_checker.restart_containers():
-            if status_namespace:
-                status_namespace.end_operation()
-            return jsonify({'message': 'TAKServer restarted successfully'})
-        else:
-            if status_namespace:
-                status_namespace.end_operation()
-            return jsonify({"error": "Failed to restart TAKServer"}), 500
-    except Exception as e:
-        if status_namespace:
-            status_namespace.end_operation()
-        return jsonify({"error": f"Error restarting TAKServer: {e}"}), 500

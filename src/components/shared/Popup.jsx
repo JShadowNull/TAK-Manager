@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import CustomScrollbar from '../CustomScrollbar';
 
 function Popup({ 
   id, 
@@ -30,13 +31,6 @@ function Popup({
   // Create internal ref if none provided for terminal variant
   const internalTerminalRef = useRef(null);
   const actualTerminalRef = terminalRef || internalTerminalRef;
-
-  // Handle terminal scrolling when output changes
-  useEffect(() => {
-    if (variant === 'terminal' && actualTerminalRef.current && terminalOutput.length > 0) {
-      actualTerminalRef.current.scrollTop = actualTerminalRef.current.scrollHeight;
-    }
-  }, [terminalOutput]);
 
   const getTerminalButtons = () => {
     if (isInProgress) {
@@ -143,11 +137,12 @@ function Popup({
   };
 
   const terminalContent = showTerminal && (
-    <div 
-      ref={actualTerminalRef}
-      className="mt-1 bg-primaryBg text-white p-4 rounded-lg h-64 overflow-y-auto font-mono text-sm border border-accentBoarder"
-    >
-      {renderTerminalOutput()}
+    <div className="mt-1 bg-primaryBg text-white rounded-lg h-64 border border-accentBoarder">
+      <CustomScrollbar>
+        <div className="p-4">
+          {renderTerminalOutput()}
+        </div>
+      </CustomScrollbar>
     </div>
   );
 

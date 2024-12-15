@@ -1,10 +1,10 @@
 from flask import Blueprint, jsonify, request
 from werkzeug.utils import secure_filename
 from backend.services.scripts.ota.ota_updates import OTAUpdate
+from backend.services.scripts.ota.ota_handler import OTAOperationHandler
 import os
 import uuid
 from backend.services.scripts.system.thread_manager import ThreadManager
-import threading
 from backend.routes.socketio import socketio
 
 # Create blueprint for OTA routes
@@ -53,13 +53,9 @@ def start_ota_update():
         # Store updater instance
         updates[update_id] = ota_updater
 
-        # Emit start status
-        socketio.emit('ota_status', {'isUpdating': True}, namespace='/ota-update')
-
-        # Start update in thread
-        thread = threading.Thread(target=ota_updater.main)
-        thread.start()
-        thread_manager.add_thread(thread)
+        # Create handler and start update in managed thread
+        handler = OTAOperationHandler(ota_updater)
+        thread = thread_manager.spawn(handler.handle_update)
 
         return jsonify({
             'message': 'OTA update started',
@@ -104,13 +100,9 @@ def update_ota():
         # Store updater instance
         updates[update_id] = ota_updater
 
-        # Emit start status
-        socketio.emit('ota_status', {'isUpdating': True}, namespace='/ota-update')
-
-        # Start update in thread
-        thread = threading.Thread(target=ota_updater.update)
-        thread.start()
-        thread_manager.add_thread(thread)
+        # Create handler and start update in managed thread
+        handler = OTAOperationHandler(ota_updater)
+        thread = thread_manager.spawn(handler.handle_update)
 
         return jsonify({
             'message': 'OTA update started',

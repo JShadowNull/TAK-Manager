@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import InputField from '../InputField';
-import Popup from '../Popup';
+import Popup from '../shared/Popup';
 import io from 'socket.io-client';
 import AdvancedFeatures from './AdvancedFeatures';
 import Configuration from './Configuration';

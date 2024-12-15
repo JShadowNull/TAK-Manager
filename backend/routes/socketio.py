@@ -1,13 +1,30 @@
 # backend/services/socketio_handler.py
 
 from flask_socketio import SocketIO, Namespace
-import eventlet
 from backend.services.scripts.system.thread_manager import thread_manager
 from backend.services.scripts.docker.docker_manager import DockerManager
-import time
+import eventlet
 import os
 
-socketio = SocketIO(async_mode='eventlet', cors_allowed_origins='*', logger=True, engineio_logger=True)
+# Initialize SocketIO with eventlet
+socketio = SocketIO(
+    async_mode='eventlet',
+    engineio_logger=True,
+    logger=True,
+    ping_timeout=60,
+    cors_allowed_origins="*",
+    manage_session=False  # Disable session management to avoid thread issues
+)
+
+def safe_emit(event, data, namespace=None, broadcast=False):
+    """Thread-safe emit function using eventlet"""
+    try:
+        if broadcast:
+            socketio.emit(event, data, namespace=namespace)
+        else:
+            socketio.emit(event, data, namespace=namespace, include_self=True)
+    except Exception as e:
+        print(f"Error in safe_emit: {e}")
 
 # Docker Installer Socket
 from backend.services.helpers.docker_installer import DockerInstaller
@@ -138,7 +155,7 @@ class DockerManagerNamespace(Namespace):
                     socketio.emit('containers', {'containers': current_containers}, namespace='/docker-manager')
                     last_containers = current_containers
 
-            eventlet.sleep(2)
+            socketio.sleep(2)
 
     def on_check_docker_status(self):
         status = self.docker_manager.check_docker_status()
@@ -157,12 +174,12 @@ class DockerManagerNamespace(Namespace):
 
     def start_docker_task(self):
         self.docker_manager.start_docker()
-        time.sleep(10)
+        socketio.sleep(10)
         self.on_check_docker_status()
 
     def stop_docker_task(self):
         self.docker_manager.stop_docker()
-        time.sleep(5)
+        socketio.sleep(5)
         self.on_check_docker_status()
 
     def on_start_container(self, data):
@@ -177,12 +194,12 @@ class DockerManagerNamespace(Namespace):
 
     def start_container_task(self, container_name):
         self.docker_manager.start_container(container_name)
-        time.sleep(2)
+        socketio.sleep(2)
         self.on_check_docker_status()
 
     def stop_container_task(self, container_name):
         self.docker_manager.stop_container(container_name)
-        time.sleep(2)
+        socketio.sleep(2)
         self.on_check_docker_status()
 
 socketio.on_namespace(DockerManagerNamespace('/docker-manager'))
@@ -215,19 +232,51 @@ class DataPackageNamespace(Namespace):
     def __init__(self, namespace=None):
         super().__init__(namespace)
         self.data_package = DataPackage()
+        self.monitor_thread = None
+        self.operation_in_progress = False
 
     def on_connect(self):
         print('Client connected to /data-package namespace')
+        if not self.monitor_thread:
+            self.monitor_thread = socketio.start_background_task(self.monitor_status)
+            thread_manager.add_thread(self.monitor_thread)
 
     def on_disconnect(self):
         print('Client disconnected from /data-package namespace')
 
+    def monitor_status(self):
+        """Monitor data package configuration status"""
+        while True:
+            try:
+                if self.operation_in_progress:
+                    socketio.emit('data_package_status', {
+                        'isConfiguring': True,
+                        'status': 'in_progress'
+                    }, namespace='/data-package')
+            except Exception as e:
+                socketio.emit('data_package_error', {
+                    'error': str(e)
+                }, namespace='/data-package')
+            socketio.sleep(2)
+            
     def on_get_certificate_files(self):
+        """Handle request for certificate files"""
         try:
             cert_files = self.data_package.get_certificate_files()
-            socketio.emit('certificate_files', {'files': cert_files}, namespace='/data-package')
+            socketio.emit('certificate_files', {
+                'files': cert_files
+            }, namespace='/data-package')
         except Exception as e:
-            socketio.emit('certificate_files_error', {'error': str(e)}, namespace='/data-package')
+            socketio.emit('data_package_error', {
+                'error': f"Error getting certificate files: {str(e)}"
+            }, namespace='/data-package')
+
+    def on_get_status(self):
+        """Handle status check request"""
+        socketio.emit('data_package_status', {
+            'isConfiguring': self.operation_in_progress,
+            'status': 'in_progress' if self.operation_in_progress else 'idle'
+        }, namespace='/data-package')
 
 # Register the data package namespace
 socketio.on_namespace(DataPackageNamespace('/data-package'))
@@ -365,7 +414,7 @@ class TakServerStatusNamespace(Namespace):
                     }
                     self.emit_status_update(error_status)
             
-            eventlet.sleep(2)
+            socketio.sleep(2)
 
     def emit_status_update(self, status):
         """Emit status updates to both relevant namespaces"""
@@ -449,7 +498,7 @@ class DockerStatusNamespace(Namespace):
                     'error': f"Error checking Docker status: {str(e)}"
                 }
                 self.emit_status_update(error_status)
-            eventlet.sleep(2)
+            socketio.sleep(2)
 
     def emit_status_update(self, status=None):
         """Emit Docker status updates"""
@@ -572,7 +621,7 @@ class CertManagerNamespace(Namespace):
                     {'error': str(e)}, 
                     namespace='/cert-manager'
                 )
-            eventlet.sleep(5)
+            socketio.sleep(5)
 
     def get_certificates(self):
         """Handle manual certificate list requests."""

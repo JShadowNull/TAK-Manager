@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import Popup from '../Popup';
+import Popup from '../shared/Popup';
 import { io } from 'socket.io-client';
 
 function AdvancedFeatures() {

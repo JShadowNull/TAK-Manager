@@ -3,7 +3,7 @@
 from flask import Blueprint, render_template, request, jsonify
 from backend.services.scripts.data_package_config.data_package import DataPackage
 from backend.services.scripts.system.thread_manager import ThreadManager
-import threading
+from backend.services.scripts.data_package.data_package_handler import DataPackageOperationHandler
 import uuid
 import json
 import os
@@ -12,8 +12,8 @@ from pathlib import Path
 # Initialize ThreadManager
 thread_manager = ThreadManager()
 
-# Dictionary to keep track of running installations
-installations = {}
+# Dictionary to keep track of running configurations
+configurations = {}
 
 data_package_bp = Blueprint('data_package', __name__)
 
@@ -31,20 +31,16 @@ def submit_preferences():
 
         # Initialize DataPackage instance
         data_package = DataPackage()
-        preferences_data = request.json
+        handler = DataPackageOperationHandler(data_package)
+        
+        # Store the handler instance
+        configurations[configuration_id] = handler
 
-        if not preferences_data:
-            raise ValueError("No preferences data provided")
-
-        # Store the data package instance
-        installations[configuration_id] = data_package
-        print(f"Stored data package instance for ID: {configuration_id}")
-
-        # Start configuration in separate thread
-        thread = threading.Thread(target=data_package.main, args=(preferences_data,))
-        thread.start()
-        thread_manager.add_thread(thread)
-        print("Configuration thread started")
+        # Start configuration in managed thread
+        thread = thread_manager.spawn(
+            handler.handle_configuration,
+            request.json
+        )
 
         return jsonify({
             'message': 'Data package configuration started!',
@@ -64,17 +60,17 @@ def stop_data_package():
         if not configuration_id:
             return jsonify({"error": "No configuration ID provided"}), 400
 
-        if configuration_id not in installations:
+        if configuration_id not in configurations:
             return jsonify({"error": "Invalid configuration ID"}), 404
 
-        # Get the data package instance and stop it
-        data_package = installations[configuration_id]
-        data_package.stop()
+        # Get the handler instance and stop it
+        handler = configurations[configuration_id]
+        thread = thread_manager.spawn(handler.handle_stop)
 
         # Clean up
-        del installations[configuration_id]
+        del configurations[configuration_id]
 
-        return jsonify({"message": "Configuration stopped successfully"}), 200
+        return jsonify({"message": "Configuration stop initiated"}), 200
 
     except Exception as e:
         error_msg = f"Error stopping configuration: {str(e)}"

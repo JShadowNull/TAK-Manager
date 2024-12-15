@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import Popup from '../Popup';
+import Popup from '../shared/Popup';
 import Button from '../shared/Button';
 
 function AdbInstallation({
