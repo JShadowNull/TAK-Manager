@@ -3,11 +3,13 @@ from pathlib import Path
 from backend.services.helpers.os_detector import OSDetector
 from backend.services.helpers.run_command import RunCommand
 from backend.services.scripts.docker.docker_manager import DockerManager
+from backend.services.scripts.docker.docker_checker import DockerChecker
 
 class TakServerStatus:
     def __init__(self):
         self.run_command = RunCommand()
         self.docker_manager = DockerManager()
+        self.docker_checker = DockerChecker()
         self.os_detector = OSDetector()
         self.working_dir = self.get_default_working_directory()
 
@@ -86,15 +88,15 @@ class TakServerStatus:
 
     def get_status(self):
         """Get complete TAK Server status."""
-        # First check if Docker is running
-        docker_running = self.docker_manager.check_docker_status()
-        if not docker_running:
+        # First check if Docker is running using DockerChecker
+        docker_status = self.docker_checker.get_status()
+        if not docker_status['isRunning']:
             return {
                 'installed': False,
                 'running': False,
                 'docker_running': False,
                 'version': None,
-                'error': 'Docker is not running',
+                'error': docker_status.get('error', 'Docker is not running'),
                 'is_starting': False,
                 'is_stopping': False,
                 'is_restarting': False

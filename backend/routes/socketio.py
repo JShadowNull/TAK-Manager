@@ -123,87 +123,6 @@ class IPFetcherNamespace(Namespace):
 # Register the IP fetcher namespace
 socketio.on_namespace(IPFetcherNamespace('/ip-fetcher'))
 
-# Docker Manager/Monitor Socket
-class DockerManagerNamespace(Namespace):
-    def __init__(self, namespace=None):
-        super().__init__(namespace)
-        self.docker_manager = DockerManager()
-        self.monitor_thread = None
-
-    def on_connect(self):
-        print('Client connected to /docker-manager namespace')
-        if not self.monitor_thread:
-            self.monitor_thread = socketio.start_background_task(self.monitor_docker_status)
-            thread_manager.add_thread(self.monitor_thread)
-
-    def on_disconnect(self):
-        print('Client disconnected from /docker-manager namespace')
-
-    def monitor_docker_status(self):
-        last_status = None
-        last_containers = None
-
-        while True:
-            current_status = self.docker_manager.check_docker_status()
-            if current_status != last_status:
-                socketio.emit('docker_status', {'docker_running': current_status}, namespace='/docker-manager')
-                last_status = current_status
-
-            if current_status:
-                current_containers = self.docker_manager.list_containers()
-                if current_containers != last_containers:
-                    socketio.emit('containers', {'containers': current_containers}, namespace='/docker-manager')
-                    last_containers = current_containers
-
-            socketio.sleep(2)
-
-    def on_check_docker_status(self):
-        status = self.docker_manager.check_docker_status()
-        socketio.emit('docker_status', {'docker_running': status}, namespace='/docker-manager')
-        if status:
-            containers = self.docker_manager.list_containers()
-            socketio.emit('containers', {'containers': containers}, namespace='/docker-manager')
-
-    def on_start_docker(self):
-        thread = socketio.start_background_task(self.start_docker_task)
-        thread_manager.add_thread(thread)
-
-    def on_stop_docker(self):
-        thread = socketio.start_background_task(self.stop_docker_task)
-        thread_manager.add_thread(thread)
-
-    def start_docker_task(self):
-        self.docker_manager.start_docker()
-        socketio.sleep(10)
-        self.on_check_docker_status()
-
-    def stop_docker_task(self):
-        self.docker_manager.stop_docker()
-        socketio.sleep(5)
-        self.on_check_docker_status()
-
-    def on_start_container(self, data):
-        container_name = data.get('container_name')
-        thread = socketio.start_background_task(self.start_container_task, container_name)
-        thread_manager.add_thread(thread)
-
-    def on_stop_container(self, data):
-        container_name = data.get('container_name')
-        thread = socketio.start_background_task(self.stop_container_task, container_name)
-        thread_manager.add_thread(thread)
-
-    def start_container_task(self, container_name):
-        self.docker_manager.start_container(container_name)
-        socketio.sleep(2)
-        self.on_check_docker_status()
-
-    def stop_container_task(self, container_name):
-        self.docker_manager.stop_container(container_name)
-        socketio.sleep(2)
-        self.on_check_docker_status()
-
-socketio.on_namespace(DockerManagerNamespace('/docker-manager'))
-
 # Services Monitor Namespace
 from backend.services.scripts.system.system_monitor import SystemMonitor
 
@@ -227,6 +146,7 @@ class ServicesMonitorNamespace(Namespace):
 # Register the services monitor namespace
 from backend.services.scripts.data_package_config.data_package import DataPackage
 socketio.on_namespace(ServicesMonitorNamespace('/services-monitor'))
+
 # Data Package Namespace
 class DataPackageNamespace(Namespace):
     def __init__(self, namespace=None):
@@ -462,65 +382,6 @@ class TakServerStatusNamespace(Namespace):
 
 # Register the TAK server status namespace
 socketio.on_namespace(TakServerStatusNamespace('/takserver-status'))
-
-# Docker Status Namespace
-from backend.services.scripts.docker.docker_checker import DockerChecker
-
-class DockerStatusNamespace(Namespace):
-    def __init__(self, namespace=None):
-        super().__init__(namespace)
-        self.docker_checker = DockerChecker()
-        self.monitor_thread = None
-
-    def on_connect(self):
-        print('Client connected to /docker-status namespace')
-        if not self.monitor_thread:
-            self.monitor_thread = socketio.start_background_task(self.monitor_docker_status)
-            thread_manager.add_thread(self.monitor_thread)
-        # Send immediate status update when client connects
-        self.emit_status_update()
-
-    def on_disconnect(self):
-        print('Client disconnected from /docker-status namespace')
-
-    def monitor_docker_status(self):
-        last_status = None
-        while True:
-            try:
-                current_status = self.docker_checker.get_status()
-                if current_status != last_status:
-                    self.emit_status_update(current_status)
-                    last_status = current_status
-            except Exception as e:
-                error_status = {
-                    'isInstalled': False,
-                    'isRunning': False,
-                    'error': f"Error checking Docker status: {str(e)}"
-                }
-                self.emit_status_update(error_status)
-            socketio.sleep(2)
-
-    def emit_status_update(self, status=None):
-        """Emit Docker status updates"""
-        if status is None:
-            status = self.docker_checker.get_status()
-        socketio.emit('docker_status', status, namespace='/docker-status')
-
-    def on_check_status(self):
-        """Handle manual status check requests"""
-        try:
-            status = self.docker_checker.get_status()
-            self.emit_status_update(status)
-        except Exception as e:
-            error_status = {
-                'isInstalled': False,
-                'isRunning': False,
-                'error': f"Error checking Docker status: {str(e)}"
-            }
-            self.emit_status_update(error_status)
-
-# Register the Docker status namespace
-socketio.on_namespace(DockerStatusNamespace('/docker-status'))
 
 from backend.services.scripts.takserver.takserver_uninstaller import TakServerUninstaller
 

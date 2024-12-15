@@ -6,6 +6,7 @@ import AdvancedFeatures from './AdvancedFeatures';
 import Configuration from './Configuration';
 import CircularProgress from '@mui/material/CircularProgress';
 import Box from '@mui/material/Box';
+import DockerPopup from '../shared/docker/DockerPopup';
 
 function TakServerStatus({ handleStartStop }) {
   const [showInstallForm, setShowInstallForm] = useState(false);
@@ -52,18 +53,34 @@ function TakServerStatus({ handleStartStop }) {
   const [installationError, setInstallationError] = useState(null);
   const [showNextButton, setShowNextButton] = useState(false);
 
-  const handleStartDocker = () => {
-    setIsStartingDocker(true);
-    if (dockerManagerSocketRef.current) {
-      dockerManagerSocketRef.current.emit('start_docker');
-    }
-  };
-
   useEffect(() => {
     // Initialize Docker status socket
-    const dockerStatusSocket = io('/docker-status', {
+    const socket = io('/docker-manager', {
       transports: ['websocket'],
       path: '/socket.io'
+    });
+
+    socket.on('connect', () => {
+      console.log('Connected to Docker manager socket');
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('Docker manager socket connection error:', error);
+      setDockerStatus(prev => ({
+        ...prev,
+        error: 'Failed to connect to Docker status service'
+      }));
+    });
+
+    socket.on('docker_status', (status) => {
+      setDockerStatus({
+        isInstalled: status.isInstalled,
+        isRunning: status.isRunning,
+        error: status.error
+      });
+      if (status.isInstalled && status.isRunning) {
+        connectTakServerSockets();
+      }
     });
 
     // Initialize Docker manager socket for start functionality only
@@ -76,26 +93,6 @@ function TakServerStatus({ handleStartStop }) {
     uninstallSocketRef.current = io('/takserver-uninstall', {
       transports: ['websocket'],
       path: '/socket.io'
-    });
-
-    // Docker status socket events
-    dockerStatusSocket.on('connect', () => {
-      console.log('Connected to Docker status service');
-    });
-
-    dockerStatusSocket.on('connect_error', (error) => {
-      console.error('Docker status connection error:', error);
-      setDockerStatus(prev => ({
-        ...prev,
-        error: 'Failed to connect to Docker status service'
-      }));
-    });
-
-    dockerStatusSocket.on('docker_status', (status) => {
-      setDockerStatus(status);
-      if (status.isInstalled && status.isRunning) {
-        connectTakServerSockets();
-      }
     });
 
     // Uninstall socket events
@@ -250,7 +247,7 @@ function TakServerStatus({ handleStartStop }) {
 
     // Cleanup on unmount
     return () => {
-      dockerStatusSocket.disconnect();
+      socket.disconnect();
       if (dockerManagerSocketRef.current) {
         dockerManagerSocketRef.current.disconnect();
         dockerManagerSocketRef.current = null;
@@ -583,63 +580,9 @@ function TakServerStatus({ handleStartStop }) {
       </div>
 
       {/* Docker Error Popup */}
-      <Popup
-        id="docker-error-popup"
-        title={dockerStatus.isInstalled ? "Docker Not Running" : "Docker Required"}
+      <DockerPopup 
         isVisible={!dockerStatus.isInstalled || !dockerStatus.isRunning}
-        onClose={() => {}}
-        variant="standard"
-        blurSidebar={false}
-        buttons={
-          dockerStatus.isInstalled ? (
-            <button
-              onClick={handleStartDocker}
-              disabled={isStartingDocker}
-              className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200 flex items-center gap-2"
-            >
-              {isStartingDocker ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-buttonTextColor border-t-transparent"/>
-                  Starting Docker...
-                </>
-              ) : (
-                'Start Docker'
-              )}
-            </button>
-          ) : (
-            <a
-              href="https://www.docker.com/products/docker-desktop/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
-            >
-              Download Docker Desktop
-            </a>
-          )
-        }
-      >
-        <div className="text-center">
-          {dockerStatus.isInstalled ? (
-            <>
-              <p className="text-yellow-500 font-semibold">
-                Docker Desktop is not running
-              </p>
-              <p className="text-sm text-gray-300">
-                Docker Desktop must be running to use TAK Server. Click the button below to start Docker.
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="text-yellow-500 font-semibold">
-                Docker Desktop is required
-              </p>
-              <p className="text-sm text-gray-300">
-                TAK Server requires Docker Desktop to run. Please install Docker Desktop to continue.
-              </p>
-            </>
-          )}
-        </div>
-      </Popup>
+      />
 
       {/* Uninstall Confirmation Popup */}
       <Popup

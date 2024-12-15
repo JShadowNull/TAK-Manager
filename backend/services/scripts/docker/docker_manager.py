@@ -31,17 +31,6 @@ class DockerManager:
         else:
             return {"error": "Unsupported OS. Cannot stop Docker."}
 
-    def check_docker_status(self):
-        """Check Docker status based on the detected OS"""
-        if self.os_type == 'macos':
-            return self._check_docker_desktop_macos()
-        elif self.os_type == 'windows':
-            return self._check_docker_desktop_windows()
-        elif self.os_type == 'linux':
-            return self._check_docker_cli_linux()
-        else:
-            return {"error": "Unsupported OS. Cannot check Docker status."}
-
     def list_containers(self):
         """List Docker containers (running and non-running) with their status."""
         try:
@@ -60,7 +49,7 @@ class DockerManager:
             print("Docker is not installed or not available in PATH.")
             return []
 
-    # Private methods for starting/stopping/checking Docker based on OS
+    # Private methods for starting/stopping Docker based on OS
     def _start_docker_desktop_macos(self):
         try:
             subprocess.run(["open", "-a", "Docker"], check=True)
@@ -138,27 +127,6 @@ class DockerManager:
             return {"status": "Stopping Docker CLI on Linux..."}
         except subprocess.CalledProcessError as e:
             return {"error": f"Failed to stop Docker CLI: {e}"}
-
-    def _check_docker_desktop_macos(self):
-        try:
-            result = subprocess.run(["pgrep", "Docker"], capture_output=True, text=True)
-            return result.returncode == 0
-        except Exception as e:
-            return {"error": f"Error checking Docker status: {e}"}
-
-    def _check_docker_desktop_windows(self):
-        try:
-            result = subprocess.run(["powershell", "Get-Process", "-Name", "Docker Desktop"], capture_output=True, text=True)
-            return result.returncode == 0
-        except Exception as e:
-            return {"error": f"Error checking Docker status: {e}"}
-
-    def _check_docker_cli_linux(self):
-        try:
-            result = subprocess.run(["sudo", "systemctl", "is-active", "--quiet", "docker"])
-            return result.returncode == 0
-        except Exception as e:
-            return {"error": f"Error checking Docker status: {e}"}
         
     def start_container(self, container_name):
         """Start a Docker container by its name."""

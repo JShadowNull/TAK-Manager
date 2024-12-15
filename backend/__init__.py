@@ -94,7 +94,7 @@ def create_app():
     # Register API routes with /api prefix
     app.register_blueprint(dashboard_bp, url_prefix='/api')
     app.register_blueprint(docker_bp, url_prefix='/api')
-    app.register_blueprint(docker_manager_bp, url_prefix='/api')
+    app.register_blueprint(docker_manager_bp, url_prefix='/docker-manager')
     app.register_blueprint(ota_update_bp, url_prefix='/api')
     app.register_blueprint(data_package_bp, url_prefix='/api/datapackage')
     app.register_blueprint(transfer_bp, url_prefix='/transfer')
