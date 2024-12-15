@@ -7,6 +7,7 @@ import Configuration from './Configuration';
 import CircularProgress from '@mui/material/CircularProgress';
 import Box from '@mui/material/Box';
 import DockerPopup from '../shared/docker/DockerPopup';
+import Button from '../shared/Button';
 
 function TakServerStatus({ handleStartStop }) {
   const [showInstallForm, setShowInstallForm] = useState(false);
@@ -157,11 +158,10 @@ function TakServerStatus({ handleStartStop }) {
         setIsInstalled(status.isInstalled);
         setIsRunning(status.isRunning);
         
-        if (!status.error) {
-          setIsStarting(false);
-          setIsStopping(false);
-          setIsRestarting(false);
-        }
+        // Update loading states based on backend status
+        setIsStarting(status.is_starting || false);
+        setIsStopping(status.is_stopping || false);
+        setIsRestarting(status.is_restarting || false);
         
         if (status.error) {
           setOperationError(status.error);
@@ -175,32 +175,7 @@ function TakServerStatus({ handleStartStop }) {
       // Only handle terminal output from status socket if not installing
       statusSocket.on('terminal_output', (data) => {
         if (!isInstalling && data.data) {
-          const message = data.data;
-          
-          // Update loading states based on message content
-          if (message.includes('Starting TAK Server containers...')) {
-            setIsStarting(true);
-            setIsStopping(false);
-            setIsRestarting(false);
-          } 
-          else if (message.includes('Stopping TAK Server containers...')) {
-            setIsStarting(false);
-            setIsStopping(true);
-            setIsRestarting(false);
-          }
-          else if (message.includes('Restarting TAK Server containers...')) {
-            setIsStarting(false);
-            setIsStopping(false);
-            setIsRestarting(true);
-          }
-          // Reset states on completion or error
-          else if (message.includes('successfully') || message.includes('Error')) {
-            setIsStarting(false);
-            setIsStopping(false);
-            setIsRestarting(false);
-          }
-
-          setTerminalOutput(prev => [...prev, message]);
+          setTerminalOutput(prev => [...prev, data.data]);
         }
       });
 
@@ -385,22 +360,18 @@ function TakServerStatus({ handleStartStop }) {
   const handleStartStopClick = async () => {
     try {
       setOperationError(null);
-      // Note: We don't need to set loading states here anymore
-      // as they will be set by the socket events
+      // Don't manually set loading states here, they will come from backend
       await handleStartStop(isRunning);
     } catch (error) {
       setOperationError(error.message);
       setTerminalOutput(prev => [...prev, `Error: ${error.message}`]);
-      // Reset loading states on error
-      setIsStarting(false);
-      setIsStopping(false);
     }
   };
 
   const handleRestartClick = async () => {
     try {
       setOperationError(null);
-      // Loading state will be set by socket event
+      // Don't manually set loading states here, they will come from backend
       const response = await fetch('/api/takserver/takserver-restart', {
         method: 'POST',
         headers: {
@@ -415,8 +386,6 @@ function TakServerStatus({ handleStartStop }) {
     } catch (error) {
       setOperationError(error.message);
       setTerminalOutput(prev => [...prev, `Error: ${error.message}`]);
-      // Reset loading state on error
-      setIsRestarting(false);
     }
   };
 
@@ -459,16 +428,22 @@ function TakServerStatus({ handleStartStop }) {
                     <span className="text-sm font-medium">Status:</span>
                     <div className="flex items-center gap-2">
                       {isStarting || isStopping || isRestarting ? (
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <CircularProgress 
-                            size={16} 
-                            sx={{ 
-                              color: isStarting ? 'rgb(34, 197, 94)' : 
-                                    isRestarting ? 'rgb(234, 179, 8)' :  // yellow-500
-                                    'rgb(239, 68, 68)',
-                            }} 
-                          />
-                        </Box>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            disabled
+                            loading
+                            variant="primary"
+                            className={
+                              isStarting ? "hover:bg-green-500" :
+                              isRestarting ? "hover:bg-yellow-500" :
+                              "hover:bg-red-500"
+                            }
+                          >
+                            {isStarting ? "Starting" :
+                             isRestarting ? "Restarting" :
+                             "Stopping"}
+                          </Button>
+                        </div>
                       ) : (
                         <div className="flex items-center gap-2">
                           {isRunning ? (
@@ -505,75 +480,70 @@ function TakServerStatus({ handleStartStop }) {
           <div className="flex justify-start gap-4">
             {isInstalled ? (
               <>
-                <button
-                  className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-red-500 transition-all duration-200"
+                <Button
                   onClick={() => setShowUninstallConfirm(true)}
                   disabled={isStarting || isStopping || isRestarting || isUninstalling}
+                  variant="danger"
                 >
                   Uninstall
-                </button>
+                </Button>
                 {isRunning && (
                   <>
-                    <button
-                      className={`text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder 
-                        bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-yellow-500 
-                        transition-all duration-200
-                        ${(isStarting || isStopping || isRestarting || isUninstalling) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    <Button
                       onClick={handleRestartClick}
                       disabled={isStarting || isStopping || isRestarting || isUninstalling}
+                      loading={isRestarting}
+                      loadingText="Restarting..."
+                      variant="primary"
+                      className="hover:bg-yellow-500"
                     >
-                      {isRestarting ? 'Restarting...' : 'Restart'}
-                    </button>
-                    <button
-                      className={`text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder 
-                        bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-red-500
-                        transition-all duration-200
-                        ${(isStarting || isStopping || isRestarting || isUninstalling) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      Restart
+                    </Button>
+                    <Button
                       onClick={handleStartStopClick}
                       disabled={isStarting || isStopping || isRestarting || isUninstalling}
+                      loading={isStarting || isStopping}
+                      loadingText={isStarting ? 'Starting...' : 'Stopping...'}
+                      variant="primary"
+                      className="hover:bg-red-500"
                     >
-                      {isStarting || isStopping ? (
-                        isStarting ? 'Starting...' : 'Stopping...'
-                      ) : (
-                        'Stop'
-                      )}
-                    </button>
-                    <a
-                      href="https://localhost:8443"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder 
-                        bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-blue-500 
-                        transition-all duration-200"
+                      Stop
+                    </Button>
+                    <Button
+                      asChild
+                      variant="primary"
                     >
-                      Launch Admin Page
-                    </a>
+                      <a
+                        href="https://localhost:8443"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Launch Admin Page
+                      </a>
+                    </Button>
                   </>
                 )}
                 {!isRunning && (
-                  <button
-                    className={`text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder 
-                      bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 
-                      transition-all duration-200
-                      ${(isStarting || isStopping || isRestarting || isUninstalling) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  <Button
                     onClick={handleStartStopClick}
                     disabled={isStarting || isStopping || isRestarting || isUninstalling}
+                    loading={isStarting || isStopping}
+                    loadingText={isStarting ? 'Starting...' : 'Stopping...'}
+                    variant="primary"
+                    className="hover:bg-green-500"
                   >
-                    {isStarting || isStopping ? (
-                      isStarting ? 'Starting...' : 'Stopping...'
-                    ) : (
-                      'Start'
-                    )}
-                  </button>
+                    Start
+                  </Button>
                 )}
               </>
             ) : (
-              <button
-                className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
+              <Button
                 onClick={() => setShowInstallForm(true)}
+                variant="primary"
+                className="hover:bg-green-500"
               >
                 Install TAK Server
-              </button>
+              </Button>
             )}
           </div>
         </div>
@@ -594,18 +564,18 @@ function TakServerStatus({ handleStartStop }) {
         blurSidebar={true}
         buttons={
           <>
-            <button
+            <Button
               onClick={() => setShowUninstallConfirm(false)}
-              className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-gray-500 transition-all duration-200"
+              variant="secondary"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={handleUninstall}
-              className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-red-500 transition-all duration-200"
+              variant="danger"
             >
               Uninstall
-            </button>
+            </Button>
           </>
         }
       >
@@ -772,18 +742,20 @@ function TakServerStatus({ handleStartStop }) {
             </div>
 
             <div className="flex justify-end gap-4 mt-4">
-              <button
-                className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-red-500 transition-all duration-200"
+              <Button
                 onClick={handleClose}
+                variant="secondary"
+                className="hover:bg-red-500"
               >
                 Cancel
-              </button>
-              <button
-                className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
+              </Button>
+              <Button
                 onClick={handleInstall}
+                variant="primary"
+                className="hover:bg-green-500"
               >
                 Begin Installation
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -872,15 +844,16 @@ function TakServerStatus({ handleStartStop }) {
         }}
         blurSidebar={true}
         buttons={
-          <button
-            className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
+          <Button
             onClick={() => {
               setShowCompletionPopup(false);
               handleClose();
             }}
+            variant="primary"
+            className="hover:bg-green-500"
           >
             Close
-          </button>
+          </Button>
         }
       >
         <div className="text-center">
@@ -901,12 +874,13 @@ function TakServerStatus({ handleStartStop }) {
         onClose={handleUninstallComplete}
         blurSidebar={true}
         buttons={
-          <button
-            className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
+          <Button
             onClick={handleUninstallComplete}
+            variant="primary"
+            className="hover:bg-green-500"
           >
             Close
-          </button>
+          </Button>
         }
       >
         <div className="text-center">

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import io from 'socket.io-client';
 import axios from 'axios';
 import Popup from '../Popup';
+import Button from '../Button';
 
 const DockerPopup = ({ isVisible }) => {
   const [dockerStatus, setDockerStatus] = useState({
@@ -101,29 +102,29 @@ const DockerPopup = ({ isVisible }) => {
       blurSidebar={false}
       buttons={
         dockerStatus.isInstalled ? (
-          <button
+          <Button
             onClick={handleStartDocker}
-            disabled={isStartingDocker}
-            className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200 flex items-center gap-2"
+            loading={isStartingDocker}
+            loadingText="Starting Docker..."
+            variant="primary"
+            className="hover:bg-green-500"
           >
-            {isStartingDocker ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-2 border-buttonTextColor border-t-transparent"/>
-                Starting Docker...
-              </>
-            ) : (
-              'Start Docker'
-            )}
-          </button>
+            Start Docker
+          </Button>
         ) : (
-          <a
-            href="https://www.docker.com/products/docker-desktop/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
+          <Button
+            asChild
+            variant="primary"
+            className="hover:bg-green-500"
           >
-            Download Docker Desktop
-          </a>
+            <a
+              href="https://www.docker.com/products/docker-desktop/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Download Docker Desktop
+            </a>
+          </Button>
         )
       }
     >

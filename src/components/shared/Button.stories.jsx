@@ -22,6 +22,8 @@ export default {
       options: ['primary', 'secondary', 'danger'],
     },
     disabled: { control: 'boolean' },
+    loading: { control: 'boolean' },
+    loadingText: { control: 'text' },
     type: {
       control: 'select',
       options: ['button', 'submit', 'reset'],
@@ -30,25 +32,66 @@ export default {
     tooltip: { control: 'text' },
   },
 };
+
 const Template = (args) => <Button {...args}>{args.children}</Button>;
 
+// Basic Variants
 export const Primary = Template.bind({});
 Primary.args = {
   children: 'Primary Button',
   variant: 'primary',
 };
 
+export const Secondary = Template.bind({});
+Secondary.args = {
+  children: 'Secondary Button',
+  variant: 'secondary',
+};
+
+export const Danger = Template.bind({});
+Danger.args = {
+  children: 'Danger Button',
+  variant: 'danger',
+};
+
+// Loading States
+export const PrimaryLoading = Template.bind({});
+PrimaryLoading.args = {
+  children: 'Submit',
+  variant: 'primary',
+  loading: true,
+  loadingText: 'Submitting...',
+};
+
+export const SecondaryLoading = Template.bind({});
+SecondaryLoading.args = {
+  children: 'Process',
+  variant: 'secondary',
+  loading: true,
+  loadingText: 'Processing...',
+};
+
+export const DangerLoading = Template.bind({});
+DangerLoading.args = {
+  children: 'Delete',
+  variant: 'danger',
+  loading: true,
+  loadingText: 'Deleting...',
+};
+
+export const LoadingWithoutText = Template.bind({});
+LoadingWithoutText.args = {
+  children: 'Loading Example',
+  variant: 'primary',
+  loading: true,
+};
+
+// Disabled States
 export const PrimaryDisabled = Template.bind({});
 PrimaryDisabled.args = {
   children: 'Primary Button',
   variant: 'primary',
   disabled: true,
-};
-
-export const Secondary = Template.bind({});
-Secondary.args = {
-  children: 'Secondary Button',
-  variant: 'secondary',
 };
 
 export const SecondaryDisabled = Template.bind({});
@@ -58,12 +101,6 @@ SecondaryDisabled.args = {
   disabled: true,
 };
 
-export const Danger = Template.bind({});
-Danger.args = {
-  children: 'Danger Button',
-  variant: 'danger',
-};
-
 export const DangerDisabled = Template.bind({});
 DangerDisabled.args = {
   children: 'Danger Button',
@@ -71,6 +108,26 @@ DangerDisabled.args = {
   disabled: true,
 };
 
+// With Tooltips
+export const WithTooltip = Template.bind({});
+WithTooltip.args = {
+  children: 'Button with Help',
+  variant: 'primary',
+  showHelpIcon: true,
+  tooltip: 'This is a helpful tooltip message',
+};
+
+export const LoadingWithTooltip = Template.bind({});
+LoadingWithTooltip.args = {
+  children: 'Process Action',
+  variant: 'primary',
+  loading: true,
+  loadingText: 'Processing...',
+  showHelpIcon: true,
+  tooltip: 'This action is in progress',
+};
+
+// Other Variants
 export const CustomClassName = Template.bind({});
 CustomClassName.args = {
   children: 'Custom Class Button',
@@ -83,36 +140,4 @@ SubmitButton.args = {
   type: 'submit',
   variant: 'primary',
 };
-
-export const WithTooltip = Template.bind({});
-WithTooltip.args = {
-  children: 'Button with Help',
-  variant: 'primary',
-  showHelpIcon: true,
-  tooltip: 'This is a helpful tooltip message',
-};
-
-export const SecondaryWithTooltip = Template.bind({});
-SecondaryWithTooltip.args = {
-  children: 'Secondary with Help',
-  variant: 'secondary',
-  showHelpIcon: true,
-  tooltip: 'Click this for secondary action',
-};
-
-export const DangerWithTooltip = Template.bind({});
-DangerWithTooltip.args = {
-  children: 'Danger with Help',
-  variant: 'danger',
-  showHelpIcon: true,
-  tooltip: 'Warning: This action cannot be undone',
-};
-
-export const DisabledWithTooltip = Template.bind({});
-DisabledWithTooltip.args = {
-  children: 'Disabled with Help',
-  variant: 'primary',
-  disabled: true,
-  showHelpIcon: true,
-  tooltip: 'This button is currently disabled',
-}; 
+ 
