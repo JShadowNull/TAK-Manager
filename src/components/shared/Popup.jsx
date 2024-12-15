@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import CustomScrollbar from '../CustomScrollbar';
+import Button from './Button';
 
 function Popup({ 
   id, 
@@ -37,13 +38,13 @@ function Popup({
       if (onStop) {
         return (
           <div className="flex justify-center w-full">
-            <button
-              className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-red-500 transition-all duration-200"
+            <Button
+              variant="danger"
               onClick={onStop}
               disabled={isStoppingInstallation}
             >
               {isStoppingInstallation ? 'Stopping...' : 'Stop'}
-            </button>
+            </Button>
           </div>
         );
       }
@@ -54,25 +55,23 @@ function Popup({
       if (onNext) {
         return (
           <div className="flex justify-end w-full">
-            <button
-              className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
+            <Button
+              variant="primary"
               onClick={onNext}
             >
               Next
-            </button>
+            </Button>
           </div>
         );
       }
       return (
         <div className="flex justify-end w-full">
-          <button
-            className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor 
-              hover:text-black hover:shadow-md hover:accentBoarder hover:bg-red-500
-              transition-all duration-200"
+          <Button
+            variant="primary"
             onClick={onClose}
           >
             Close
-          </button>
+          </Button>
         </div>
       );
     }

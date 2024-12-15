@@ -1,4 +1,5 @@
 import Popup from './Popup';
+import Button from './Button';
 
 // Generate a large amount of mock terminal output
 const generateMockOutput = (lines = 50) => {
@@ -69,7 +70,7 @@ export const StandardBasic = {
   args: {
     ...baseArgs,
     title: 'Basic Standard Popup',
-    children: <p className="p-4">This is a basic popup with no buttons.</p>
+    children: <p className="p-4 text-textPrimary">This is a basic popup with no buttons.</p>
   }
 };
 
@@ -77,15 +78,21 @@ export const StandardWithButtons = {
   args: {
     ...baseArgs,
     title: 'Standard Popup with Buttons',
-    children: <p className="p-4">This popup has custom action buttons.</p>,
+    children: <p className="p-4 text-textPrimary">This popup has custom action buttons.</p>,
     buttons: (
       <>
-        <button className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:bg-red-500">
+        <Button
+          variant="danger"
+          onClick={() => console.log('Cancel clicked')}
+        >
           Cancel
-        </button>
-        <button className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:bg-green-500">
+        </Button>
+        <Button
+          variant="primary"
+          onClick={() => console.log('Confirm clicked')}
+        >
           Confirm
-        </button>
+        </Button>
       </>
     )
   }
