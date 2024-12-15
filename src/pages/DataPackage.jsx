@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
+import io from 'socket.io-client';
 import Popup from '../components/shared/Popup';
 import CustomScrollbar from '../components/CustomScrollbar';
 import ZipNameSection from '../components/datapackage/ZipNameSection/ZipNameSection';
@@ -9,6 +10,7 @@ import AtakPreferencesSection from '../components/datapackage/AtakPreferencesSec
 function DataPackage() {
   const location = useLocation();
   const renderCount = useRef(0);
+  const socketRef = useRef(null);
   
   // State management
   const [preferences, setPreferences] = useState({});
@@ -17,8 +19,97 @@ function DataPackage() {
   const [validationMessages, setValidationMessages] = useState([]);
   const [isConfiguring, setIsConfiguring] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
+  const [showCompletionPopup, setShowCompletionPopup] = useState(false);
   const [terminalOutput, setTerminalOutput] = useState([]);
+  const [socketConnected, setSocketConnected] = useState(false);
+  const [socketError, setSocketError] = useState(null);
+  const [operationStatus, setOperationStatus] = useState({
+    isInProgress: false,
+    isComplete: false,
+    isSuccess: false,
+    errorMessage: null
+  });
   const terminalRef = useRef(null);
+
+  // Socket.IO initialization and cleanup
+  useEffect(() => {
+    // Initialize socket connection
+    socketRef.current = io('/data-package', {
+      transports: ['websocket'],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      timeout: 10000
+    });
+
+    // Connection handlers
+    socketRef.current.on('connect', () => {
+      console.log('Connected to data-package service');
+      setSocketConnected(true);
+      setSocketError(null);
+    });
+
+    socketRef.current.on('connect_error', (err) => {
+      console.error('Socket connection error:', err);
+      setSocketError(err);
+      setSocketConnected(false);
+    });
+
+    socketRef.current.on('disconnect', () => {
+      console.log('Disconnected from data-package service');
+      setSocketConnected(false);
+    });
+
+    // Terminal output handler
+    socketRef.current.on('terminal_output', (data) => {
+      if (data && data.data) {
+        setTerminalOutput(prev => [...prev, data.data]);
+      }
+    });
+
+    // Operation status handlers
+    socketRef.current.on('operation_started', () => {
+      console.log('Operation started');
+      setOperationStatus({
+        isInProgress: true,
+        isComplete: false,
+        isSuccess: false,
+        errorMessage: null
+      });
+    });
+
+    socketRef.current.on('operation_complete', (data) => {
+      console.log('Operation complete:', data);
+      setOperationStatus({
+        isInProgress: false,
+        isComplete: true,
+        isSuccess: true,
+        errorMessage: null
+      });
+      setIsConfiguring(false);
+    });
+
+    socketRef.current.on('operation_failed', (data) => {
+      console.log('Operation failed:', data);
+      setOperationStatus({
+        isInProgress: false,
+        isComplete: true,
+        isSuccess: false,
+        errorMessage: data.error || 'Operation failed'
+      });
+      setIsConfiguring(false);
+    });
+
+    // Cleanup on unmount
+    return () => {
+      if (socketRef.current) {
+        console.log('Cleaning up socket connection to /data-package');
+        socketRef.current.removeAllListeners();
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+    };
+  }, []);
 
   // Debug re-renders
   useEffect(() => {
@@ -85,20 +176,22 @@ function DataPackage() {
     });
   }, [zipFileName, isFormValid]);
 
-  // Terminal output handling
-  const appendToTerminalOutput = useCallback((text) => {
-    setTerminalOutput(prev => [...prev, text]);
-    if (terminalRef.current) {
-      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
-    }
-  }, []);
-
   // Generate data package
   const handleGenerateDataPackage = useCallback(async () => {
     if (!isFormValid) return;
+    if (!socketConnected) {
+      console.error('Socket not connected. Cannot generate data package.');
+      return;
+    }
 
     setShowPopup(true);
     setIsConfiguring(true);
+    setOperationStatus({
+      isInProgress: true,
+      isComplete: false,
+      isSuccess: false,
+      errorMessage: null
+    });
     
     try {
       const formattedPreferences = {};
@@ -156,19 +249,36 @@ function DataPackage() {
       });
 
       const data = await response.json();
-      appendToTerminalOutput(data.message || data.error);
       
       if (!response.ok) {
         throw new Error(data.error || 'Failed to generate data package');
       }
 
-      setIsConfiguring(false);
-      appendToTerminalOutput('Data package generated successfully');
     } catch (error) {
-      setIsConfiguring(false);
-      appendToTerminalOutput(`Error: ${error.message}`);
+      console.error('Error generating data package:', error);
+      if (socketRef.current) {
+        socketRef.current.emit('operation_failed', { error: error.message });
+      }
     }
-  }, [isFormValid, zipFileName, preferences, appendToTerminalOutput]);
+  }, [isFormValid, zipFileName, preferences, socketConnected]);
+
+  // Handle next step after successful operation
+  const handleNext = () => {
+    setShowPopup(false);
+    setShowCompletionPopup(true);
+  };
+
+  // Handle completion popup close
+  const handleComplete = () => {
+    setShowCompletionPopup(false);
+    setTerminalOutput([]);
+    setOperationStatus({
+      isInProgress: false,
+      isComplete: false,
+      isSuccess: false,
+      errorMessage: null
+    });
+  };
 
   return (
     <div className="flex flex-col gap-8 pt-14">
@@ -287,24 +397,107 @@ function DataPackage() {
         </div>
       </div>
 
-      {/* Configuration Popup */}
+      {/* Configuration Popup with connection status */}
       <Popup
         id="data-package-popup"
-        title="Generating Data Package"
         isVisible={showPopup}
-        onClose={() => setShowPopup(false)}
+        title={
+          isConfiguring 
+            ? "Generating Data Package"
+            : operationStatus.isComplete
+              ? operationStatus.isSuccess
+                ? "Data Package Complete"
+                : "Data Package Failed"
+              : "Operation Progress"
+        }
         variant="terminal"
-        showTerminal={true}
-        terminalOutput={terminalOutput}
+        terminalOutput={[
+          ...(socketError ? [`Connection Error: ${socketError.message}`] : []),
+          ...(socketConnected ? [] : ['Attempting to connect to server...']),
+          ...terminalOutput
+        ]}
         terminalRef={terminalRef}
-        isInProgress={isConfiguring}
-        isComplete={terminalOutput.length > 0 && !isConfiguring}
-        isSuccess={terminalOutput.length > 0 && !isConfiguring && !terminalOutput.some(line => line.toLowerCase().includes('error'))}
-        progressMessage="Generating data package configuration..."
-        successMessage="Data package generated successfully"
-        failureMessage="Failed to generate data package"
-        nextStepMessage="Your data package has been created successfully."
+        showTerminal={true}
+        isInProgress={operationStatus.isInProgress}
+        isComplete={!operationStatus.isInProgress && (operationStatus.isComplete)}
+        isSuccess={operationStatus.isSuccess}
+        errorMessage={operationStatus.errorMessage}
+        progressMessage={
+          operationStatus.isInProgress
+            ? "Generating data package configuration..."
+            : 'Operation in Progress'
+        }
+        successMessage={
+          operationStatus.isComplete && operationStatus.isSuccess
+            ? "Data package generated successfully"
+            : ""
+        }
+        nextStepMessage={
+          operationStatus.isComplete && operationStatus.isSuccess
+            ? "Your data package has been created successfully. Click 'Next' to continue."
+            : ""
+        }
+        failureMessage={
+          operationStatus.errorMessage
+            ? 'Data package generation failed'
+            : 'Operation failed'
+        }
+        onClose={() => {
+          if (!operationStatus.isInProgress) {
+            setShowPopup(false);
+            setTerminalOutput([]);
+            setOperationStatus({
+              isInProgress: false,
+              isComplete: false,
+              isSuccess: false,
+              errorMessage: null
+            });
+          }
+        }}
+        onNext={handleNext}
+        onStop={
+          operationStatus.isInProgress
+            ? () => {
+                if (socketRef.current) {
+                  socketRef.current.emit('stop_operation');
+                }
+                setOperationStatus({
+                  isInProgress: false,
+                  isComplete: true,
+                  isSuccess: false,
+                  errorMessage: "Operation cancelled by user"
+                });
+              }
+            : undefined
+        }
+        blurSidebar={true}
       />
+
+      {/* Completion Popup */}
+      <Popup
+        id="completion-popup"
+        title="Data Package Complete"
+        isVisible={showCompletionPopup}
+        variant="standard"
+        onClose={handleComplete}
+        blurSidebar={true}
+        buttons={
+          <Button
+            variant="primary"
+            onClick={handleComplete}
+          >
+            Close
+          </Button>
+        }
+      >
+        <div className="text-center">
+          <p className="text-green-500 font-semibold">✓</p>
+          <p className="text-green-500 font-semibold">Data Package Generated Successfully</p>
+          <p className="text-sm text-gray-300">
+            Your data package has been created and is ready to use in ATAK.
+          </p>
+        </div>
+      </Popup>
     </div>
   );
 }

@@ -27,7 +27,10 @@ class DataPackage:
             self.current_process.kill()
             self.current_process = None
         socketio.emit('terminal_output', {'data': 'Configuration stopped by user'}, namespace='/data-package')
-        socketio.emit('installation_failed', {'error': 'Configuration stopped by user'}, namespace='/data-package')
+        socketio.emit('operation_failed', {
+            'error': 'Configuration stopped by user',
+            'isInProgress': False
+        }, namespace='/data-package')
 
     def check_stop(self):
         if self.stop_event.is_set():
@@ -404,8 +407,10 @@ class DataPackage:
         try:
             # Create a temporary directory for all operations
             with tempfile.TemporaryDirectory() as temp_dir:
-                # Emit installation started event
-                socketio.emit('installation_started', namespace='/data-package')
+                # Emit operation started event
+                socketio.emit('operation_started', {
+                    'isInProgress': True
+                }, namespace='/data-package')
                 socketio.emit('terminal_output', {'data': 'Starting data package configuration...'}, namespace='/data-package')
 
                 # Get zip name from preferences
@@ -441,10 +446,16 @@ class DataPackage:
                 self.create_zip_file(temp_dir, zip_name)
                 
                 socketio.emit('terminal_output', {'data': 'Data package configuration completed successfully'}, namespace='/data-package')
-                socketio.emit('installation_complete', namespace='/data-package')
+                socketio.emit('operation_complete', {
+                    'message': 'Data package configuration completed successfully',
+                    'isInProgress': False
+                }, namespace='/data-package')
                 
         except Exception as e:
             error_msg = f'Error during configuration: {str(e)}'
             socketio.emit('terminal_output', {'data': error_msg}, namespace='/data-package')
-            socketio.emit('installation_failed', {'error': error_msg}, namespace='/data-package')
+            socketio.emit('operation_failed', {
+                'error': error_msg,
+                'isInProgress': False
+            }, namespace='/data-package')
             raise
