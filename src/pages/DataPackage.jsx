@@ -6,6 +6,7 @@ import CustomScrollbar from '../components/CustomScrollbar';
 import ZipNameSection from '../components/datapackage/ZipNameSection/ZipNameSection';
 import CotStreamsSection from '../components/datapackage/CotStreamsSection/CotStreamsSection';
 import AtakPreferencesSection from '../components/datapackage/AtakPreferencesSection/AtakPreferencesSection';
+import Button from '../components/shared/Button';
 
 function DataPackage() {
   const location = useLocation();
