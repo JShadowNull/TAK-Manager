@@ -11,6 +11,10 @@ interface TooltipProps extends React.ComponentProps<typeof TooltipPrimitive.Root
   disableHover?: boolean;
 }
 
+// Add helper type for tooltip placement
+export type TooltipSide = 'top' | 'right' | 'bottom' | 'left';
+export type TooltipTriggerMode = 'click' | 'hover';
+
 const Tooltip = React.forwardRef<
   React.ElementRef<typeof TooltipPrimitive.Root>,
   TooltipProps

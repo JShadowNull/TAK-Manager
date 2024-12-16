@@ -8,7 +8,9 @@ export const HelpIconTooltip = ({
   iconSize = 16,
   className = '',
   triggerMode = 'click', // 'click' or 'hover'
-  side = 'top'
+  side = 'top',
+  showIcon = true,
+  children
 }) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -31,6 +33,21 @@ export const HelpIconTooltip = ({
     setIsOpen(open);
   }, [triggerMode]);
 
+  const tooltipTrigger = showIcon ? (
+    <div 
+      className={`cursor-pointer ${className}`}
+      onClick={handleClick}
+    >
+      <HelpIcon 
+        sx={{ 
+          fontSize: iconSize,
+          color: isOpen ? 'rgba(255, 255, 255, 0.9)' : 'rgba(255, 255, 255, 0.7)',
+          transition: 'color 0.2s ease-in-out'
+        }} 
+      />
+    </div>
+  ) : children;
+
   return (
     <TooltipProvider>
       <Tooltip 
@@ -39,18 +56,7 @@ export const HelpIconTooltip = ({
         disableHover={triggerMode === 'click'}
       >
         <TooltipTrigger asChild>
-          <div 
-            className={`cursor-pointer ${className}`}
-            onClick={handleClick}
-          >
-            <HelpIcon 
-              sx={{ 
-                fontSize: iconSize,
-                color: isOpen ? 'rgba(255, 255, 255, 0.9)' : 'rgba(255, 255, 255, 0.7)',
-                transition: 'color 0.2s ease-in-out'
-              }} 
-            />
-          </div>
+          {tooltipTrigger}
         </TooltipTrigger>
         <TooltipContent side={side}>
           <p>{tooltip}</p>
@@ -65,7 +71,9 @@ HelpIconTooltip.propTypes = {
   iconSize: PropTypes.number,
   className: PropTypes.string,
   triggerMode: PropTypes.oneOf(['click', 'hover']),
-  side: PropTypes.oneOf(['top', 'right', 'bottom', 'left'])
+  side: PropTypes.oneOf(['top', 'right', 'bottom', 'left']),
+  showIcon: PropTypes.bool,
+  children: PropTypes.node
 };
 
 export default HelpIconTooltip; 

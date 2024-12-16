@@ -41,24 +41,42 @@ const Button = forwardRef(({
     </div>
   ) : children;
 
+  const buttonElement = (
+    <Comp
+      ref={ref}
+      type={type}
+      onClick={onClick}
+      disabled={disabled || loading}
+      className={`
+        ${baseStyles}
+        ${variants[variant]}
+        ${!className.includes('hover:bg-') ? defaultHoverStyles[variant] : ''}
+        ${(disabled || loading) ? 'opacity-50 cursor-not-allowed' : ''}
+        ${className}
+      `}
+      {...props}
+    >
+      {buttonContent}
+    </Comp>
+  );
+
+  // If there's a tooltip but no help icon, wrap the button in a tooltip
+  if (tooltip && !showHelpIcon) {
+    return (
+      <HelpIconTooltip 
+        tooltip={tooltip}
+        triggerMode={triggerMode}
+        showIcon={false}
+      >
+        {buttonElement}
+      </HelpIconTooltip>
+    );
+  }
+
+  // If there's a help icon or no tooltip, use the original layout
   return (
     <div className="inline-flex items-center gap-2">
-      <Comp
-        ref={ref}
-        type={type}
-        onClick={onClick}
-        disabled={disabled || loading}
-        className={`
-          ${baseStyles}
-          ${variants[variant]}
-          ${!className.includes('hover:bg-') ? defaultHoverStyles[variant] : ''}
-          ${(disabled || loading) ? 'opacity-50 cursor-not-allowed' : ''}
-          ${className}
-        `}
-        {...props}
-      >
-        {buttonContent}
-      </Comp>
+      {buttonElement}
       {showHelpIcon && <HelpIconTooltip tooltip={tooltip} triggerMode={triggerMode} />}
     </div>
   );
