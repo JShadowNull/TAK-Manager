@@ -3,6 +3,7 @@ import shutil
 from pathlib import Path
 from backend.services.helpers.os_detector import OSDetector
 from backend.services.helpers.run_command import RunCommand
+from backend.routes.socketio import socketio
 
 class TakServerUninstaller:
     def __init__(self):
@@ -41,6 +42,19 @@ class TakServerUninstaller:
         try:
             docker_compose_dir = self.get_docker_compose_dir()
             version = self.get_takserver_version()
+            
+            # Emit stopping status
+            socketio.emit('takserver_status', {
+                'isInstalled': True,
+                'isRunning': True,
+                'dockerRunning': True,
+                'version': version,
+                'error': None,
+                'isStarting': False,
+                'isStopping': True,
+                'isRestarting': False,
+                'isUninstalling': True
+            }, namespace='/takserver-status')
             
             self.run_command.emit_log_output(
                 "→ Stopping and removing TAK Server containers and volumes...", 
@@ -117,9 +131,35 @@ class TakServerUninstaller:
                 capture_output=False
             )
 
+            # Emit stopped status
+            socketio.emit('takserver_status', {
+                'isInstalled': True,
+                'isRunning': False,
+                'dockerRunning': True,
+                'version': version,
+                'error': None,
+                'isStarting': False,
+                'isStopping': False,
+                'isRestarting': False,
+                'isUninstalling': True
+            }, namespace='/takserver-status')
+
             return True
 
         except Exception as e:
+            # Emit error status
+            socketio.emit('takserver_status', {
+                'isInstalled': True,
+                'isRunning': True,
+                'dockerRunning': True,
+                'version': self.get_takserver_version(),
+                'error': str(e),
+                'isStarting': False,
+                'isStopping': False,
+                'isRestarting': False,
+                'isUninstalling': True
+            }, namespace='/takserver-status')
+
             self.run_command.emit_log_output(
                 f"× Error stopping TAK Server containers: {str(e)}", 
                 'takserver-uninstall'
@@ -205,6 +245,19 @@ class TakServerUninstaller:
     def uninstall(self):
         """Main uninstallation method."""
         try:
+            # Emit initial uninstall status
+            socketio.emit('takserver_status', {
+                'isInstalled': True,
+                'isRunning': True,
+                'dockerRunning': True,
+                'version': self.get_takserver_version(),
+                'error': None,
+                'isStarting': False,
+                'isStopping': False,
+                'isRestarting': False,
+                'isUninstalling': True
+            }, namespace='/takserver-status')
+
             self.run_command.emit_log_output(
                 "→ Starting TAK Server uninstallation...", 
                 'takserver-uninstall'
@@ -222,6 +275,19 @@ class TakServerUninstaller:
             if not self.remove_installation_directory():
                 raise Exception("Failed to remove installation directory")
 
+            # Emit final success status
+            socketio.emit('takserver_status', {
+                'isInstalled': False,
+                'isRunning': False,
+                'dockerRunning': True,
+                'version': None,
+                'error': None,
+                'isStarting': False,
+                'isStopping': False,
+                'isRestarting': False,
+                'isUninstalling': False
+            }, namespace='/takserver-status')
+
             self.run_command.emit_log_output(
                 "✓ TAK Server uninstallation completed successfully", 
                 'takserver-uninstall'
@@ -229,6 +295,19 @@ class TakServerUninstaller:
             return True
 
         except Exception as e:
+            # Emit error status
+            socketio.emit('takserver_status', {
+                'isInstalled': True,
+                'isRunning': False,
+                'dockerRunning': True,
+                'version': self.get_takserver_version(),
+                'error': str(e),
+                'isStarting': False,
+                'isStopping': False,
+                'isRestarting': False,
+                'isUninstalling': False
+            }, namespace='/takserver-status')
+
             self.run_command.emit_log_output(
                 f"× Uninstallation failed: {str(e)}", 
                 'takserver-uninstall'

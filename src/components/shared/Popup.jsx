@@ -42,8 +42,10 @@ function Popup({
               variant="danger"
               onClick={onStop}
               disabled={isStoppingInstallation}
+              loading={isStoppingInstallation}
+              loadingText="Stopping Installation..."
             >
-              {isStoppingInstallation ? 'Stopping...' : 'Stop'}
+              Stop Installation
             </Button>
           </div>
         );
@@ -136,7 +138,7 @@ function Popup({
   };
 
   const terminalContent = showTerminal && (
-    <div className="mt-1 bg-primaryBg text-white rounded-lg h-64 border border-accentBoarder">
+    <div className="mt-1 bg-primaryBg text-white rounded-lg h-64 border text-wrap border-accentBoarder">
       <CustomScrollbar>
         <div className="p-4">
           {renderTerminalOutput()}

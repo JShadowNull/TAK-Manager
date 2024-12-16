@@ -4,6 +4,8 @@ from backend.services.helpers.os_detector import OSDetector
 from backend.services.helpers.run_command import RunCommand
 from backend.services.scripts.docker.docker_manager import DockerManager
 from backend.services.scripts.docker.docker_checker import DockerChecker
+from backend.routes.socketio import socketio
+import eventlet
 
 class TakServerStatus:
     def __init__(self):
@@ -92,14 +94,15 @@ class TakServerStatus:
         docker_status = self.docker_checker.get_status()
         if not docker_status['isRunning']:
             return {
-                'installed': False,
-                'running': False,
-                'docker_running': False,
+                'isInstalled': False,
+                'isRunning': False,
+                'dockerRunning': False,
                 'version': None,
                 'error': docker_status.get('error', 'Docker is not running'),
-                'is_starting': False,
-                'is_stopping': False,
-                'is_restarting': False
+                'isStarting': False,
+                'isStopping': False,
+                'isRestarting': False,
+                'isUninstalling': False
             }
 
         is_installed = self.check_installation()
@@ -107,17 +110,18 @@ class TakServerStatus:
         version = self.get_takserver_version() if is_installed else None
 
         status = {
-            'installed': is_installed,
-            'running': is_running,
-            'docker_running': True,
+            'isInstalled': is_installed,
+            'isRunning': is_running,
+            'dockerRunning': True,
             'version': version,
             'error': None,
-            'is_starting': False,
-            'is_stopping': False,
-            'is_restarting': False
+            'isStarting': False,
+            'isStopping': False,
+            'isRestarting': False,
+            'isUninstalling': False
         }
 
-        return status 
+        return status
 
     def get_docker_compose_dir(self):
         """Get the docker compose directory based on version"""
@@ -136,12 +140,11 @@ class TakServerStatus:
         Returns:
             bool: True if desired state reached, False if timeout
         """
-        import eventlet
-        import time  # Use regular time module for timing
+        import time
         
-        start_time = time.time()  # Use time.time() for timing
+        start_time = time.time()
         
-        while time.time() - start_time < timeout:  # Use time.time() for comparison
+        while time.time() - start_time < timeout:
             current_state = self.check_containers_running()
             if current_state == desired_state:
                 return True
@@ -150,7 +153,7 @@ class TakServerStatus:
                 f"Waiting for containers to be {'running' if desired_state else 'stopped'}...", 
                 'takserver-status'
             )
-            eventlet.sleep(interval)  # Keep eventlet.sleep for non-blocking sleep
+            eventlet.sleep(interval)
         
         return False
 
@@ -163,6 +166,18 @@ class TakServerStatus:
             docker_compose_dir = self.get_docker_compose_dir()
             
             # Emit starting status
+            socketio.emit('takserver_status', {
+                'isInstalled': True,
+                'isRunning': False,
+                'dockerRunning': True,
+                'version': self.get_takserver_version(),
+                'error': None,
+                'isStarting': True,
+                'isStopping': False,
+                'isRestarting': False,
+                'isUninstalling': False
+            }, namespace='/takserver-status')
+            
             self.run_command.emit_log_output(
                 "Starting TAK Server containers...", 
                 'takserver-status'
@@ -181,6 +196,18 @@ class TakServerStatus:
                 raise Exception("Timeout waiting for containers to start")
 
             # Emit success status
+            socketio.emit('takserver_status', {
+                'isInstalled': True,
+                'isRunning': True,
+                'dockerRunning': True,
+                'version': self.get_takserver_version(),
+                'error': None,
+                'isStarting': False,
+                'isStopping': False,
+                'isRestarting': False,
+                'isUninstalling': False
+            }, namespace='/takserver-status')
+
             self.run_command.emit_log_output(
                 "TAK Server containers started successfully", 
                 'takserver-status'
@@ -188,6 +215,19 @@ class TakServerStatus:
             return True
 
         except Exception as e:
+            # Emit error status
+            socketio.emit('takserver_status', {
+                'isInstalled': True,
+                'isRunning': False,
+                'dockerRunning': True,
+                'version': self.get_takserver_version(),
+                'error': str(e),
+                'isStarting': False,
+                'isStopping': False,
+                'isRestarting': False,
+                'isUninstalling': False
+            }, namespace='/takserver-status')
+            
             self.run_command.emit_log_output(
                 f"Error starting TAK Server: {str(e)}", 
                 'takserver-status'
@@ -203,6 +243,18 @@ class TakServerStatus:
             docker_compose_dir = self.get_docker_compose_dir()
             
             # Emit stopping status
+            socketio.emit('takserver_status', {
+                'isInstalled': True,
+                'isRunning': True,
+                'dockerRunning': True,
+                'version': self.get_takserver_version(),
+                'error': None,
+                'isStarting': False,
+                'isStopping': True,
+                'isRestarting': False,
+                'isUninstalling': False
+            }, namespace='/takserver-status')
+            
             self.run_command.emit_log_output(
                 "Stopping TAK Server containers...", 
                 'takserver-status'
@@ -221,6 +273,18 @@ class TakServerStatus:
                 raise Exception("Timeout waiting for containers to stop")
 
             # Emit success status
+            socketio.emit('takserver_status', {
+                'isInstalled': True,
+                'isRunning': False,
+                'dockerRunning': True,
+                'version': self.get_takserver_version(),
+                'error': None,
+                'isStarting': False,
+                'isStopping': False,
+                'isRestarting': False,
+                'isUninstalling': False
+            }, namespace='/takserver-status')
+
             self.run_command.emit_log_output(
                 "TAK Server containers stopped successfully", 
                 'takserver-status'
@@ -228,6 +292,19 @@ class TakServerStatus:
             return True
 
         except Exception as e:
+            # Emit error status
+            socketio.emit('takserver_status', {
+                'isInstalled': True,
+                'isRunning': True,
+                'dockerRunning': True,
+                'version': self.get_takserver_version(),
+                'error': str(e),
+                'isStarting': False,
+                'isStopping': False,
+                'isRestarting': False,
+                'isUninstalling': False
+            }, namespace='/takserver-status')
+            
             self.run_command.emit_log_output(
                 f"Error stopping TAK Server: {str(e)}", 
                 'takserver-status'
@@ -243,6 +320,18 @@ class TakServerStatus:
             docker_compose_dir = self.get_docker_compose_dir()
             
             # Emit restarting status
+            socketio.emit('takserver_status', {
+                'isInstalled': True,
+                'isRunning': True,
+                'dockerRunning': True,
+                'version': self.get_takserver_version(),
+                'error': None,
+                'isStarting': False,
+                'isStopping': False,
+                'isRestarting': True,
+                'isUninstalling': False
+            }, namespace='/takserver-status')
+            
             self.run_command.emit_log_output(
                 "Restarting TAK Server containers...", 
                 'takserver-status'
@@ -261,6 +350,18 @@ class TakServerStatus:
                 raise Exception("Timeout waiting for containers to restart")
 
             # Emit success status
+            socketio.emit('takserver_status', {
+                'isInstalled': True,
+                'isRunning': True,
+                'dockerRunning': True,
+                'version': self.get_takserver_version(),
+                'error': None,
+                'isStarting': False,
+                'isStopping': False,
+                'isRestarting': False,
+                'isUninstalling': False
+            }, namespace='/takserver-status')
+
             self.run_command.emit_log_output(
                 "TAK Server containers restarted successfully", 
                 'takserver-status'
@@ -268,6 +369,19 @@ class TakServerStatus:
             return True
 
         except Exception as e:
+            # Emit error status
+            socketio.emit('takserver_status', {
+                'isInstalled': True,
+                'isRunning': False,
+                'dockerRunning': True,
+                'version': self.get_takserver_version(),
+                'error': str(e),
+                'isStarting': False,
+                'isStopping': False,
+                'isRestarting': False,
+                'isUninstalling': False
+            }, namespace='/takserver-status')
+            
             self.run_command.emit_log_output(
                 f"Error restarting TAK Server: {str(e)}", 
                 'takserver-status'

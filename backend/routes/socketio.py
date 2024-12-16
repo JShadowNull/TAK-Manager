@@ -13,7 +13,11 @@ socketio = SocketIO(
     logger=True,
     ping_timeout=60,
     cors_allowed_origins="*",
-    manage_session=False  # Disable session management to avoid thread issues
+    path='/socket.io',  # Explicitly set the Socket.IO path
+    manage_session=False,  # Disable session management to avoid thread issues
+    always_connect=True,  # Allow connections even if initial handshake fails
+    max_http_buffer_size=1e8,  # 100MB max http buffer size
+    async_handlers=True  # Enable async handlers for better performance
 )
 
 def safe_emit(event, data, namespace=None, broadcast=False):
@@ -292,159 +296,6 @@ class TransferNamespace(Namespace):
 
 # Register the transfer namespace
 socketio.on_namespace(TransferNamespace('/transfer'))
-
-from backend.services.scripts.takserver.check_status import TakServerStatus
-# TAKServer Status Monitoring Socket
-class TakServerStatusNamespace(Namespace):
-    def __init__(self, namespace=None):
-        super().__init__(namespace)
-        self.tak_status = TakServerStatus()
-        self.monitor_thread = None
-        self.operation_in_progress = False  # Add lock flag
-
-    def on_connect(self):
-        print('Client connected to /takserver-status namespace')
-        if not self.monitor_thread:
-            self.monitor_thread = socketio.start_background_task(self.monitor_takserver_status)
-            thread_manager.add_thread(self.monitor_thread)
-        # Send immediate status update when client connects
-        self.on_check_status()
-
-    def on_disconnect(self):
-        print('Client disconnected from /takserver-status namespace')
-
-    def monitor_takserver_status(self):
-        last_status = None
-        while True:
-            try:
-                # Skip status check if operation is in progress
-                if not self.operation_in_progress:
-                    current_status = self.tak_status.get_status()
-                    if current_status != last_status:
-                        self.emit_status_update(current_status)
-                        last_status = current_status
-            except Exception as e:
-                if not self.operation_in_progress:  # Only emit error if no operation is in progress
-                    error_status = {
-                        'error': str(e),
-                        'installed': False,
-                        'running': False,
-                        'docker_running': False,
-                        'version': None
-                    }
-                    self.emit_status_update(error_status)
-            
-            socketio.sleep(2)
-
-    def emit_status_update(self, status):
-        """Emit status updates to both relevant namespaces"""
-        # Emit to status namespace for status-specific components
-        socketio.emit('takserver_status', {
-            'isInstalled': status['installed'],
-            'isRunning': status['running'],
-            'dockerRunning': status['docker_running'],
-            'version': status.get('version'),
-            'error': status.get('error'),
-            'isStarting': status.get('is_starting', False),
-            'isStopping': status.get('is_stopping', False),
-            'isRestarting': status.get('is_restarting', False)
-        }, namespace='/takserver-status')
-
-    def on_check_status(self):
-        """Handle manual status check requests"""
-        try:
-            if not self.operation_in_progress:  # Only check if no operation is in progress
-                status = self.tak_status.get_status()
-                self.emit_status_update(status)
-        except Exception as e:
-            error_status = {
-                'error': str(e),
-                'installed': False,
-                'running': False,
-                'docker_running': False,
-                'version': None
-            }
-            self.emit_status_update(error_status)
-
-    def start_operation(self):
-        """Set the operation lock"""
-        self.operation_in_progress = True
-
-    def end_operation(self):
-        """Release the operation lock and update status"""
-        self.operation_in_progress = False
-        # Force a status update after operation completes
-        try:
-            current_status = self.tak_status.get_status()
-            self.emit_status_update(current_status)
-        except Exception as e:
-            print(f"Error updating status after operation: {e}")
-
-# Register the TAK server status namespace
-socketio.on_namespace(TakServerStatusNamespace('/takserver-status'))
-
-from backend.services.scripts.takserver.takserver_uninstaller import TakServerUninstaller
-
-# TAKServer Uninstall Namespace
-class TakServerUninstallNamespace(Namespace):
-    def __init__(self, namespace=None):
-        super().__init__(namespace)
-        self.uninstaller = TakServerUninstaller()
-        self.operation_in_progress = False
-
-    def on_connect(self):
-        print('Client connected to /takserver-uninstall namespace')
-        # Send initial status on connect
-        self.emit_status()
-
-    def on_disconnect(self):
-        print('Client disconnected from /takserver-uninstall namespace')
-
-    def emit_status(self):
-        """Emit current uninstall status"""
-        socketio.emit('uninstall_status', {
-            'isUninstalling': self.operation_in_progress
-        }, namespace='/takserver-uninstall')
-
-    def on_check_status(self):
-        """Handle status check request"""
-        self.emit_status()
-
-    def on_start_uninstall(self):
-        """Handle uninstall request"""
-        if not self.operation_in_progress:
-            self.operation_in_progress = True
-            # Emit status update immediately
-            self.emit_status()
-            thread = socketio.start_background_task(self.uninstall_task)
-            thread_manager.add_thread(thread)
-
-    def uninstall_task(self):
-        """Background task for uninstallation"""
-        try:
-            success = self.uninstaller.uninstall()
-            if success:
-                socketio.emit('uninstall_complete', {
-                    'success': True,
-                    'message': 'TAK Server uninstallation completed successfully'
-                }, namespace='/takserver-uninstall')
-            else:
-                socketio.emit('uninstall_complete', {
-                    'success': False,
-                    'message': 'TAK Server uninstallation failed'
-                }, namespace='/takserver-uninstall')
-        except Exception as e:
-            socketio.emit('uninstall_complete', {
-                'success': False,
-                'message': f'Uninstallation error: {str(e)}'
-            }, namespace='/takserver-uninstall')
-        finally:
-            self.operation_in_progress = False
-            # Emit final status update
-            self.emit_status()
-
-# Register the uninstall namespace
-socketio.on_namespace(TakServerUninstallNamespace('/takserver-uninstall'))
 
 from backend.services.scripts.cert_manager.certmanager import CertManager
 
