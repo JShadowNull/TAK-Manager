@@ -381,31 +381,71 @@ volumes:
         socketio.emit('rollback_started', namespace='/takserver-installer')
 
         try:
-            # Stop any running containers if they exist
-            if self.takserver_version:
-                containers = [
-                    f"takserver-{self.takserver_version}",
-                    f"tak-database-{self.takserver_version}"
-                ]
-                for container in containers:
-                    try:
-                        self.run_command.emit_log_output(f"Stopping container: {container}", 'takserver-installer')
+            # Check if docker-compose.yml exists
+            docker_compose_path = os.path.join(self.working_dir, self.extracted_folder_name, "docker-compose.yml")
+            if os.path.exists(docker_compose_path):
+                docker_compose_dir = os.path.join(self.working_dir, self.extracted_folder_name)
+                self.run_command.emit_log_output("Found docker-compose.yml, cleaning up containers, images, and volumes...", 'takserver-installer')
+                try:
+                    # Use docker-compose down with flags to remove everything
+                    self.run_command.run_command(
+                        ["docker-compose", "down", "--rmi", "all", "--volumes", "--remove-orphans"],
+                        working_dir=docker_compose_dir,
+                        namespace='takserver-installer',
+                        capture_output=True,
+                        emit_output=True
+                    )
+                    
+                    # Clean up BuildKit resources
+                    self.run_command.emit_log_output("Cleaning up BuildKit resources...", 'takserver-installer')
+                    
+                    # Get and remove BuildKit containers
+                    buildkit_containers = [container_id for container_id in self.run_command.run_command(
+                        ["docker", "ps", "-a", "--filter", "ancestor=moby/buildkit:buildx-stable-1", "--format", "{{.ID}}"],
+                        namespace='takserver-installer',
+                        capture_output=True,
+                        emit_output=True
+                    ).stdout.strip().split('\n') if container_id]
+                    
+                    if buildkit_containers:
                         self.run_command.run_command(
-                            ["docker", "stop", container],
+                            ["docker", "rm", "-f"] + buildkit_containers,
                             namespace='takserver-installer',
                             capture_output=True,
                             emit_output=True
                         )
-                        self.run_command.emit_log_output(f"Removing container: {container}", 'takserver-installer')
+                        self.run_command.emit_log_output("BuildKit containers cleaned up", 'takserver-installer')
+                    
+                    # Get and remove BuildKit volumes
+                    buildkit_volumes = [volume_id for volume_id in self.run_command.run_command(
+                        ["docker", "volume", "ls", "--filter", "name=buildkit", "--quiet"],
+                        namespace='takserver-installer',
+                        capture_output=True,
+                        emit_output=True
+                    ).stdout.strip().split('\n') if volume_id]
+                    
+                    if buildkit_volumes:
                         self.run_command.run_command(
-                            ["docker", "rm", "-f", container],
+                            ["docker", "volume", "rm", "-f"] + buildkit_volumes,
                             namespace='takserver-installer',
                             capture_output=True,
                             emit_output=True
                         )
-                    except Exception as e:
-                        self.run_command.emit_log_output(f"Warning: {str(e)}", 'takserver-installer')
-                        pass  # Ignore errors if containers don't exist
+                        self.run_command.emit_log_output("BuildKit volumes cleaned up", 'takserver-installer')
+                    
+                    # Remove BuildKit image
+                    self.run_command.run_command(
+                        ["docker", "rmi", "-f", "moby/buildkit:buildx-stable-1"],
+                        namespace='takserver-installer',
+                        capture_output=True,
+                        emit_output=True
+                    )
+                    self.run_command.emit_log_output("BuildKit image removed", 'takserver-installer')
+                    
+                except Exception as e:
+                    self.run_command.emit_log_output(f"Warning during docker-compose cleanup: {str(e)}", 'takserver-installer')
+            else:
+                self.run_command.emit_log_output("No docker-compose.yml found, skipping container/image/volume cleanup", 'takserver-installer')
 
             # Remove the working directory if it exists
             if os.path.exists(self.working_dir):
@@ -415,32 +455,6 @@ volumes:
                     self.run_command.emit_log_output("Removed working directory", 'takserver-installer')
                 except Exception as e:
                     self.run_command.emit_log_output(f"Error removing working directory: {str(e)}", 'takserver-installer')
-
-            # Clean up Docker volumes
-            try:
-                if self.takserver_version:
-                    volume_patterns = [
-                        f"takserver-{self.takserver_version}_*",
-                        "*tak-database*",
-                        "*takserver*"
-                    ]
-                    for pattern in volume_patterns:
-                        self.run_command.emit_log_output(f"Cleaning up volumes matching: {pattern}", 'takserver-installer')
-                        volumes = self.run_command.run_command(
-                            ["docker", "volume", "ls", "-q", "-f", f"name={pattern}"],
-                            namespace='takserver-installer',
-                            capture_output=True,
-                            emit_output=True
-                        )
-                        if volumes.stdout.strip():
-                            self.run_command.run_command(
-                                ["docker", "volume", "rm", "-f"] + volumes.stdout.strip().split('\n'),
-                                namespace='takserver-installer',
-                                capture_output=True,
-                                emit_output=True
-                            )
-            except Exception as e:
-                self.run_command.emit_log_output(f"Error cleaning up Docker volumes: {str(e)}", 'takserver-installer')
 
             self.run_command.emit_log_output("Rollback completed successfully", 'takserver-installer')
             socketio.emit('rollback_complete', namespace='/takserver-installer')

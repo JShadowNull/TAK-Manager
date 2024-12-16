@@ -1,6 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import Popup from '../shared/Popup';
-import { io } from 'socket.io-client';
+import useSocket from '../../hooks/useSocket';
+import Button from '../shared/Button';
 
 function AdvancedFeatures() {
   const [showOtaForm, setShowOtaForm] = useState(false);
@@ -12,108 +13,94 @@ function AdvancedFeatures() {
   const [updatePluginsFormData, setUpdatePluginsFormData] = useState({
     ota_zip_file: null,
   });
-  const [terminalOutput, setTerminalOutput] = useState([]);
-  const terminalRef = useRef(null);
-  const [isInstalling, setIsInstalling] = useState(false);
-  const [installationSuccessful, setInstallationSuccessful] = useState(false);
-  const [installationError, setInstallationError] = useState(null);
-  const [showNextButton, setShowNextButton] = useState(false);
   const [showCompletionPopup, setShowCompletionPopup] = useState(false);
-  const [installationFailed, setInstallationFailed] = useState(false);
-  const socketRef = useRef(null);
   const [completedOperation, setCompletedOperation] = useState(null);
 
-  useEffect(() => {
-    // Initialize socket connection
-    socketRef.current = io('/ota-update', {
-      autoConnect: true,
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000
-    });
-
-    // Socket event listeners
-    socketRef.current.on('connect', () => {
+  // Socket event handlers
+  const eventHandlers = {
+    handleTerminalOutput: true,
+    onConnect: () => {
       console.log('Connected to OTA update namespace');
-      setTerminalOutput(prev => [...prev, 'Connected to server']);
-    });
-
-    socketRef.current.on('ota_status', (data) => {
-      setIsInstalling(data.isUpdating);
-      if (data.isUpdating) {
-        setTerminalOutput(prev => [...prev, 'OTA update in progress...']);
-      }
-    });
-
-    socketRef.current.on('terminal_output', (data) => {
-      setTerminalOutput(prev => [...prev, data.data]);
-      if (terminalRef.current) {
-        terminalRef.current.scrollToBottom();
-      }
-    });
-
-    // Initial OTA configuration events
-    socketRef.current.on('installation_started', () => {
-      setTerminalOutput([]);
-      setIsInstalling(true);
-      setInstallationSuccessful(false);
-      setInstallationError(null);
-      setShowNextButton(false);
-      setInstallationFailed(false);
-    });
-
-    socketRef.current.on('installation_complete', (data) => {
+    },
+    // Installation process events (for operation_type: 'install')
+    installation_started: (_, { clearTerminal, updateState }) => {
+      clearTerminal();
+      updateState({
+        isInstalling: true,
+        installationSuccessful: false,
+        installationError: null,
+        showNextButton: false,
+        installationFailed: false,
+      });
+      setCompletedOperation('config');
+    },
+    installation_complete: (data, { updateState }) => {
       if (data.status === 'success') {
-        setInstallationSuccessful(true);
-        setTerminalOutput(prev => [...prev, 'OTA configuration completed successfully']);
-        setShowNextButton(true);
-        setCompletedOperation('config');
+        updateState({
+          installationSuccessful: true,
+          showNextButton: true,
+          isInstalling: false,
+        });
       }
-      setIsInstalling(false);
-    });
-
-    // Plugin update events
-    socketRef.current.on('ota_update_started', () => {
-      setTerminalOutput([]);
-      setIsInstalling(true);
-      setInstallationSuccessful(false);
-      setInstallationError(null);
-      setShowNextButton(false);
-      setInstallationFailed(false);
-    });
-
-    socketRef.current.on('ota_update_complete', (data) => {
+    },
+    installation_failed: (data, { updateState }) => {
+      updateState({
+        installationError: data.error,
+        installationFailed: true,
+        isInstalling: false,
+      });
+    },
+    // Update process events (for operation_type: 'update')
+    ota_update_started: (_, { clearTerminal, updateState }) => {
+      clearTerminal();
+      updateState({
+        isInstalling: true,
+        installationSuccessful: false,
+        installationError: null,
+        showNextButton: false,
+        installationFailed: false,
+      });
+      setCompletedOperation('update');
+    },
+    ota_update_complete: (data, { updateState }) => {
       if (data.status === 'success') {
-        setInstallationSuccessful(true);
-        setTerminalOutput(prev => [...prev, 'Plugin update completed successfully']);
-        setShowNextButton(true);
-        setCompletedOperation('update');
+        updateState({
+          installationSuccessful: true,
+          showNextButton: true,
+          isInstalling: false,
+        });
       }
-      setIsInstalling(false);
-    });
+    },
+    ota_update_failed: (data, { updateState }) => {
+      updateState({
+        installationError: data.error,
+        installationFailed: true,
+        isInstalling: false,
+      });
+    }
+  };
 
-    socketRef.current.on('ota_update_failed', (data) => {
-      setInstallationError(data.error);
-      setInstallationFailed(true);
-      setIsInstalling(false);
-      setTerminalOutput(prev => [...prev, `Error: ${data.error}`]);
-    });
-
-    // Cleanup on unmount
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.off('terminal_output');
-        socketRef.current.off('ota_status');
-        socketRef.current.off('installation_started');
-        socketRef.current.off('installation_complete');
-        socketRef.current.off('ota_update_started');
-        socketRef.current.off('ota_update_complete');
-        socketRef.current.off('ota_update_failed');
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
-    };
-  }, []);
+  // Initialize socket with useSocket hook
+  const {
+    terminalOutput,
+    state: {
+      isInstalling = false,
+      installationSuccessful = false,
+      installationError = null,
+      showNextButton = false,
+      installationFailed = false,
+    },
+    clearTerminalOutput,
+  } = useSocket('/ota-update', {
+    eventHandlers,
+    initialState: {
+      isInstalling: false,
+      installationSuccessful: false,
+      installationError: null,
+      showNextButton: false,
+      installationFailed: false,
+    }
+  });
 
   const handleOtaInputChange = (e) => {
     const { id, files } = e.target;
@@ -132,25 +119,18 @@ function AdvancedFeatures() {
 
   const handleOtaSubmit = async () => {
     try {
-      // Validate file first
       if (!otaFormData.ota_zip_file || !otaFormData.ota_zip_file.name.endsWith('.zip')) {
         throw new Error('Please select a valid OTA plugins ZIP file');
       }
 
-      // Clear previous states
-      setTerminalOutput([]);
       setShowOtaProgress(true);
       setShowOtaForm(false);
-      setIsInstalling(true);
-      setInstallationSuccessful(false);
-      setInstallationError(null);
-      setShowNextButton(false);
-      setInstallationFailed(false);
 
       const formDataToSend = new FormData();
       formDataToSend.append('ota_zip_file', otaFormData.ota_zip_file);
+      formDataToSend.append('operation_type', 'install');
 
-      const response = await fetch('/api/ota/start-ota-update', {
+      const response = await fetch('/api/ota/ota-update', {
         method: 'POST',
         body: formDataToSend,
       });
@@ -160,15 +140,15 @@ function AdvancedFeatures() {
         throw new Error(errorData.error || 'Configuration failed');
       }
 
-      const data = await response.json();
-      setTerminalOutput(prev => [...prev, `Configuration started: ${data.message}`]);
-
+      // Don't update UI state here - wait for socket events
     } catch (error) {
       console.error('OTA configuration error:', error);
-      setTerminalOutput(prev => [...prev, `Error: ${error.message}`]);
-      setIsInstalling(false);
-      setInstallationError(error.message);
-      setInstallationFailed(true);
+      // Update UI state for immediate errors (like validation or network errors)
+      updateState({
+        installationError: error.message,
+        installationFailed: true,
+        isInstalling: false,
+      });
     }
   };
 
@@ -189,25 +169,18 @@ function AdvancedFeatures() {
 
   const handleUpdatePluginsSubmit = async () => {
     try {
-      // Validate file first
       if (!updatePluginsFormData.ota_zip_file || !updatePluginsFormData.ota_zip_file.name.endsWith('.zip')) {
         throw new Error('Please select a valid plugins ZIP file');
       }
 
-      // Clear previous states
-      setTerminalOutput([]);
       setShowOtaProgress(true);
       setShowUpdatePluginsForm(false);
-      setIsInstalling(true);
-      setInstallationSuccessful(false);
-      setInstallationError(null);
-      setShowNextButton(false);
-      setInstallationFailed(false);
 
       const formDataToSend = new FormData();
       formDataToSend.append('ota_zip_file', updatePluginsFormData.ota_zip_file);
+      formDataToSend.append('operation_type', 'update');
 
-      const response = await fetch('/api/ota/update-ota', {
+      const response = await fetch('/api/ota/ota-update', {
         method: 'POST',
         body: formDataToSend,
       });
@@ -217,15 +190,15 @@ function AdvancedFeatures() {
         throw new Error(errorData.error || 'Update failed');
       }
 
-      const data = await response.json();
-      setTerminalOutput(prev => [...prev, `Update started: ${data.message}`]);
-
+      // Don't update UI state here - wait for socket events
     } catch (error) {
       console.error('Plugin update error:', error);
-      setTerminalOutput(prev => [...prev, `Error: ${error.message}`]);
-      setIsInstalling(false);
-      setInstallationError(error.message);
-      setInstallationFailed(true);
+      // Update UI state for immediate errors (like validation or network errors)
+      updateState({
+        installationError: error.message,
+        installationFailed: true,
+        isInstalling: false,
+      });
     }
   };
 
@@ -237,11 +210,7 @@ function AdvancedFeatures() {
   const handleComplete = () => {
     setShowCompletionPopup(false);
     setShowOtaProgress(false);
-    setTerminalOutput([]);
-    setIsInstalling(false);
-    setInstallationSuccessful(false);
-    setInstallationError(null);
-    setShowNextButton(false);
+    clearTerminalOutput();
     handleOtaClose();
   };
 
@@ -252,22 +221,30 @@ function AdvancedFeatures() {
           <h3 className="text-base font-bold">Advanced Features</h3>
 
           <div className="bg-primaryBg border border-accentBoarder p-4 rounded-lg mb-4">
-              <p className="text-sm text-white">Once configured, use https://your-ip-address:8443/ota/plugins in ATAK for update url to check for plugins and install them</p>
+            <p className="text-sm text-white">
+              Once configured, use https://your-ip-address:8443/ota/plugins in ATAK for update url to check for plugins and install them
+            </p>
           </div>
 
           <div className="flex gap-4">
-            <button
-              className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
+            <Button
+              variant="primary"
               onClick={() => setShowOtaForm(true)}
+              tooltip="Configure OTA updates for ATAK clients"
+              triggerMode="hover"
+              showHelpIcon={false}
             >
               Configure OTA Updates
-            </button>
-            <button
-              className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
+            </Button>
+            <Button
+              variant="primary"
               onClick={() => setShowUpdatePluginsForm(true)}
+              tooltip="Update or add new plugins for OTA updates"
+              triggerMode="hover"
+              showHelpIcon={false}
             >
               Update Plugins
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -320,18 +297,21 @@ function AdvancedFeatures() {
             </div>
 
             <div className="flex justify-end gap-4 mt-4">
-              <button
-                className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-red-500 transition-all duration-200"
+              <Button
+                variant="danger"
                 onClick={handleOtaClose}
               >
                 Cancel
-              </button>
-              <button
-                className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
+              </Button>
+              <Button
+                variant="primary"
                 onClick={handleOtaSubmit}
+                loading={isInstalling}
+                loadingText="Configuring..."
+                disabled={!otaFormData.ota_zip_file}
               >
                 Begin Configuration
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -384,18 +364,21 @@ function AdvancedFeatures() {
             </div>
 
             <div className="flex justify-end gap-4 mt-4">
-              <button
-                className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-red-500 transition-all duration-200"
+              <Button
+                variant="danger"
                 onClick={handleUpdatePluginsClose}
               >
                 Cancel
-              </button>
-              <button
-                className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
+              </Button>
+              <Button
+                variant="primary"
                 onClick={handleUpdatePluginsSubmit}
+                loading={isInstalling}
+                loadingText="Updating..."
+                disabled={!updatePluginsFormData.ota_zip_file}
               >
                 Begin Update
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -418,7 +401,6 @@ function AdvancedFeatures() {
         }
         variant="terminal"
         terminalOutput={terminalOutput}
-        terminalRef={terminalRef}
         showTerminal={true}
         isInProgress={isInstalling}
         isComplete={!isInstalling && (installationSuccessful || installationError)}
@@ -457,12 +439,12 @@ function AdvancedFeatures() {
         onClose={handleComplete}
         blurSidebar={true}
         buttons={
-          <button
-            className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
+          <Button
+            variant="primary"
             onClick={handleComplete}
           >
             Close
-          </button>
+          </Button>
         }
       >
         <div className="text-center">

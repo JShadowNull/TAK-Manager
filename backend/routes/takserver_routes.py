@@ -6,8 +6,8 @@ from werkzeug.utils import secure_filename
 from backend.services.scripts.takserver.takserver_installer import TakServerInstaller
 from backend.services.scripts.takserver.check_status import TakServerStatus
 from backend.services.scripts.takserver.takserver_uninstaller import TakServerUninstaller
+from backend.services.helpers.docker_installer import DockerInstaller
 from flask_socketio import Namespace
-import threading
 import os
 import uuid
 from backend.services.scripts.system.thread_manager import ThreadManager
@@ -266,9 +266,46 @@ class TakServerUninstallNamespace(Namespace):
             # Emit final status update
             self.emit_status()
 
+# TAKServer Installer Namespace
+class TakServerInstallerNamespace(Namespace):
+    def __init__(self, namespace=None):
+        super().__init__(namespace)
+        self.docker_installed = DockerInstaller()
+        self.operation_in_progress = False
+        self.operation_threads = []
+
+    def cleanup_operation_threads(self):
+        """Clean up completed operation threads"""
+        # Remove dead threads
+        self.operation_threads = [t for t in self.operation_threads if not t.dead]
+        # Kill any remaining threads that are still alive
+        for thread in self.operation_threads:
+            try:
+                if not thread.dead:
+                    thread.kill()
+            except Exception as e:
+                print(f"Error killing thread: {e}")
+        self.operation_threads = []
+
+    def on_connect(self):
+        print('Client connected to /takserver-installer namespace')
+        # Send initial docker status on connect
+        self.on_check_docker_installed()
+
+    def on_disconnect(self):
+        print('Client disconnected from /takserver-installer namespace')
+        self.cleanup_operation_threads()
+
+    def on_check_docker_installed(self):
+        """Handle docker installation status check"""
+        print('Received request to check if Docker is installed')
+        result = self.docker_installed.is_docker_installed()
+        socketio.emit('docker_installed_status', result, namespace='/takserver-installer')
+
 # Register the TAK server namespaces
 socketio.on_namespace(TakServerStatusNamespace('/takserver-status'))
 socketio.on_namespace(TakServerUninstallNamespace('/takserver-uninstall'))
+socketio.on_namespace(TakServerInstallerNamespace('/takserver-installer'))
 
 # ============================================================================
 # HTTP Routes

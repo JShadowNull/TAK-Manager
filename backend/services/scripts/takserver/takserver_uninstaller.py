@@ -61,72 +61,10 @@ class TakServerUninstaller:
                 'takserver-uninstall'
             )
             
-            # Run docker-compose down with volume removal
-            result = self.run_command.run_command(
-                ["docker-compose", "down", "-v", "--remove-orphans"],
-                working_dir=docker_compose_dir,
-                namespace='takserver-uninstall',
-                capture_output=False
-            )
-
-            # Remove any remaining containers with tak in the name
-            self.run_command.emit_log_output(
-                "→ Checking for remaining TAK Server containers...", 
-                'takserver-uninstall'
-            )
-            containers = self.run_command.run_command(
-                ["docker", "ps", "-a", "-q", "--filter", "name=tak"],
-                namespace='takserver-uninstall',
-                capture_output=True
-            )
-            if containers.stdout.strip():
-                self.run_command.emit_log_output(
-                    "→ Removing remaining TAK Server containers...", 
-                    'takserver-uninstall'
-                )
-                self.run_command.run_command(
-                    ["docker", "rm", "-f"] + containers.stdout.strip().split('\n'),
-                    namespace='takserver-uninstall',
-                    capture_output=False
-                )
-
-            # Remove all volumes associated with TAK server
-            self.run_command.emit_log_output(
-                "→ Removing TAK Server volumes...", 
-                'takserver-uninstall'
-            )
-
-            # Remove named volumes
-            volume_patterns = [
-                f"takserver-{version}_*",  # TAK server volumes
-                "*tak-database*",          # Database volumes
-                "*takserver*"              # Any other TAK-related volumes
-            ]
-
-            for pattern in volume_patterns:
-                volumes = self.run_command.run_command(
-                    ["docker", "volume", "ls", "-q", "-f", f"name={pattern}"],
-                    namespace='takserver-uninstall',
-                    capture_output=True
-                )
-                if volumes.stdout.strip():
-                    self.run_command.emit_log_output(
-                        f"→ Removing volumes matching pattern: {pattern}", 
-                        'takserver-uninstall'
-                    )
-                    self.run_command.run_command(
-                        ["docker", "volume", "rm", "-f"] + volumes.stdout.strip().split('\n'),
-                        namespace='takserver-uninstall',
-                        capture_output=False
-                    )
-
-            # Final prune of all unused volumes
-            self.run_command.emit_log_output(
-                "→ Pruning unused volumes...", 
-                'takserver-uninstall'
-            )
+            # Run docker-compose down with all cleanup flags
             self.run_command.run_command(
-                ["docker", "volume", "prune", "-f"],
+                ["docker-compose", "down", "--rmi", "all", "--volumes", "--remove-orphans"],
+                working_dir=docker_compose_dir,
                 namespace='takserver-uninstall',
                 capture_output=False
             )
@@ -188,48 +126,57 @@ class TakServerUninstaller:
             return False
 
     def clean_docker_build_cache(self):
-        """Clean Docker build cache for TAK Server images."""
+        """Clean Docker build cache and BuildKit resources."""
         try:
+            # Clean up BuildKit resources
             self.run_command.emit_log_output(
-                "→ Cleaning Docker build cache and images...", 
+                "→ Cleaning up BuildKit resources...", 
                 'takserver-uninstall'
             )
             
-            # Remove TAK Server images
-            self.run_command.emit_log_output(
-                "→ Removing TAK Server images...", 
-                'takserver-uninstall'
-            )
-            images = self.run_command.run_command(
-                ["docker", "images", "-q", "--filter", "reference=*tak*"],
+            # Get and remove BuildKit containers
+            buildkit_containers = [container_id for container_id in self.run_command.run_command(
+                ["docker", "ps", "-a", "--filter", "ancestor=moby/buildkit:buildx-stable-1", "--format", "{{.ID}}"],
                 namespace='takserver-uninstall',
                 capture_output=True
-            )
-            if images.stdout.strip():
+            ).stdout.strip().split('\n') if container_id]
+            
+            if buildkit_containers:
                 self.run_command.run_command(
-                    ["docker", "rmi", "-f"] + images.stdout.strip().split('\n'),
+                    ["docker", "rm", "-f"] + buildkit_containers,
                     namespace='takserver-uninstall',
                     capture_output=False
                 )
-
-            # Prune unused build cache
-            self.run_command.emit_log_output(
-                "→ Pruning Docker build cache...", 
-                'takserver-uninstall'
-            )
-            self.run_command.run_command(
-                ["docker", "builder", "prune", "-f"],
+                self.run_command.emit_log_output(
+                    "→ BuildKit containers cleaned up", 
+                    'takserver-uninstall'
+                )
+            
+            # Get and remove BuildKit volumes
+            buildkit_volumes = [volume_id for volume_id in self.run_command.run_command(
+                ["docker", "volume", "ls", "--filter", "name=buildkit", "--quiet"],
                 namespace='takserver-uninstall',
-                capture_output=False
-            )
-
-            # Prune all unused images
+                capture_output=True
+            ).stdout.strip().split('\n') if volume_id]
+            
+            if buildkit_volumes:
+                self.run_command.run_command(
+                    ["docker", "volume", "rm", "-f"] + buildkit_volumes,
+                    namespace='takserver-uninstall',
+                    capture_output=False
+                )
+                self.run_command.emit_log_output(
+                    "→ BuildKit volumes cleaned up", 
+                    'takserver-uninstall'
+                )
+            
+            # Remove BuildKit image
             self.run_command.emit_log_output(
-                "→ Pruning unused images...", 
+                "→ Removing BuildKit image...", 
                 'takserver-uninstall'
             )
             self.run_command.run_command(
-                ["docker", "image", "prune", "-a", "-f"],
+                ["docker", "rmi", "-f", "moby/buildkit:buildx-stable-1"],
                 namespace='takserver-uninstall',
                 capture_output=False
             )

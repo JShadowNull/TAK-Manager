@@ -1,114 +1,196 @@
 from flask import Blueprint, jsonify, request
 from werkzeug.utils import secure_filename
+from flask_socketio import Namespace
 from backend.services.scripts.ota.ota_updates import OTAUpdate
-from backend.services.scripts.ota.ota_handler import OTAOperationHandler
 import os
 import uuid
+import eventlet
 from backend.services.scripts.system.thread_manager import ThreadManager
 from backend.routes.socketio import socketio
 
-# Create blueprint for OTA routes
+# ============================================================================
+# Blueprint and Global Variables
+# ============================================================================
 ota_bp = Blueprint('ota', __name__)
-
-# Initialize thread manager
 thread_manager = ThreadManager()
-
-# Dictionary to keep track of running updates
 updates = {}
 
+# ============================================================================
+# Helper Functions
+# ============================================================================
+def get_ota_status_namespace():
+    """Helper function to get the OTA status namespace instance"""
+    try:
+        return next(ns for ns in socketio.server.namespace_handlers.values() 
+                   if isinstance(ns, OTAUpdateNamespace))
+    except StopIteration:
+        raise RuntimeError("OTA status namespace not found")
+
+def execute_ota_operation(operation_func):
+    """Execute an OTA operation in a background thread"""
+    status_namespace = get_ota_status_namespace()
+    
+    def operation_thread():
+        try:
+            status_namespace.start_operation()
+            result = operation_func()
+            status_namespace.end_operation()
+            status_namespace.cleanup_operation_threads()
+            return result
+        except Exception as e:
+            status_namespace.end_operation()
+            status_namespace.cleanup_operation_threads()
+            raise e
+    
+    thread = thread_manager.spawn(operation_thread)
+    status_namespace.operation_threads.append(thread)
+    return {'message': 'Operation initiated'}
+
+def process_ota_file(request):
+    """Process and validate OTA file from request"""
+    if 'ota_zip_file' not in request.files:
+        raise ValueError("No file provided")
+        
+    file = request.files['ota_zip_file']
+    
+    if file.filename == '':
+        raise ValueError("No file selected")
+        
+    if not allowed_file(file.filename):
+        raise ValueError("Invalid file type. Please upload a ZIP file")
+
+    temp_dir = '/tmp' if os.name != 'nt' else os.environ.get('TEMP', 'C:\\Temp')
+    os.makedirs(temp_dir, exist_ok=True)
+
+    filename = secure_filename(file.filename)
+    file_path = os.path.join(temp_dir, filename)
+    file.save(file_path)
+    
+    return file_path
+
 def allowed_file(filename):
+    """Check if the file extension is allowed (zip)"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'zip'
 
-@ota_bp.route('/start-ota-update', methods=['POST'])
-def start_ota_update():
+# ============================================================================
+# Socket.IO Namespace
+# ============================================================================
+class OTAUpdateNamespace(Namespace):
+    def __init__(self, namespace=None):
+        super().__init__(namespace)
+        self.operation_in_progress = False
+        self.operation_threads = []
+        self.monitor_thread = None
+
+    def cleanup_operation_threads(self):
+        """Clean up completed operation threads"""
+        self.operation_threads = [t for t in self.operation_threads if not t.dead]
+        for thread in self.operation_threads:
+            try:
+                if not thread.dead:
+                    thread.kill()
+            except Exception as e:
+                print(f"Error killing thread: {e}")
+        self.operation_threads = []
+
+    def on_connect(self):
+        print('Client connected to /ota-update namespace')
+        if not self.monitor_thread:
+            self.monitor_thread = thread_manager.spawn(self.monitor_ota_status)
+        self.emit_status()
+
+    def on_disconnect(self):
+        print('Client disconnected from /ota-update namespace')
+        self.cleanup_operation_threads()
+        if self.monitor_thread and not self.monitor_thread.dead:
+            try:
+                self.monitor_thread.kill()
+            except Exception as e:
+                print(f"Error killing monitor thread: {e}")
+        self.monitor_thread = None
+
+    def monitor_ota_status(self):
+        """Monitor OTA update status"""
+        last_status = None
+        while True:
+            try:
+                current_status = {'isUpdating': self.operation_in_progress}
+                if current_status != last_status:
+                    self.emit_status()
+                    last_status = current_status
+            except Exception as e:
+                socketio.emit('ota_error', {'error': str(e)}, namespace='/ota-update')
+            eventlet.sleep(2)
+
+    def emit_status(self):
+        """Emit current OTA update status"""
+        socketio.emit('ota_status', {
+            'isUpdating': self.operation_in_progress
+        }, namespace='/ota-update')
+
+    def on_check_status(self):
+        """Handle status check request"""
+        self.emit_status()
+
+    def start_operation(self):
+        """Set the operation lock"""
+        self.operation_in_progress = True
+        self.emit_status()
+
+    def end_operation(self):
+        """Release the operation lock and update status"""
+        self.operation_in_progress = False
+        self.emit_status()
+
+# Register the OTA update namespace
+socketio.on_namespace(OTAUpdateNamespace('/ota-update'))
+
+# ============================================================================
+# HTTP Routes
+# ============================================================================
+@ota_bp.route('/ota-update', methods=['POST'])
+def handle_ota_update():
+    """Handle both update and installation operations"""
     try:
-        # Validate file exists in request
-        if 'ota_zip_file' not in request.files:
-            return jsonify({"error": "No file provided"}), 400
-            
-        file = request.files['ota_zip_file']
-        
-        # Validate filename
-        if file.filename == '':
-            return jsonify({"error": "No file selected"}), 400
-            
-        if not allowed_file(file.filename):
-            return jsonify({"error": "Invalid file type. Please upload a ZIP file"}), 400
+        operation_type = request.form.get('operation_type', 'update')
+        if operation_type not in ['update', 'install']:
+            return jsonify({"error": "Invalid operation type"}), 400
 
-        # Create temp directory if it doesn't exist
-        temp_dir = '/tmp' if os.name != 'nt' else os.environ.get('TEMP', 'C:\\Temp')
-        os.makedirs(temp_dir, exist_ok=True)
+        try:
+            file_path = process_ota_file(request)
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
 
-        # Save file with secure filename
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(temp_dir, filename)
-        file.save(file_path)
-
-        # Generate update ID
         update_id = str(uuid.uuid4())
-
-        # Initialize OTA updater
         ota_updater = OTAUpdate(file_path)
-
-        # Store updater instance
         updates[update_id] = ota_updater
 
-        # Create handler and start update in managed thread
-        handler = OTAOperationHandler(ota_updater)
-        thread = thread_manager.spawn(handler.handle_update)
+        def update_operation():
+            try:
+                if operation_type == 'update':
+                    return ota_updater.update()
+                else:  # install
+                    return ota_updater.main()
+            except Exception as e:
+                raise e
 
+        # Execute the operation
+        execute_ota_operation(update_operation)
         return jsonify({
-            'message': 'OTA update started',
-            'update_id': update_id
+            'update_id': update_id,
+            'message': f'OTA {operation_type} initiated'
         })
 
     except Exception as e:
-        socketio.emit('ota_failed', {'error': str(e)}, namespace='/ota-update')
         return jsonify({"error": str(e)}), 500
-    
-@ota_bp.route('/update-ota', methods=['POST'])
-def update_ota():
+
+@ota_bp.route('/ota-status', methods=['GET'])
+def get_ota_status():
+    """Get current OTA update status"""
     try:
-        # Validate file exists in request
-        if 'ota_zip_file' not in request.files:
-            return jsonify({"error": "No file provided"}), 400
-            
-        file = request.files['ota_zip_file']
-        
-        # Validate filename
-        if file.filename == '':
-            return jsonify({"error": "No file selected"}), 400
-            
-        if not allowed_file(file.filename):
-            return jsonify({"error": "Invalid file type. Please upload a ZIP file"}), 400
-
-        # Create temp directory if it doesn't exist
-        temp_dir = '/tmp' if os.name != 'nt' else os.environ.get('TEMP', 'C:\\Temp')
-        os.makedirs(temp_dir, exist_ok=True)
-
-        # Save file with secure filename
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(temp_dir, filename)
-        file.save(file_path)
-
-        # Generate update ID
-        update_id = str(uuid.uuid4())
-
-        # Initialize OTA updater
-        ota_updater = OTAUpdate(file_path)
-
-        # Store updater instance
-        updates[update_id] = ota_updater
-
-        # Create handler and start update in managed thread
-        handler = OTAOperationHandler(ota_updater)
-        thread = thread_manager.spawn(handler.handle_update)
-
+        status_namespace = get_ota_status_namespace()
         return jsonify({
-            'message': 'OTA update started',
-            'update_id': update_id
+            'isUpdating': status_namespace.operation_in_progress
         })
-
     except Exception as e:
-        socketio.emit('ota_failed', {'error': str(e)}, namespace='/ota-update')
         return jsonify({"error": str(e)}), 500

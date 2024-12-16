@@ -7,40 +7,25 @@ from pathlib import Path
 from eventlet.green import threading  # Use green threading
 from backend.services.helpers.run_command import RunCommand
 from backend.routes.socketio import socketio
-from backend.services.scripts.docker.docker_manager import DockerManager
 from backend.services.scripts.ota.generate_content import GenerateOTAContent
 from backend.services.helpers.os_detector import OSDetector
+from backend.services.scripts.takserver.check_status import TakServerStatus
 import subprocess
 
 class OTAUpdate:
     def __init__(self, ota_zip_path):
         self.ota_zip_path = ota_zip_path  # Store the path to the OTA zip file
         self.run_command = RunCommand()
-        self.docker_manager = DockerManager()
         self.generate_content = GenerateOTAContent()
         self.stop_event = threading.Event()
         self.os_detector = OSDetector()
+        self.tak_status = TakServerStatus()
         self.completed_steps = []
 
     def check_stop(self):
         if self.stop_event.is_set():
             raise Exception("Configuration stopped by user.")
         
-    def check_docker_running(self):
-        """
-        Checks if Docker is running and attempts to start it if not.
-        Uses DockerManager's check_docker_status() method to determine Docker's status.
-        """
-        self.run_command.emit_log_output("Checking if Docker is running...", 'ota-update')
-        self.check_stop()
-
-        docker_status = self.docker_manager.check_docker_status()  # Use DockerManager's check method
-        if docker_status:
-            self.run_command.emit_log_output("Docker is running.", 'ota-update')
-        else:
-            self.run_command.emit_log_output("Docker is installed but not running. Attempting to start Docker...", 'ota-update')
-            self.start_docker()
-
     def install_rosetta_on_mac(self):
         """
         Detects if the operating system is macOS and installs Rosetta if it is.
@@ -56,89 +41,23 @@ class OTAUpdate:
             self.run_command.emit_log_output("Rosetta installed successfully.", 'ota-update')
         else:
             self.run_command.emit_log_output("Operating system is not macOS. Skipping Rosetta installation.", 'ota-update')
-
-    def start_docker(self):
-        """
-        Attempt to start Docker based on the OS platform using DockerManager's start_docker method.
-        """
-        self.run_command.emit_log_output("Attempting to start Docker...", 'ota-update')
-        self.check_stop()
-
-        docker_start_result = self.docker_manager.start_docker()  # Use DockerManager's start_docker()
-
-        # Handle the result of the start_docker method
-        if 'error' in docker_start_result:
-            self.run_command.emit_log_output(docker_start_result['error'], 'ota-update')
-            raise SystemExit("Failed to start Docker. Please start it manually.")
-        else:
-            self.run_command.emit_log_output(docker_start_result['status'], 'ota-update')
-
-        self.run_command.emit_log_output("Docker started successfully.", 'ota-update')
         
     def check_takserver_running(self):
-        self.run_command.emit_log_output("Starting TAKServer and TAKServer-DB containers...", 'ota-update')
-
-        # Read the version from version.txt
-        version = self.read_version_txt()
-
-        # Check if TAKServer and TAKServer-DB containers are running
-        takserver_container_name = f"takserver-{version}"
-        takserver_db_container_name = f"tak-database-{version}"
-
-        check_takserver_command = ['docker', 'ps', '-q', '--filter', f"name=^{takserver_container_name}"]
-        check_takserver_db_command = ['docker', 'ps', '-q', '--filter', f"name=^{takserver_db_container_name}"]
-
-        takserver_running = self.run_command.run_command(check_takserver_command, namespace='ota-update', capture_output=True).stdout.strip()
-        takserver_db_running = self.run_command.run_command(check_takserver_db_command, namespace='ota-update', capture_output=True).stdout.strip()
-
-        if not takserver_running:
-            self.run_command.emit_log_output(f"{takserver_container_name} is not running. Attempting to start it...", 'ota-update')
-            start_takserver_command = ['docker', 'start', takserver_container_name]
-            self.run_command.run_command(start_takserver_command, namespace='ota-update', capture_output=True)
-
-        if not takserver_db_running:
-            self.run_command.emit_log_output(f"{takserver_db_container_name} is not running. Attempting to start it...", 'ota-update')
-            start_takserver_db_command = ['docker', 'start', takserver_db_container_name]
-            self.run_command.run_command(start_takserver_db_command, namespace='ota-update', capture_output=True)
-
-        self.run_command.emit_log_output("TAKServer containers started successfully. Waiting for containers to stabilize...", 'ota-update')
-
-        # Wait for 8 seconds to allow containers to start
-        eventlet.sleep(8)
+        """Check and start TAKServer containers if needed"""
+        self.run_command.emit_log_output("Checking TAKServer status...", 'ota-update')
         
-    def read_version_txt(self):
-        """
-        Reads the version.txt file located in the OTA updates working directory and returns the version.
-        """
-        self.check_stop()
-        working_dir = self.get_default_working_directory()
-        version_file_path = os.path.join(working_dir, "version.txt")
-
-        if not os.path.exists(version_file_path):
-            raise FileNotFoundError(f"version.txt not found in {working_dir}")
-
-        with open(version_file_path, 'r') as version_file:
-            version = version_file.read().strip()
-
-        self.run_command.emit_log_output(f"Read version: {version} from version.txt", 'ota-update')
-        return version
-    
-    def get_default_working_directory(self):
-        """Determine the default working directory based on the OS."""
-        os_type = self.os_detector.detect_os()
-        home_dir = str(Path.home())
-        if os_type == 'windows' or os_type == 'macos':
-            documents_dir = os.path.join(home_dir, 'Documents')
-            # Ensure the Documents directory exists
-            if not os.path.exists(documents_dir):
-                os.makedirs(documents_dir)
-            # Set the working directory to Documents/takserver-docker
-            working_dir = os.path.join(documents_dir, 'takserver-docker')
+        if not self.tak_status.check_installation():
+            raise Exception("TAKServer is not installed")
+            
+        # Start the containers if they're not running
+        if not self.tak_status.check_containers_running():
+            self.run_command.emit_log_output("TAKServer containers not running. Starting them...", 'ota-update')
+            success = self.tak_status.start_containers()
+            if not success:
+                raise Exception("Failed to start TAKServer containers")
         else:
-            # For Linux, use the home directory directly
-            working_dir = os.path.join(home_dir, 'takserver-docker')
-        return working_dir
-    
+            self.run_command.emit_log_output("TAKServer containers are already running.", 'ota-update')
+        
     def update_dockerfile(self):
         """
         Updates the Dockerfile located in the working directory with the new content.
@@ -146,10 +65,9 @@ class OTAUpdate:
         try:
             self.run_command.emit_log_output("Updating Dockerfile with new content...", 'ota-update')
 
-            # Read the version from version.txt
-            version = self.read_version_txt()
-            working_dir = self.get_default_working_directory()
-            dockerfile_path = os.path.join(working_dir, f"takserver-docker-{version}", "docker", "Dockerfile.takserver")
+            # Get the docker compose directory from TakServerStatus
+            docker_compose_dir = self.tak_status.get_docker_compose_dir()
+            dockerfile_path = os.path.join(docker_compose_dir, "docker", "Dockerfile.takserver")
 
             if not os.path.exists(dockerfile_path):
                 raise FileNotFoundError(f"Dockerfile not found at {dockerfile_path}")
@@ -173,10 +91,9 @@ class OTAUpdate:
         try:
             self.run_command.emit_log_output("Updating docker-compose.yml with new content...", 'ota-update')
 
-            # Read the version from version.txt
-            version = self.read_version_txt()
-            working_dir = self.get_default_working_directory()
-            dockercompose_path = os.path.join(working_dir, f"takserver-docker-{version}", "docker-compose.yml")
+            # Get the docker compose directory from TakServerStatus
+            docker_compose_dir = self.tak_status.get_docker_compose_dir()
+            dockercompose_path = os.path.join(docker_compose_dir, "docker-compose.yml")
 
             if not os.path.exists(dockercompose_path):
                 raise FileNotFoundError(f"docker-compose.yml not found at {dockercompose_path}")
@@ -197,11 +114,10 @@ class OTAUpdate:
         try:
             self.run_command.emit_log_output("Running docker compose build and docker compose up...", 'ota-update')
 
-            # Read the version from version.txt
-            version = self.read_version_txt()
-            working_dir = self.get_default_working_directory()
-            dockerfile_path = os.path.join(working_dir, f"takserver-docker-{version}", "docker", "Dockerfile.takserver")
-            compose_file_path = os.path.join(working_dir, f"takserver-docker-{version}", "docker-compose.yml")
+            # Get the docker compose directory from TakServerStatus
+            docker_compose_dir = self.tak_status.get_docker_compose_dir()
+            dockerfile_path = os.path.join(docker_compose_dir, "docker", "Dockerfile.takserver")
+            compose_file_path = os.path.join(docker_compose_dir, "docker-compose.yml")
 
             if not os.path.exists(dockerfile_path):
                 raise FileNotFoundError(f"Dockerfile not found at {dockerfile_path}")
@@ -227,8 +143,8 @@ class OTAUpdate:
             script_path = '/opt/android-sdk/build-tools/33.0.0/generate-inf.sh'
             self.run_command.emit_log_output(f"Checking if script {script_path} already exists inside Docker container...", 'ota-update')
 
-            # Read the version from version.txt
-            version = self.read_version_txt()
+            # Get container name using TakServerStatus
+            version = self.tak_status.get_takserver_version()
             takserver_container_name = f"takserver-{version}"
 
             # Command to check if the script exists
@@ -237,7 +153,6 @@ class OTAUpdate:
             ]
             result = self.run_command.run_command(check_command, namespace='ota-update', capture_output=True)
 
-            # Check if the result is a CompletedProcess object or a boolean
             if isinstance(result, subprocess.CompletedProcess):
                 if result.returncode == 0:
                     self.run_command.emit_log_output(f"Script {script_path} already exists inside Docker container.", 'ota-update')
@@ -246,7 +161,6 @@ class OTAUpdate:
                     self.run_command.emit_log_output(f"Script {script_path} does not exist inside Docker container.", 'ota-update')
                     return False
             else:
-                # Handle the case where result is a boolean
                 self.run_command.emit_log_output(f"Unexpected result type: {type(result)}", 'ota-update')
                 return False
         except Exception as e:
@@ -254,12 +168,12 @@ class OTAUpdate:
             raise
 
     def create_generate_inf_script(self):
-        temp_script_path = None  # Initialize temp_script_path
+        temp_script_path = None
         try:
             self.run_command.emit_log_output("Checking if generate-inf.sh script already exists...", 'ota-update')
 
-            # Read the version from version.txt
-            version = self.read_version_txt()
+            # Get container name using TakServerStatus
+            version = self.tak_status.get_takserver_version()
             takserver_container_name = f"takserver-{version}"
 
             # Check if the script already exists inside the Docker container
@@ -280,7 +194,7 @@ class OTAUpdate:
 
             self.run_command.emit_log_output(f"Temporary script file created at {temp_script_path}", 'ota-update')
 
-            # Copy the script into the Docker container named takserver-<version>
+            # Copy the script into the Docker container
             copy_command = [
                 'docker', 'cp', temp_script_path, f'{takserver_container_name}:/opt/android-sdk/build-tools/33.0.0/generate-inf.sh'
             ]
@@ -301,7 +215,6 @@ class OTAUpdate:
             self.run_command.emit_log_output(f"An error occurred while creating and preparing generate-inf.sh: {e}", 'ota-update')
             raise
         finally:
-            # Clean up the temporary file
             if temp_script_path and os.path.exists(temp_script_path):
                 os.remove(temp_script_path)
                 
@@ -309,8 +222,8 @@ class OTAUpdate:
         try:
             self.run_command.emit_log_output("Checking if plugins folder already exists inside Docker container...", 'ota-update')
 
-            # Read the version from version.txt
-            version = self.read_version_txt()
+            # Get container name using TakServerStatus
+            version = self.tak_status.get_takserver_version()
             takserver_container_name = f"takserver-{version}"
 
             # Command to check if the plugins folder exists
@@ -358,11 +271,11 @@ class OTAUpdate:
 
                 self.run_command.emit_log_output(f"All files moved to root of temporary directory: {temp_dir}", 'ota-update')
 
-                # Read the version from version.txt
-                version = self.read_version_txt()
+                # Get container name using TakServerStatus
+                version = self.tak_status.get_takserver_version()
                 takserver_container_name = f"takserver-{version}"
 
-                # Copy the contents of the temporary directory into the Docker container under the plugins directory
+                # Copy the contents of the temporary directory into the Docker container
                 copy_command = [
                     'docker', 'cp', f'{temp_dir}/.', f'{takserver_container_name}:/opt/tak/webcontent/plugins'
                 ]
@@ -377,8 +290,8 @@ class OTAUpdate:
         try:
             self.run_command.emit_log_output("Running generate-inf.sh script...", 'ota-update')
 
-            # Read the version from version.txt
-            version = self.read_version_txt()
+            # Get container name using TakServerStatus
+            version = self.tak_status.get_takserver_version()
             takserver_container_name = f"takserver-{version}"
 
             # Command to run the generate-inf.sh script with the required arguments
@@ -393,30 +306,13 @@ class OTAUpdate:
             raise
 
     def restart_takserver_containers(self):
+        """Restart TAKServer containers using TakServerStatus"""
         try:
-            self.run_command.emit_log_output("Restarting TAKServer and TAKServer-DB containers...", 'ota-update')
-
-            # Read the version from version.txt
-            version = self.read_version_txt()
-
-            # Define container names
-            takserver_container_name = f"takserver-{version}"
-            takserver_db_container_name = f"tak-database-{version}"
-
-            # Restart TAKServer-DB container first
-            self.run_command.emit_log_output(f"Restarting {takserver_db_container_name} container...", 'ota-update')
-            restart_takserver_db_command = ['docker', 'restart', takserver_db_container_name]
-            self.run_command.run_command(restart_takserver_db_command, namespace='ota-update', capture_output=False)
-
-            # Restart TAKServer container
-            self.run_command.emit_log_output(f"Restarting {takserver_container_name} container...", 'ota-update')
-            restart_takserver_command = ['docker', 'restart', takserver_container_name]
-            self.run_command.run_command(restart_takserver_command, namespace='ota-update', capture_output=False)
-
-            self.run_command.emit_log_output("TAKServer containers restarted successfully. Waiting for containers to stabilize...", 'ota-update')
-
-            # Wait for 5 seconds to allow containers to restart
-            eventlet.sleep(5)
+            self.run_command.emit_log_output("Restarting TAKServer containers...", 'ota-update')
+            success = self.tak_status.restart_containers()
+            if not success:
+                raise Exception("Failed to restart TAKServer containers")
+            self.run_command.emit_log_output("TAKServer containers restarted successfully.", 'ota-update')
         except Exception as e:
             self.run_command.emit_log_output(f"An error occurred while restarting TAKServer containers: {e}", 'ota-update')
             raise
@@ -426,7 +322,6 @@ class OTAUpdate:
         try:
             socketio.emit('installation_started', namespace='/ota-update')
             self.install_rosetta_on_mac()
-            self.check_docker_running()
             self.check_takserver_running()
             self.update_dockerfile()
             self.update_docker_compose_file()
@@ -447,7 +342,6 @@ class OTAUpdate:
         """ OTA update process"""
         try:
             socketio.emit('ota_update_started', namespace='/ota-update')
-            self.check_docker_running()
             self.check_takserver_running()
             self.check_and_remove_existing_plugin_folder()
             self.extract_and_prepare_plugins(self.ota_zip_path)

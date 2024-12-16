@@ -53,52 +53,6 @@ class DockerInstallerNamespace(Namespace):
 # Register the docker installer namespace
 socketio.on_namespace(DockerInstallerNamespace('/docker-installer'))
 
-# TAKServer Installer Socket
-class TakServerInstallerNamespace(Namespace):
-    def __init__(self, namespace=None):
-        super().__init__(namespace)
-        self.docker_installed = DockerInstaller()
-
-    def on_connect(self):
-        print('Client connected to /takserver-installer namespace')
-
-    def on_disconnect(self):
-        print('Client disconnected from /takserver-installer namespace')
-
-    def on_check_docker_installed(self):
-        print('Received request to check if Docker is installed')
-        result = self.docker_installed.is_docker_installed()
-        socketio.emit('docker_installed_status', result, namespace='/takserver-installer')
-
-# Register the takserver installer namespace
-socketio.on_namespace(TakServerInstallerNamespace('/takserver-installer'))
-
-# OTA Update Socket
-class OTAUpdateNamespace(Namespace):
-    def __init__(self, namespace=None):
-        super().__init__(namespace)
-        self.operation_in_progress = False
-
-    def on_connect(self):
-        print('Client connected to /ota-update namespace')
-        self.emit_status()
-
-    def on_disconnect(self):
-        print('Client disconnected from /ota-update namespace')
-
-    def emit_status(self):
-        """Emit current OTA update status"""
-        socketio.emit('ota_status', {
-            'isUpdating': self.operation_in_progress
-        }, namespace='/ota-update')
-
-    def on_check_status(self):
-        """Handle status check request"""
-        self.emit_status()
-
-# Register the OTA update namespace
-socketio.on_namespace(OTAUpdateNamespace('/ota-update'))
-
 # Get IP Address Socket
 from backend.services.helpers.get_ip import IPFetcher
 
