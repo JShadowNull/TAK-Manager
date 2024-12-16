@@ -44,7 +44,7 @@ function ExistingCertificates({
       setDeletingCerts(prev => new Set([...prev, username]));
       setupSocket();
 
-      const response = await fetch('/api/certmanager/delete', {
+      const response = await fetch('/certmanager/delete', {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -78,7 +78,7 @@ function ExistingCertificates({
       }
 
       setupSocket();
-      const response = await fetch('/api/certmanager/delete', {
+      const response = await fetch('/certmanager/delete', {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

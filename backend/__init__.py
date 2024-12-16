@@ -100,6 +100,6 @@ def create_app():
     app.register_blueprint(transfer_bp, url_prefix='/transfer')
     app.register_blueprint(takserver_bp, url_prefix='/api/takserver')
     app.register_blueprint(ota_bp, url_prefix='/api/ota')
-    app.register_blueprint(certmanager_routes, url_prefix='/api/certmanager')
+    app.register_blueprint(certmanager_routes, url_prefix='/certmanager')
 
     return app

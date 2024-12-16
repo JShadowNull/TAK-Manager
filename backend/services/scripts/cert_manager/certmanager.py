@@ -262,46 +262,39 @@ class CertManager:
 
     # Main Interface Methods
     def create_main(self, username, password=None, is_admin=False, groups=None):
-        """Main creation function that the frontend calls to create a new user."""
+        """Create client certificates for a user."""
         try:
-            # Emit start event
-            socketio.emit('cert_operation', {
-                'type': 'create',
-                'status': 'started',
+            # Validate certificate data
+            cert_data = {
                 'username': username,
-                'message': f'Starting certificate creation for user {username}'
-            }, namespace='/cert-manager')
-
-            # First verify the user doesn't already exist
-            certificates = self.get_registered_certificates()
-            if any(cert['identifier'] == username for cert in certificates):
-                # Emit failure event
+                'password': password,
+                'is_admin': is_admin,
+                'groups': groups if groups else ['__ANON__']
+            }
+            
+            is_valid, error_message = self.validate_cert_data(cert_data)
+            if not is_valid:
                 socketio.emit('cert_operation', {
                     'type': 'create',
                     'status': 'failed',
                     'username': username,
-                    'message': f'User {username} already exists'
+                    'message': error_message
                 }, namespace='/cert-manager')
                 return {
                     'success': False,
-                    'message': f"User {username} already exists"
+                    'message': error_message
                 }
-            
-            # Validate groups
-            if not groups or not isinstance(groups, list) or len(groups) == 0:
-                groups = ['__ANON__']
-            
-            # Emit progress - Creating certificates
+
+            # Emit start event
             socketio.emit('cert_operation', {
                 'type': 'create',
-                'status': 'in_progress',
+                'status': 'started',
                 'username': username,
                 'message': f'Creating certificates for user {username}'
             }, namespace='/cert-manager')
 
             # Create the certificates
             if not self.create_client_certificate(username):
-                # Emit failure event
                 socketio.emit('cert_operation', {
                     'type': 'create',
                     'status': 'failed',
@@ -313,17 +306,8 @@ class CertManager:
                     'message': f"Failed to create certificates for user {username}"
                 }
 
-            # Emit progress - Registering user
-            socketio.emit('cert_operation', {
-                'type': 'create',
-                'status': 'in_progress',
-                'username': username,
-                'message': f'Registering user {username}'
-            }, namespace='/cert-manager')
-
             # Register the user
             if not self.register_user(username, password, is_admin, groups):
-                # Emit failure event
                 socketio.emit('cert_operation', {
                     'type': 'create',
                     'status': 'failed',
@@ -337,7 +321,7 @@ class CertManager:
             
             success_message = (
                 f"Successfully created {'admin' if is_admin else 'user'} {username} "
-                f"with groups: {', '.join(groups)}"
+                f"with groups: {', '.join(groups if groups else ['__ANON__'])}"
             )
             
             # Emit completion event
@@ -354,8 +338,7 @@ class CertManager:
             }
 
         except Exception as e:
-            error_message = f"Error during creation of user {username}: {str(e)}"
-            # Emit error event
+            error_message = f"Error creating certificates for user {username}: {str(e)}"
             socketio.emit('cert_operation', {
                 'type': 'create',
                 'status': 'failed',
@@ -469,5 +452,144 @@ class CertManager:
             }, namespace='/cert-manager')
             return {
                 'success': False,
+                'message': error_message
+            }
+
+    def validate_cert_data(self, cert_data):
+        """Validate certificate data."""
+        if not isinstance(cert_data, dict):
+            return False, "Certificate data must be a dictionary"
+            
+        username = cert_data.get('username')
+        if not username:
+            return False, "Username is required"
+            
+        # Allow hyphens and underscores in username
+        if not all(c.isalnum() or c in '-_' for c in username):
+            return False, "Username must contain only letters, numbers, hyphens, and underscores"
+            
+        groups = cert_data.get('groups', ['__ANON__'])
+        if not isinstance(groups, list):
+            return False, "Groups must be a list"
+            
+        # Validate each group name
+        for group in groups:
+            if not isinstance(group, str) or not group.strip():
+                return False, "Each group must be a non-empty string"
+            if not all(c.isalnum() or c in '-_' for c in group):
+                return False, f"Group name '{group}' contains invalid characters"
+
+        # Validate password if provided
+        password = cert_data.get('password')
+        if password is not None and not isinstance(password, str):
+            return False, "Password must be a string"
+
+        # Validate is_admin if provided
+        is_admin = cert_data.get('is_admin')
+        if is_admin is not None and not isinstance(is_admin, bool):
+            return False, "is_admin must be a boolean"
+            
+        return True, None
+
+    def validate_batch_inputs(self, base_name, count, group='__ANON__'):
+        """Validate batch creation inputs."""
+        if not base_name:
+            return False, "Base name is required"
+
+        if not all(c.isalnum() or c in '-_' for c in base_name):
+            return False, "Base name must contain only letters, numbers, hyphens, and underscores"
+
+        if count < 1:
+            return False, "Count must be greater than 0"
+
+        if not isinstance(group, str) or not group.strip():
+            return False, "Group must be a non-empty string"
+
+        if not all(c.isalnum() or c in '-_' for c in group):
+            return False, f"Group name '{group}' contains invalid characters"
+
+        return True, None
+
+    def create_batch(self, certificates):
+        """Create certificates for multiple users in a batch."""
+        try:
+            results = []
+            success_count = 0
+            failure_count = 0
+
+            # Emit batch start event
+            socketio.emit('cert_operation', {
+                'type': 'create',
+                'status': 'started',
+                'message': f'Starting batch creation of {len(certificates)} certificates'
+            }, namespace='/cert-manager')
+
+            for cert_data in certificates:
+                try:
+                    # Validate certificate data
+                    is_valid, error_message = self.validate_cert_data(cert_data)
+                    if not is_valid:
+                        results.append({
+                            'username': cert_data.get('username', 'unknown'),
+                            'success': False,
+                            'message': error_message
+                        })
+                        failure_count += 1
+                        continue
+
+                    # Create certificate with validated data
+                    result = self.create_main(
+                        username=cert_data['username'],
+                        password=cert_data.get('password'),
+                        is_admin=cert_data.get('is_admin', False),
+                        groups=cert_data.get('groups', ['__ANON__'])
+                    )
+
+                    results.append({
+                        'username': cert_data['username'],
+                        'success': result['success'],
+                        'message': result.get('message', 'Certificate created successfully' if result['success'] else 'Failed to create certificate')
+                    })
+
+                    if result['success']:
+                        success_count += 1
+                    else:
+                        failure_count += 1
+
+                except Exception as e:
+                    results.append({
+                        'username': cert_data.get('username', 'unknown'),
+                        'success': False,
+                        'message': str(e)
+                    })
+                    failure_count += 1
+
+            # Emit batch completion message
+            socketio.emit('cert_operation', {
+                'type': 'create',
+                'status': 'batch_completed',
+                'message': f'Created {success_count} certificates, {failure_count} failures',
+                'success_count': success_count,
+                'failure_count': failure_count,
+                'total': len(certificates)
+            }, namespace='/cert-manager')
+
+            return {
+                'status': f'Created {success_count} certificates, {failure_count} failures',
+                'results': results
+            }
+
+        except Exception as e:
+            error_message = f"Error during batch creation: {str(e)}"
+            # Emit error event
+            socketio.emit('cert_operation', {
+                'type': 'create',
+                'status': 'failed',
+                'username': 'batch',
+                'message': error_message
+            }, namespace='/cert-manager')
+            return {
+                'status': 'failed',
+                'results': [],
                 'message': error_message
             }

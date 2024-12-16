@@ -2,7 +2,8 @@ import React, { forwardRef } from 'react';
 import PropTypes from 'prop-types';
 import { Slot } from '@radix-ui/react-slot';
 import { Loader2 } from 'lucide-react';
-import HelpIconTooltip from './HelpIconTooltip';
+import { HelpIconTooltip } from './HelpIconTooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './shadcn/tooltip';
 
 const Button = forwardRef(({ 
   children, 
@@ -17,10 +18,15 @@ const Button = forwardRef(({
   triggerMode = 'click',
   loading = false,
   loadingText = '',
+  tooltipStyle = 'material',
+  leadingIcon = null,
+  trailingIcon = null,
+  iconOnly = false,
   ...props
 }, ref) => {
   const Comp = asChild ? Slot : 'button';
-  const baseStyles = 'rounded-lg px-4 py-2 text-sm border transition-all duration-200';
+  const baseStyles = 'rounded-lg transition-all duration-200 text-sm border inline-flex items-center justify-center gap-2';
+  const paddingStyles = iconOnly ? 'p-2' : 'px-4 py-2';
   
   const variants = {
     primary: 'text-buttonTextColor border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-transparent',
@@ -34,12 +40,24 @@ const Button = forwardRef(({
     danger: 'hover:bg-red-500'
   };
 
-  const buttonContent = loading ? (
-    <div className="flex items-center gap-2">
-      <Loader2 className="h-4 w-4 animate-spin" />
-      {loadingText || children}
-    </div>
-  ) : children;
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin" />
+          {loadingText || children}
+        </>
+      );
+    }
+
+    return (
+      <>
+        {leadingIcon && <span className="inline-flex items-center">{leadingIcon}</span>}
+        {!iconOnly && children}
+        {trailingIcon && <span className="inline-flex items-center">{trailingIcon}</span>}
+      </>
+    );
+  };
 
   const buttonElement = (
     <Comp
@@ -49,19 +67,36 @@ const Button = forwardRef(({
       disabled={disabled || loading}
       className={`
         ${baseStyles}
+        ${paddingStyles}
         ${variants[variant]}
         ${!className.includes('hover:bg-') ? defaultHoverStyles[variant] : ''}
-        ${(disabled || loading) ? 'opacity-50 cursor-not-allowed' : ''}
+        ${(disabled || loading) && !className.includes('opacity-') ? 'opacity-50 cursor-not-allowed' : ''}
         ${className}
       `}
       {...props}
     >
-      {buttonContent}
+      {renderContent()}
     </Comp>
   );
 
-  // If there's a tooltip but no help icon, wrap the button in a tooltip
-  if (tooltip && !showHelpIcon) {
+  // If using shadcn tooltip
+  if (tooltip && !showHelpIcon && tooltipStyle === 'shadcn') {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {buttonElement}
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{tooltip}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  // If using Material-UI tooltip
+  if (tooltip && !showHelpIcon && tooltipStyle === 'material') {
     return (
       <HelpIconTooltip 
         tooltip={tooltip}
@@ -77,7 +112,13 @@ const Button = forwardRef(({
   return (
     <div className="inline-flex items-center gap-2">
       {buttonElement}
-      {showHelpIcon && <HelpIconTooltip tooltip={tooltip} triggerMode={triggerMode} />}
+      {showHelpIcon && (
+        <HelpIconTooltip 
+          tooltip={tooltip} 
+          triggerMode={triggerMode}
+          className="flex items-center"
+        />
+      )}
     </div>
   );
 });
@@ -94,7 +135,11 @@ Button.propTypes = {
   showHelpIcon: PropTypes.bool,
   triggerMode: PropTypes.oneOf(['click', 'hover']),
   loading: PropTypes.bool,
-  loadingText: PropTypes.string
+  loadingText: PropTypes.string,
+  tooltipStyle: PropTypes.oneOf(['material', 'shadcn']),
+  leadingIcon: PropTypes.node,
+  trailingIcon: PropTypes.node,
+  iconOnly: PropTypes.bool,
 };
 
 Button.displayName = 'Button';
