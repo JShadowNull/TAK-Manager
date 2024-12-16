@@ -102,62 +102,7 @@ class ServicesMonitorNamespace(Namespace):
             self.system_monitor.stop_monitoring()
 
 # Register the services monitor namespace
-from backend.services.scripts.data_package_config.data_package import DataPackage
 socketio.on_namespace(ServicesMonitorNamespace('/services-monitor'))
-
-# Data Package Namespace
-class DataPackageNamespace(Namespace):
-    def __init__(self, namespace=None):
-        super().__init__(namespace)
-        self.data_package = DataPackage()
-        self.monitor_thread = None
-        self.operation_in_progress = False
-
-    def on_connect(self):
-        print('Client connected to /data-package namespace')
-        if not self.monitor_thread:
-            self.monitor_thread = socketio.start_background_task(self.monitor_status)
-            thread_manager.add_thread(self.monitor_thread)
-
-    def on_disconnect(self):
-        print('Client disconnected from /data-package namespace')
-
-    def monitor_status(self):
-        """Monitor data package configuration status"""
-        while True:
-            try:
-                if self.operation_in_progress:
-                    socketio.emit('data_package_status', {
-                        'isConfiguring': True,
-                        'status': 'in_progress'
-                    }, namespace='/data-package')
-            except Exception as e:
-                socketio.emit('data_package_error', {
-                    'error': str(e)
-                }, namespace='/data-package')
-            socketio.sleep(2)
-            
-    def on_get_certificate_files(self):
-        """Handle request for certificate files"""
-        try:
-            cert_files = self.data_package.get_certificate_files()
-            socketio.emit('certificate_files', {
-                'files': cert_files
-            }, namespace='/data-package')
-        except Exception as e:
-            socketio.emit('data_package_error', {
-                'error': f"Error getting certificate files: {str(e)}"
-            }, namespace='/data-package')
-
-    def on_get_status(self):
-        """Handle status check request"""
-        socketio.emit('data_package_status', {
-            'isConfiguring': self.operation_in_progress,
-            'status': 'in_progress' if self.operation_in_progress else 'idle'
-        }, namespace='/data-package')
-
-# Register the data package namespace
-socketio.on_namespace(DataPackageNamespace('/data-package'))
 
 from backend.services.scripts.transfer.transfer import RapidFileTransfer
 # Transfer Namespace

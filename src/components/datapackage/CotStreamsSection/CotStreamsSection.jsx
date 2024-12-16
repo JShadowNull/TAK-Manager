@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
-import io from 'socket.io-client';
+import React, { useState, useEffect, useCallback, memo, useRef } from 'react';
 import PreferenceItem from '../shared/PreferenceItem';
 import { generateCotStreamItems, validateCotStream } from './cotStreamConfig';
 
@@ -7,69 +6,104 @@ const CotStreamsSection = memo(({
   preferences, 
   onPreferenceChange, 
   onEnableChange, 
-  onValidationChange
+  onValidationChange,
+  socket,
+  isConnected
 }) => {
   const [certOptions, setCertOptions] = useState([]);
   const count = parseInt(preferences.count?.value || "1", 10);
   const items = generateCotStreamItems(count);
-  const socketRef = useRef(null);
-  const renderCount = useRef(0);
+  const hasRequestedCerts = useRef(false);
+  const certRequestTimeout = useRef(null);
 
-  // Debug re-renders
-  useEffect(() => {
-    renderCount.current += 1;
-    console.log('CotStreamsSection: Rendering, count:', renderCount.current);
-  });
-
-  // Socket connection for certificate options
-  useEffect(() => {
-    console.log('CotStreamsSection: Setting up socket connection');
-    const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-    const socket = io('/data-package', {
-      transports: ['websocket'],
-      path: '/socket.io'
-    });
-    socketRef.current = socket;
-
-    socket.on('connect', () => {
-      console.log('CotStreamsSection: Socket connected');
+  // Request certificates function
+  const requestCertificates = useCallback(() => {
+    if (socket && isConnected && !hasRequestedCerts.current && certOptions.length === 0) {
+      console.log('Requesting certificates...');
       socket.emit('get_certificate_files');
-    });
+      hasRequestedCerts.current = true;
+    }
+  }, [socket, isConnected, certOptions.length]);
 
-    socket.on('disconnect', () => {
-      console.log('CotStreamsSection: Socket disconnected');
-    });
-
-    socket.on('connect_error', (error) => {
-      console.error('CotStreamsSection: Socket connection error:', error);
-    });
-
-    socket.on('certificate_files', (data) => {
-      console.log('CotStreamsSection: Received certificate files');
-      if (data.files && Array.isArray(data.files)) {
-        const options = data.files.map(file => ({
-          value: `cert/${file}`,
-          text: file
-        }));
-        setCertOptions(options);
+  // Handle certificate response
+  const handleCertificateFiles = useCallback((data) => {
+    console.log('Received certificate files response:', data);
+    if (data.files && Array.isArray(data.files)) {
+      const options = data.files.map(file => ({
+        value: `cert/${file}`,
+        text: file
+      }));
+      setCertOptions(options);
+    } else {
+      // If no certificates found, retry after a delay
+      hasRequestedCerts.current = false;
+      if (certRequestTimeout.current) {
+        clearTimeout(certRequestTimeout.current);
       }
-    });
+      certRequestTimeout.current = setTimeout(requestCertificates, 1000);
+    }
+  }, [requestCertificates]);
 
+  // Set up socket event listeners
+  useEffect(() => {
+    if (!socket || !isConnected) {
+      hasRequestedCerts.current = false;
+      return;
+    }
+
+    // Request certificates immediately when socket is connected
+    requestCertificates();
+
+    // Set up event listener
+    socket.on('certificate_files', handleCertificateFiles);
+
+    // Cleanup
     return () => {
-      console.log('CotStreamsSection: Cleaning up socket connection');
-      if (socketRef.current) {
-        console.log('CotStreamsSection: Socket exists, removing listeners');
-        socket.off('connect');
-        socket.off('disconnect');
-        socket.off('connect_error');
-        socket.off('certificate_files');
-        socket.removeAllListeners();
-        socket.disconnect();
-        socketRef.current = null;
-        console.log('CotStreamsSection: Socket cleanup complete');
+      socket.off('certificate_files', handleCertificateFiles);
+      if (certRequestTimeout.current) {
+        clearTimeout(certRequestTimeout.current);
       }
     };
-  }, []);
+  }, [socket, isConnected, requestCertificates, handleCertificateFiles]);
+
+  // Request certificates when connection status changes
+  useEffect(() => {
+    if (isConnected) {
+      requestCertificates();
+    } else {
+      hasRequestedCerts.current = false;
+    }
+  }, [isConnected, requestCertificates]);
+
+  // Initialize preferences only when count changes or new preferences are added
+  useEffect(() => {
+    const newItems = items.filter(item => !preferences[item.label]);
+    
+    if (newItems.length > 0) {
+      newItems.forEach((item) => {
+        onPreferenceChange(item.label, item.input_type === 'checkbox' ? true : (item.value || ''));
+        onEnableChange(item.label, true);
+      });
+    }
+  }, [count, items, preferences, onPreferenceChange, onEnableChange]);
+
+  // Validate all streams whenever relevant preferences change
+  useEffect(() => {
+    let allErrors = {};
+    
+    // Only validate if the stream is enabled
+    for (let i = 0; i < count; i++) {
+      if (preferences[`enabled${i}`]?.value) {
+        const streamErrors = validateCotStream(i, preferences);
+        allErrors = { ...allErrors, ...streamErrors };
+      }
+    }
+
+    // Report validation errors
+    if (onValidationChange) {
+      onValidationChange('cot_streams', allErrors);
+    }
+  }, [count, preferences, onValidationChange]);
 
   const handleSelectAll = useCallback(() => {
     items.forEach((item) => {
@@ -83,44 +117,6 @@ const CotStreamsSection = memo(({
     });
   }, [items, onEnableChange]);
 
-  // Initialize all preferences as enabled by default
-  useEffect(() => {
-    items.forEach((item) => {
-      const pref = preferences[item.label];
-      
-      if (!pref) {
-        // For new preferences, set both value and enabled state
-        onPreferenceChange(item.label, item.input_type === 'checkbox' ? true : (item.value || ''));
-        onEnableChange(item.label, true);
-      } else {
-        // For existing preferences, ensure they're enabled if not explicitly set
-        if (pref.enabled === undefined) {
-          onEnableChange(item.label, true);
-        }
-        // Initialize value if undefined
-        if (pref.value === undefined) {
-          onPreferenceChange(item.label, item.input_type === 'checkbox' ? true : (item.value || ''));
-        }
-      }
-    });
-  }, [count]);
-
-  // Validate all streams whenever preferences change
-  useEffect(() => {
-    let allErrors = {};
-    
-    // Validate each stream
-    for (let i = 0; i < count; i++) {
-      const streamErrors = validateCotStream(i, preferences);
-      allErrors = { ...allErrors, ...streamErrors };
-    }
-
-    // Report validation errors
-    if (onValidationChange) {
-      onValidationChange('cot_streams', allErrors);
-    }
-  }, [preferences, count, onValidationChange]);
-
   return (
     <div className="p-4 bg-backgroundPrimary">
       <button 
@@ -131,7 +127,6 @@ const CotStreamsSection = memo(({
         className="hidden cot-streams-unselect-all"
         onClick={handleUnselectAll}
       />
-
       <div className="divide-y divide-accentBoarder">
         {items.map((item) => {
           const isCertLocationField = item.label.toLowerCase().includes('location');

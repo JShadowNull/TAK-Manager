@@ -9,6 +9,7 @@ const TooltipProvider = TooltipPrimitive.Provider
 
 interface TooltipProps extends React.ComponentProps<typeof TooltipPrimitive.Root> {
   disableHover?: boolean;
+  delayDuration?: number;
 }
 
 // Add helper type for tooltip placement
@@ -18,12 +19,11 @@ export type TooltipTriggerMode = 'click' | 'hover';
 const Tooltip = React.forwardRef<
   React.ElementRef<typeof TooltipPrimitive.Root>,
   TooltipProps
->(({ disableHover, ...props }, ref) => (
+>(({ disableHover, delayDuration = 200, ...props }, ref) => (
   <TooltipPrimitive.Root 
     {...props}
+    delayDuration={disableHover ? 0 : delayDuration}
     // Disable hover behavior if disableHover is true
-    delayDuration={0}
-    // In click mode, we want the tooltip to stay open
     disableHoverableContent={disableHover}
     onOpenChange={(open) => {
       if (disableHover) {

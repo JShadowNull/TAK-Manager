@@ -1,16 +1,18 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
-import io from 'socket.io-client';
+import useSocket from '../hooks/useSocket';
 import Popup from '../components/shared/Popup';
 import CustomScrollbar from '../components/CustomScrollbar';
 import ZipNameSection from '../components/datapackage/ZipNameSection/ZipNameSection';
 import CotStreamsSection from '../components/datapackage/CotStreamsSection/CotStreamsSection';
 import AtakPreferencesSection from '../components/datapackage/AtakPreferencesSection/AtakPreferencesSection';
 import Button from '../components/shared/Button';
+import axios from 'axios';
 
 function DataPackage() {
   const location = useLocation();
   const renderCount = useRef(0);
+  const terminalRef = useRef(null);
   const socketRef = useRef(null);
   
   // State management
@@ -21,66 +23,34 @@ function DataPackage() {
   const [isConfiguring, setIsConfiguring] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
   const [showCompletionPopup, setShowCompletionPopup] = useState(false);
-  const [terminalOutput, setTerminalOutput] = useState([]);
-  const [socketConnected, setSocketConnected] = useState(false);
-  const [socketError, setSocketError] = useState(null);
   const [operationStatus, setOperationStatus] = useState({
     isInProgress: false,
     isComplete: false,
     isSuccess: false,
     errorMessage: null
   });
-  const terminalRef = useRef(null);
 
-  // Socket.IO initialization and cleanup
-  useEffect(() => {
-    // Initialize socket connection
-    socketRef.current = io('/data-package', {
-      transports: ['websocket'],
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-      timeout: 10000
-    });
-
-    // Connection handlers
-    socketRef.current.on('connect', () => {
-      console.log('Connected to data-package service');
-      setSocketConnected(true);
-      setSocketError(null);
-    });
-
-    socketRef.current.on('connect_error', (err) => {
-      console.error('Socket connection error:', err);
-      setSocketError(err);
-      setSocketConnected(false);
-    });
-
-    socketRef.current.on('disconnect', () => {
-      console.log('Disconnected from data-package service');
-      setSocketConnected(false);
-    });
-
-    // Terminal output handler
-    socketRef.current.on('terminal_output', (data) => {
-      if (data && data.data) {
-        setTerminalOutput(prev => [...prev, data.data]);
+  // Socket event handlers
+  const socketEventHandlers = {
+    handleTerminalOutput: true,
+    terminal_output: (data, { appendToTerminal }) => {
+      const outputText = typeof data === 'string' 
+        ? data 
+        : (data?.data || data?.message || JSON.stringify(data));
+      
+      if (outputText) {
+        appendToTerminal(outputText);
       }
-    });
-
-    // Operation status handlers
-    socketRef.current.on('operation_started', () => {
-      console.log('Operation started');
+    },
+    operation_started: () => {
       setOperationStatus({
         isInProgress: true,
         isComplete: false,
         isSuccess: false,
         errorMessage: null
       });
-    });
-
-    socketRef.current.on('operation_complete', (data) => {
-      console.log('Operation complete:', data);
+    },
+    operation_complete: (data) => {
       setOperationStatus({
         isInProgress: false,
         isComplete: true,
@@ -88,10 +58,8 @@ function DataPackage() {
         errorMessage: null
       });
       setIsConfiguring(false);
-    });
-
-    socketRef.current.on('operation_failed', (data) => {
-      console.log('Operation failed:', data);
+    },
+    operation_failed: (data) => {
       setOperationStatus({
         isInProgress: false,
         isComplete: true,
@@ -99,24 +67,38 @@ function DataPackage() {
         errorMessage: data.error || 'Operation failed'
       });
       setIsConfiguring(false);
-    });
+    }
+  };
 
-    // Cleanup on unmount
-    return () => {
-      if (socketRef.current) {
-        console.log('Cleaning up socket connection to /data-package');
-        socketRef.current.removeAllListeners();
-        socketRef.current.disconnect();
-        socketRef.current = null;
+  // Initialize socket with useSocket hook
+  const {
+    isConnected: socketConnected,
+    error: socketError,
+    emit,
+    terminalOutput,
+    clearTerminal,
+    socket
+  } = useSocket('/data-package', {
+    eventHandlers: {
+      ...socketEventHandlers,
+      onConnect: (socket) => {
+        console.log('DataPackage: Socket connected');
       }
-    };
-  }, []);
-
-  // Debug re-renders
-  useEffect(() => {
-    renderCount.current += 1;
-    console.log('DataPackage: Component rendering, path:', location.pathname, 'render count:', renderCount.current);
+    },
+    socketRef
   });
+
+  // Store socket reference and log connection status
+  useEffect(() => {
+    if (socket) {
+      console.log('Socket reference updated');
+      socketRef.current = socket;
+    }
+  }, [socket]);
+
+  useEffect(() => {
+    console.log('Socket connected status:', socketConnected);
+  }, [socketConnected]);
 
   // Common handlers for preferences - memoized to prevent unnecessary re-renders
   const handlePreferenceChange = useCallback((label, value) => {
@@ -139,7 +121,10 @@ function DataPackage() {
     }));
   }, []);
 
-  // Enhanced validation handling
+  // Memoize preferences to prevent unnecessary re-renders
+  const memoizedPreferences = useMemo(() => preferences, [preferences]);
+
+  // Enhanced validation handling with memoized dependencies
   const handleValidationChange = useCallback((section, errors) => {
     setValidationMessages(prevMessages => {
       const messages = [];
@@ -179,11 +164,17 @@ function DataPackage() {
 
   // Generate data package
   const handleGenerateDataPackage = useCallback(async () => {
-    if (!isFormValid) return;
-    if (!socketConnected) {
-      console.error('Socket not connected. Cannot generate data package.');
+    console.log('handleGenerateDataPackage called');
+    console.log('Form valid:', isFormValid);
+    
+    if (!isFormValid) {
+      console.log('Form is not valid, returning early');
       return;
     }
+
+    // Clear terminal output before starting
+    clearTerminal();
+    console.log('Terminal output cleared');
 
     setShowPopup(true);
     setIsConfiguring(true);
@@ -241,27 +232,72 @@ function DataPackage() {
         }
       });
 
-      const response = await fetch('/api/datapackage/submit-preferences', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formattedPreferences)
-      });
-
-      const data = await response.json();
+      console.log('Submitting preferences:', formattedPreferences);
       
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to generate data package');
+      try {
+        // Make the HTTP request
+        console.log('Making HTTP request to /datapackage/submit-preferences');
+        console.log('Request config:', {
+          method: 'post',
+          url: '/datapackage/submit-preferences',
+          headers: { 'Content-Type': 'application/json' },
+          data: formattedPreferences
+        });
+
+        const response = await axios({
+          method: 'post',
+          url: '/datapackage/submit-preferences',
+          data: formattedPreferences,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }).catch(error => {
+          console.error('Axios error:', {
+            message: error.message,
+            config: error.config,
+            response: error.response,
+            request: error.request
+          });
+          throw error;
+        });
+        
+        console.log('Received response:', response);
+
+        if (response.data.error) {
+          throw new Error(response.data.error);
+        }
+
+        // Update operation status on success
+        setOperationStatus({
+          isInProgress: false,
+          isComplete: true,
+          isSuccess: true,
+          errorMessage: null
+        });
+        
+      } catch (error) {
+        console.error('HTTP Error:', error);
+        console.error('Error details:', {
+          message: error.message,
+          response: error.response?.data,
+          status: error.response?.status,
+          config: error.config
+        });
+        
+        throw error;  // Re-throw to be caught by outer catch block
       }
 
     } catch (error) {
       console.error('Error generating data package:', error);
-      if (socketRef.current) {
-        socketRef.current.emit('operation_failed', { error: error.message });
-      }
+      setOperationStatus({
+        isInProgress: false,
+        isComplete: true,
+        isSuccess: false,
+        errorMessage: error.message || 'Failed to generate data package'
+      });
+      setIsConfiguring(false);
     }
-  }, [isFormValid, zipFileName, preferences, socketConnected]);
+  }, [isFormValid, zipFileName, preferences, clearTerminal]);
 
   // Handle next step after successful operation
   const handleNext = () => {
@@ -272,7 +308,7 @@ function DataPackage() {
   // Handle completion popup close
   const handleComplete = () => {
     setShowCompletionPopup(false);
-    setTerminalOutput([]);
+    clearTerminal();
     setOperationStatus({
       isInProgress: false,
       isComplete: false,
@@ -297,32 +333,38 @@ function DataPackage() {
           <div className="p-4 flex justify-between items-center">
             <div className="text-base text-medium">CoT Streams</div>
             <div className="space-x-2">
-              <button 
+              <Button 
+                variant="secondary"
                 onClick={() => document.querySelector('.cot-streams-select-all')?.click()}
-                className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor 
-                  hover:text-black hover:shadow-md hover:accentBoarder hover:bg-selectedColor
-                  transition-all duration-200"
+                tooltip="Enable all COT streams"
+                tooltipStyle="shadcn"
+                tooltipDelay={1000}
+                tooltipPosition="bottom"
               >
                 Select All
-              </button>
-              <button 
+              </Button>
+              <Button 
+                variant="secondary"
                 onClick={() => document.querySelector('.cot-streams-unselect-all')?.click()}
-                className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor 
-                  hover:text-black hover:shadow-md hover:accentBoarder hover:bg-selectedColor
-                  transition-all duration-200"
+                tooltip="Disable all COT streams"
+                tooltipStyle="shadcn"
+                tooltipDelay={1000}
+                tooltipPosition="bottom"
               >
                 Unselect All
-              </button>
+              </Button>
             </div>
           </div>
         </div>
         <div className="h-full pt-16">
           <CustomScrollbar>
             <CotStreamsSection
-              preferences={preferences}
+              preferences={memoizedPreferences}
               onPreferenceChange={handlePreferenceChange}
               onEnableChange={handlePreferenceEnable}
               onValidationChange={handleValidationChange}
+              socket={socket}
+              isConnected={socketConnected}
             />
           </CustomScrollbar>
         </div>
@@ -334,29 +376,33 @@ function DataPackage() {
           <div className="p-4 flex justify-between items-center">
             <div className="text-base text-medium">ATAK Preferences</div>
             <div className="space-x-2">
-              <button 
+              <Button 
+                variant="secondary"
                 onClick={() => document.querySelector('.atak-prefs-select-all')?.click()}
-                className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor 
-                  hover:text-black hover:shadow-md hover:accentBoarder hover:bg-selectedColor
-                  transition-all duration-200"
+                tooltip="Enable all ATAK preferences"
+                tooltipStyle="shadcn"
+                tooltipDelay={1000}
+                tooltipPosition="bottom"
               >
                 Select All
-              </button>
-              <button 
+              </Button>
+              <Button 
+                variant="secondary"
                 onClick={() => document.querySelector('.atak-prefs-unselect-all')?.click()}
-                className="text-buttonTextColor rounded-lg px-4 py-2 text-sm border border-buttonBorder bg-buttonColor 
-                  hover:text-black hover:shadow-md hover:accentBoarder hover:bg-selectedColor
-                  transition-all duration-200"
+                tooltip="Disable all ATAK preferences"
+                tooltipStyle="shadcn"
+                tooltipDelay={1000}
+                tooltipPosition="bottom"
               >
                 Unselect All
-              </button>
+              </Button>
             </div>
           </div>
         </div>
         <div className="h-full pt-16">
           <CustomScrollbar>
             <AtakPreferencesSection
-              preferences={preferences}
+              preferences={memoizedPreferences}
               onPreferenceChange={handlePreferenceChange}
               onEnableChange={handlePreferenceEnable}
               onValidationChange={handleValidationChange}
@@ -365,23 +411,17 @@ function DataPackage() {
         </div>
       </div>
 
-      {/* Generate Button with original styling but enhanced messages */}
+      {/* Generate Button with validation messages */}
       <div className="flex justify-center mt-4">
-        <div className="relative group">
-          <button
-            className={`
-              text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder 
-              bg-buttonColor hover:text-black hover:shadow-md hover:border-black 
-              hover:bg-green-500 transition-all duration-200
-              ${!isFormValid ? 'opacity-50 cursor-not-allowed' : ''}
-            `}
-            onClick={handleGenerateDataPackage}
-            disabled={!isFormValid}
-          >
-            Generate Data Package
-          </button>
-          {!isFormValid && validationMessages.length > 0 && (
-            <div className="absolute bottom-full mb-2 hidden group-hover:block w-96 bg-gray-900 text-white text-sm rounded-lg p-2 shadow-lg">
+        <Button
+          variant="primary"
+          onClick={() => {
+            console.log('Generate button clicked');
+            handleGenerateDataPackage();
+          }}
+          disabled={!isFormValid}
+          tooltip={!isFormValid && validationMessages.length > 0 ? (
+            <div>
               <div className="font-semibold mb-1">Please fix the following:</div>
               <ul className="list-disc pl-4 max-h-60 overflow-y-auto">
                 {validationMessages.map((message, index) => (
@@ -394,8 +434,13 @@ function DataPackage() {
                 ))}
               </ul>
             </div>
-          )}
-        </div>
+          ) : undefined}
+          tooltipStyle="shadcn"
+          tooltipDelay={500}
+          triggerMode="hover"
+        >
+          Generate Data Package
+        </Button>
       </div>
 
       {/* Configuration Popup with connection status */}
@@ -412,11 +457,7 @@ function DataPackage() {
               : "Operation Progress"
         }
         variant="terminal"
-        terminalOutput={[
-          ...(socketError ? [`Connection Error: ${socketError.message}`] : []),
-          ...(socketConnected ? [] : ['Attempting to connect to server...']),
-          ...terminalOutput
-        ]}
+        terminalOutput={terminalOutput}
         terminalRef={terminalRef}
         showTerminal={true}
         isInProgress={operationStatus.isInProgress}
@@ -446,7 +487,7 @@ function DataPackage() {
         onClose={() => {
           if (!operationStatus.isInProgress) {
             setShowPopup(false);
-            setTerminalOutput([]);
+            clearTerminal();
             setOperationStatus({
               isInProgress: false,
               isComplete: false,
@@ -459,9 +500,7 @@ function DataPackage() {
         onStop={
           operationStatus.isInProgress
             ? () => {
-                if (socketRef.current) {
-                  socketRef.current.emit('stop_operation');
-                }
+                emit('stop_operation');
                 setOperationStatus({
                   isInProgress: false,
                   isComplete: true,

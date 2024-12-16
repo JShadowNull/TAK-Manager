@@ -568,11 +568,6 @@ function TakServerStatus({ handleStartStop }) {
                       )}
                     </div>
                   </div>
-                  {operationError && (
-                    <div className="text-sm text-red-500">
-                      {operationError}
-                    </div>
-                  )}
                 </>
               ) : (
                 <div className="flex items-center gap-2">
@@ -873,13 +868,6 @@ function TakServerStatus({ handleStartStop }) {
         isComplete={!isInstalling && (installationSuccessful || installationFailed)}
         isSuccess={installationSuccessful}
         errorMessage={installationError}
-        progressMessage={
-          isRollingBack 
-            ? 'Rolling Back Installation...'
-            : isStoppingInstallation 
-              ? 'Stopping Installation...' 
-              : 'Installing TAK Server...'
-        }
         onNext={handleNext}
         onStop={handleCancelInstallation}
         isStoppingInstallation={isStoppingInstallation}

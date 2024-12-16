@@ -230,8 +230,9 @@ function AdvancedFeatures() {
             <Button
               variant="primary"
               onClick={() => setShowOtaForm(true)}
-              tooltip="Configure OTA updates for ATAK clients"
-              triggerMode="hover"
+              tooltip="First time installation only"
+              tooltipStyle="shadcn"
+              tooltipDelay={1000}
               showHelpIcon={false}
             >
               Configure OTA Updates
@@ -240,7 +241,8 @@ function AdvancedFeatures() {
               variant="primary"
               onClick={() => setShowUpdatePluginsForm(true)}
               tooltip="Update or add new plugins for OTA updates"
-              triggerMode="hover"
+              tooltipStyle="shadcn"
+              tooltipDelay={1000}
               showHelpIcon={false}
             >
               Update Plugins

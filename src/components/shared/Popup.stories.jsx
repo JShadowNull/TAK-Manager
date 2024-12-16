@@ -1,7 +1,7 @@
 import Popup from './Popup';
 import Button from './Button';
 
-// Generate a large amount of mock terminal output
+// Generate mock terminal output for testing
 const generateMockOutput = (lines = 50) => {
   const outputs = [];
   for (let i = 1; i <= lines; i++) {
@@ -54,131 +54,86 @@ export default {
     isSuccess: {
       control: 'boolean',
       description: 'Shows if the operation was successful'
+    },
+    showTerminal: {
+      control: 'boolean',
+      description: 'Whether to show the terminal output area'
     }
   }
 };
 
-// Base configuration for stories
+// Base configuration for all stories
 const baseArgs = {
   id: 'story-popup',
   isVisible: true,
   onClose: () => console.log('Close clicked'),
 };
 
-// Standard Popup Examples
-export const StandardBasic = {
+// 1. Standard Popup Variations
+export const Standard_Basic = {
   args: {
     ...baseArgs,
     title: 'Basic Standard Popup',
-    children: <p className="p-4 text-textPrimary">This is a basic popup with no buttons.</p>
+    children: <p className="p-4 text-textPrimary">Basic popup with no buttons or special configuration.</p>
   }
 };
 
-export const StandardWithButtons = {
+export const Standard_WithButtons = {
   args: {
     ...baseArgs,
     title: 'Standard Popup with Buttons',
-    children: <p className="p-4 text-textPrimary">This popup has custom action buttons.</p>,
+    children: <p className="p-4 text-textPrimary">Popup demonstrating button configurations.</p>,
     buttons: (
       <>
-        <Button
-          variant="danger"
-          onClick={() => console.log('Cancel clicked')}
-        >
-          Cancel
-        </Button>
-        <Button
-          variant="primary"
-          onClick={() => console.log('Confirm clicked')}
-        >
-          Confirm
-        </Button>
+        <Button variant="secondary" onClick={() => console.log('Cancel clicked')}>Cancel</Button>
+        <Button variant="primary" onClick={() => console.log('Confirm clicked')}>Confirm</Button>
       </>
     )
   }
 };
 
-// Terminal Popup Examples
-export const TerminalInProgress = {
+export const Standard_FullscreenBlur = {
   args: {
     ...baseArgs,
-    title: 'Terminal (In Progress)',
-    variant: 'terminal',
-    showTerminal: true,
-    terminalOutput: mockTerminalOutput.slice(0, 20),
-    isInProgress: true,
-    progressMessage: 'Operation in progress...',
+    title: 'Fullscreen Standard Popup',
+    children: <p className="p-4 text-textPrimary">This popup blurs the entire screen including sidebar.</p>,
+    blurSidebar: true,
+    buttons: (
+      <Button variant="primary" onClick={() => console.log('OK clicked')}>OK</Button>
+    )
   }
 };
 
-export const TerminalWithStop = {
+// 2. Terminal Popup - Progress States
+export const Terminal_InProgress = {
   args: {
     ...baseArgs,
-    title: 'Terminal (With Stop Button)',
+    title: 'Terminal - In Progress',
     variant: 'terminal',
     showTerminal: true,
     terminalOutput: mockTerminalOutput.slice(0, 20),
     isInProgress: true,
-    progressMessage: 'Long-running operation in progress...',
+    progressMessage: 'Installation in progress...',
+  }
+};
+
+export const Terminal_InProgress_WithStop = {
+  args: {
+    ...baseArgs,
+    title: 'Terminal - In Progress with Stop',
+    variant: 'terminal',
+    showTerminal: true,
+    terminalOutput: mockTerminalOutput.slice(0, 20),
+    isInProgress: true,
+    progressMessage: 'Installation in progress...',
     onStop: () => console.log('Stop clicked'),
   }
 };
 
-export const TerminalSuccess = {
+export const Terminal_InProgress_NoOutput = {
   args: {
     ...baseArgs,
-    title: 'Terminal (Success)',
-    variant: 'terminal',
-    showTerminal: true,
-    terminalOutput: mockTerminalOutput,
-    isInProgress: false,
-    isComplete: true,
-    isSuccess: true,
-    successMessage: 'Operation completed successfully',
-  }
-};
-
-export const TerminalSuccessWithNext = {
-  args: {
-    ...baseArgs,
-    title: 'Terminal (Success with Next)',
-    variant: 'terminal',
-    showTerminal: true,
-    terminalOutput: mockTerminalOutput,
-    isInProgress: false,
-    isComplete: true,
-    isSuccess: true,
-    successMessage: 'Operation completed successfully',
-    nextStepMessage: 'Click Next to continue',
-    onNext: () => console.log('Next clicked'),
-  }
-};
-
-export const TerminalFailure = {
-  args: {
-    ...baseArgs,
-    title: 'Terminal (Failure)',
-    variant: 'terminal',
-    showTerminal: true,
-    terminalOutput: [
-      ...mockTerminalOutput.slice(0, 30),
-      "ERROR: Operation failed unexpectedly",
-      "ERROR: Unable to complete the requested action",
-      ...mockTerminalOutput.slice(30, 40).map(line => `DEBUG: ${line}`)
-    ],
-    isInProgress: false,
-    isComplete: true,
-    isSuccess: false,
-    failureMessage: 'Operation failed',
-    errorMessage: 'Unable to complete the requested action',
-  }
-};
-
-// Special Cases
-export const NoTerminalWithMessage = {
-  args: {
-    ...baseArgs,
-    title: 'Message Only',
+    title: 'Terminal - In Progress (No Output)',
     variant: 'terminal',
     showTerminal: false,
     isInProgress: true,
@@ -186,15 +141,126 @@ export const NoTerminalWithMessage = {
   }
 };
 
-export const FullscreenBlur = {
+// 3. Terminal Popup - Success States
+export const Terminal_Success_Basic = {
   args: {
     ...baseArgs,
-    title: 'Fullscreen Popup',
+    title: 'Terminal - Success Basic',
+    variant: 'terminal',
+    showTerminal: true,
+    terminalOutput: mockTerminalOutput,
+    isInProgress: false,
+    isComplete: true,
+    isSuccess: true,
+    successMessage: 'Operation completed successfully',
+  }
+};
+
+export const Terminal_Success_WithNext = {
+  args: {
+    ...baseArgs,
+    title: 'Terminal - Success with Next Step',
+    variant: 'terminal',
+    showTerminal: true,
+    terminalOutput: mockTerminalOutput,
+    isInProgress: false,
+    isComplete: true,
+    isSuccess: true,
+    successMessage: 'Operation completed successfully',
+    nextStepMessage: 'Click Next to proceed to configuration',
+    onNext: () => console.log('Next clicked'),
+  }
+};
+
+export const Terminal_Success_NoOutput = {
+  args: {
+    ...baseArgs,
+    title: 'Terminal - Success (No Output)',
+    variant: 'terminal',
+    showTerminal: false,
+    isInProgress: false,
+    isComplete: true,
+    isSuccess: true,
+    successMessage: 'Operation completed successfully',
+  }
+};
+
+// 4. Terminal Popup - Failure States
+export const Terminal_Failure_Basic = {
+  args: {
+    ...baseArgs,
+    title: 'Terminal - Failure Basic',
+    variant: 'terminal',
+    showTerminal: true,
+    terminalOutput: [
+      ...mockTerminalOutput.slice(0, 15),
+      "ERROR: Operation failed unexpectedly",
+      ...mockTerminalOutput.slice(15, 20).map(line => `DEBUG: ${line}`)
+    ],
+    isInProgress: false,
+    isComplete: true,
+    isSuccess: false,
+    failureMessage: 'Operation failed',
+  }
+};
+
+export const Terminal_Failure_WithError = {
+  args: {
+    ...baseArgs,
+    title: 'Terminal - Failure with Error Details',
+    variant: 'terminal',
+    showTerminal: true,
+    terminalOutput: [
+      ...mockTerminalOutput.slice(0, 15),
+      "ERROR: Connection timeout",
+      "ERROR: Unable to reach server",
+      ...mockTerminalOutput.slice(15, 20).map(line => `DEBUG: ${line}`)
+    ],
+    isInProgress: false,
+    isComplete: true,
+    isSuccess: false,
+    failureMessage: 'Installation failed',
+    errorMessage: 'Connection timeout: Unable to reach server',
+  }
+};
+
+export const Terminal_Failure_NoOutput = {
+  args: {
+    ...baseArgs,
+    title: 'Terminal - Failure (No Output)',
+    variant: 'terminal',
+    showTerminal: false,
+    isInProgress: false,
+    isComplete: true,
+    isSuccess: false,
+    failureMessage: 'Operation failed',
+    errorMessage: 'An unexpected error occurred',
+  }
+};
+
+// 5. Special Configurations
+export const Special_LoadingState = {
+  args: {
+    ...baseArgs,
+    title: 'Special - Loading State',
+    variant: 'terminal',
+    showTerminal: true,
+    isInProgress: true,
+    progressMessage: 'Loading...',
+    isStoppingInstallation: true,
+    onStop: () => console.log('Stop clicked'),
+  }
+};
+
+export const Special_FullscreenTerminal = {
+  args: {
+    ...baseArgs,
+    title: 'Special - Fullscreen Terminal',
     variant: 'terminal',
     showTerminal: true,
     terminalOutput: mockTerminalOutput,
     blurSidebar: true,
     isInProgress: true,
-    progressMessage: 'This popup blurs the entire screen',
+    progressMessage: 'This terminal popup blurs the entire screen',
   }
 }; 

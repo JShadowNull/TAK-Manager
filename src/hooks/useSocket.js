@@ -7,11 +7,13 @@ import { io } from 'socket.io-client';
  * @param {Object} options - Configuration options
  * @param {Object} eventHandlers - Map of event names to their handlers
  * @param {Object} initialState - Initial state for any custom states needed
+ * @param {Object} socketRef - Reference to the socket instance
  * @returns {Object} Socket instance and utility functions
  */
 function useSocket(namespace, {
   eventHandlers = {},
   initialState = {},
+  socketRef = null,
   ...options
 } = {}) {
   // Basic socket states
@@ -20,9 +22,13 @@ function useSocket(namespace, {
   const [state, setState] = useState(initialState);
   const [terminalOutput, setTerminalOutput] = useState([]);
   
-  const socketRef = useRef(null);
+  const internalSocketRef = useRef(null);
   const handlersRef = useRef(eventHandlers);
   const stateRef = useRef(state);
+  const mountedRef = useRef(true);
+
+  // Use the provided socketRef if available, otherwise use internal one
+  const activeSocketRef = socketRef || internalSocketRef;
 
   // Update refs when props change
   useEffect(() => {
@@ -34,24 +40,36 @@ function useSocket(namespace, {
   }, [state]);
 
   // Clear terminal output
-  const clearTerminalOutput = useCallback(() => {
-    setTerminalOutput([]);
+  const clearTerminal = useCallback(() => {
+    if (mountedRef.current) {
+      setTerminalOutput([]);
+    }
   }, []);
 
   // Update state partially
   const updateState = useCallback((updates) => {
-    setState(prev => ({
-      ...prev,
-      ...updates
-    }));
+    if (mountedRef.current) {
+      setState(prev => ({
+        ...prev,
+        ...updates
+      }));
+    }
+  }, []);
+
+  // Append to terminal output
+  const appendToTerminal = useCallback((message) => {
+    if (message && mountedRef.current) {
+      setTerminalOutput(prev => [...prev, message]);
+    }
   }, []);
 
   // Initialize socket connection
   useEffect(() => {
+    mountedRef.current = true;
+
     // Only create socket if it doesn't exist
-    if (!socketRef.current) {
-      console.log(`Initializing socket connection to ${namespace}`);
-      socketRef.current = io(namespace, {
+    if (!activeSocketRef.current) {
+      activeSocketRef.current = io(namespace, {
         transports: ['websocket'],
         path: '/socket.io',
         reconnection: true,
@@ -61,48 +79,52 @@ function useSocket(namespace, {
       });
 
       // Handle connection events
-      socketRef.current.on('connect', () => {
-        console.log(`Socket connected to ${namespace}`);
-        setIsConnected(true);
-        setError(null);
-        
-        // Call connect handler if provided
-        if (handlersRef.current.onConnect) {
-          handlersRef.current.onConnect(socketRef.current);
+      activeSocketRef.current.on('connect', () => {
+        if (mountedRef.current) {
+          setIsConnected(true);
+          setError(null);
+          
+          // Call connect handler if provided
+          if (handlersRef.current.onConnect) {
+            handlersRef.current.onConnect(activeSocketRef.current);
+          }
         }
       });
 
-      socketRef.current.on('connect_error', (err) => {
-        console.error(`Socket connection error for ${namespace}:`, err);
-        setError(err);
-        setIsConnected(false);
-        
-        // Call error handler if provided
-        if (handlersRef.current.onError) {
-          handlersRef.current.onError(err);
+      activeSocketRef.current.on('connect_error', (err) => {
+        if (mountedRef.current) {
+          setError(err);
+          setIsConnected(false);
+          
+          // Call error handler if provided
+          if (handlersRef.current.onError) {
+            handlersRef.current.onError(err);
+          }
         }
       });
 
-      socketRef.current.on('disconnect', () => {
-        console.log(`Socket disconnected from ${namespace}`);
-        setIsConnected(false);
-        
-        // Call disconnect handler if provided
-        if (handlersRef.current.onDisconnect) {
-          handlersRef.current.onDisconnect();
+      activeSocketRef.current.on('disconnect', () => {
+        if (mountedRef.current) {
+          setIsConnected(false);
+          
+          // Call disconnect handler if provided
+          if (handlersRef.current.onDisconnect) {
+            handlersRef.current.onDisconnect();
+          }
         }
       });
 
       // Handle terminal output if component uses it
       if (handlersRef.current.handleTerminalOutput === true) {
-        socketRef.current.on('terminal_output', (data) => {
-          if (data && data.data) {
-            // If a custom handler is provided, use it
-            if (typeof handlersRef.current.handleTerminalOutput === 'function') {
-              handlersRef.current.handleTerminalOutput(data.data);
-            } else {
-              // Default behavior: append to terminal output
-              setTerminalOutput(prev => [...prev, data.data]);
+        activeSocketRef.current.on('terminal_output', (data) => {
+          if (mountedRef.current) {
+            // Handle both string and object data formats
+            const outputText = typeof data === 'string' 
+              ? data 
+              : (data?.data || data?.message || JSON.stringify(data));
+            
+            if (outputText) {
+              appendToTerminal(outputText);
             }
           }
         });
@@ -114,59 +136,58 @@ function useSocket(namespace, {
         if (['onConnect', 'onError', 'onDisconnect', 'handleTerminalOutput'].includes(event)) {
           return;
         }
-        socketRef.current.on(event, (data) => {
-          handler(data, {
-            state: stateRef.current,
-            updateState,
-            setTerminalOutput,
-            socket: socketRef.current
-          });
+        activeSocketRef.current.on(event, (data) => {
+          if (mountedRef.current) {
+            handler(data, {
+              state: stateRef.current,
+              updateState,
+              appendToTerminal,
+              clearTerminal,
+              socket: activeSocketRef.current
+            });
+          }
         });
       });
     }
 
     // Cleanup on unmount only
     return () => {
-      if (socketRef.current) {
-        console.log(`Cleaning up socket connection to ${namespace}`);
-        socketRef.current.removeAllListeners();
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
+      mountedRef.current = false;
+      
+      // Only cleanup if this is a real unmount, not a React strict mode unmount
+      const timeoutId = setTimeout(() => {
+        if (!mountedRef.current && activeSocketRef.current) {
+          activeSocketRef.current.removeAllListeners();
+          activeSocketRef.current.disconnect();
+          activeSocketRef.current = null;
+        }
+      }, 0);
+
+      return () => clearTimeout(timeoutId);
     };
-  }, [namespace]); // Only depend on namespace
+  }, [namespace, options, appendToTerminal]); // Only depend on namespace and options
 
   // Helper function to safely emit events
   const emit = useCallback((event, data) => {
-    if (socketRef.current && isConnected) {
-      socketRef.current.emit(event, data);
+    if (activeSocketRef.current && isConnected) {
+      activeSocketRef.current.emit(event, data);
       return true;
     }
-    console.warn(`Failed to emit ${event}: Socket not connected`);
     return false;
   }, [isConnected]);
 
   // Helper function to add one-off event listeners
   const on = useCallback((event, handler) => {
-    if (socketRef.current) {
-      socketRef.current.on(event, handler);
-      return () => socketRef.current?.off(event, handler);
+    if (activeSocketRef.current) {
+      activeSocketRef.current.on(event, handler);
+      return () => activeSocketRef.current?.off(event, handler);
     }
     return () => {};
   }, []);
 
-  // Add standard terminal output helpers
-  const appendToTerminal = useCallback((message) => {
-    setTerminalOutput(prev => [...prev, message]);
-  }, []);
-
-  const clearTerminal = useCallback(() => {
-    setTerminalOutput([]);
-  }, []);
-
   return {
     // Socket instance and connection state
-    socket: socketRef.current,
+    socket: activeSocketRef.current,
     isConnected,
     error,
     
@@ -180,10 +201,9 @@ function useSocket(namespace, {
     
     // Terminal handling
     terminalOutput,
-    setTerminalOutput: appendToTerminal,
-    clearTerminalOutput: clearTerminal,
     appendToTerminal,
-    clearTerminal
+    clearTerminal,
+    setTerminalOutput
   };
 }
 

@@ -1,38 +1,35 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, memo } from 'react';
 import PreferenceItem from '../shared/PreferenceItem';
 import { ATAK_PREFERENCES, validateAtakPreferences } from './atakPreferencesConfig';
 
-const AtakPreferencesSection = ({ 
+const AtakPreferencesSection = memo(({ 
   preferences, 
   onPreferenceChange, 
   onEnableChange, 
   onValidationChange 
 }) => {
-  // Initialize all preferences as enabled by default
+  // Initialize preferences only when new ones are added
   useEffect(() => {
-    ATAK_PREFERENCES.forEach((item) => {
-      const pref = preferences[item.label];
-      
-      if (!pref) {
-        // For new preferences, set both value and enabled state
+    const newItems = ATAK_PREFERENCES.filter(item => !preferences[item.label]);
+    
+    if (newItems.length > 0) {
+      newItems.forEach((item) => {
         onPreferenceChange(item.label, item.input_type === 'checkbox' ? true : (item.value || ''));
         onEnableChange(item.label, true);
-      } else {
-        // For existing preferences, ensure they're enabled if not explicitly set
-        if (pref.enabled === undefined) {
-          onEnableChange(item.label, true);
-        }
-        // Initialize value if undefined
-        if (pref.value === undefined) {
-          onPreferenceChange(item.label, item.input_type === 'checkbox' ? true : (item.value || ''));
-        }
+      });
+    }
+  }, [preferences, onPreferenceChange, onEnableChange]);
+
+  // Validate preferences only when enabled preferences change
+  useEffect(() => {
+    const enabledPreferences = {};
+    Object.entries(preferences).forEach(([key, pref]) => {
+      if (pref.enabled) {
+        enabledPreferences[key] = pref;
       }
     });
-  }, []);
 
-  // Validate preferences whenever they change
-  useEffect(() => {
-    const errors = validateAtakPreferences(preferences);
+    const errors = validateAtakPreferences(enabledPreferences);
     if (onValidationChange) {
       onValidationChange('atak_preferences', errors);
     }
@@ -99,6 +96,8 @@ const AtakPreferencesSection = ({
       </div>
     </div>
   );
-};
+});
+
+AtakPreferencesSection.displayName = 'AtakPreferencesSection';
 
 export default AtakPreferencesSection; 

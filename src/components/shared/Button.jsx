@@ -19,6 +19,8 @@ const Button = forwardRef(({
   loading = false,
   loadingText = '',
   tooltipStyle = 'material',
+  tooltipDelay = 200,
+  tooltipPosition = 'top',
   leadingIcon = null,
   trailingIcon = null,
   iconOnly = false,
@@ -83,11 +85,11 @@ const Button = forwardRef(({
   if (tooltip && !showHelpIcon && tooltipStyle === 'shadcn') {
     return (
       <TooltipProvider>
-        <Tooltip>
+        <Tooltip delayDuration={tooltipDelay}>
           <TooltipTrigger asChild>
             {buttonElement}
           </TooltipTrigger>
-          <TooltipContent>
+          <TooltipContent side={tooltipPosition}>
             <p>{tooltip}</p>
           </TooltipContent>
         </Tooltip>
@@ -102,6 +104,7 @@ const Button = forwardRef(({
         tooltip={tooltip}
         triggerMode={triggerMode}
         showIcon={false}
+        delay={tooltipDelay}
       >
         {buttonElement}
       </HelpIconTooltip>
@@ -137,9 +140,11 @@ Button.propTypes = {
   loading: PropTypes.bool,
   loadingText: PropTypes.string,
   tooltipStyle: PropTypes.oneOf(['material', 'shadcn']),
+  tooltipPosition: PropTypes.oneOf(['top', 'right', 'bottom', 'left']),
   leadingIcon: PropTypes.node,
   trailingIcon: PropTypes.node,
   iconOnly: PropTypes.bool,
+  tooltipDelay: PropTypes.number,
 };
 
 Button.displayName = 'Button';

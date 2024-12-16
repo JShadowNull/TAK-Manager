@@ -350,11 +350,17 @@ class DataPackage:
             container_name = f"takserver-{version}"
             
             # List certificate files from container
-            return self.list_cert_files(container_name)
+            cert_files = self.list_cert_files(container_name)
+            
+            # Emit the certificate files for the frontend
+            socketio.emit('certificate_files', {'files': cert_files}, namespace='/data-package')
+            
+            return cert_files
                 
         except Exception as e:
             error_msg = f"Error getting certificate files: {str(e)}"
             socketio.emit('terminal_output', {'data': error_msg}, namespace='/data-package')
+            socketio.emit('certificate_files', {'files': []}, namespace='/data-package')
             return []  # Return empty list on any error
 
     def create_zip_file(self, temp_dir, zip_name):

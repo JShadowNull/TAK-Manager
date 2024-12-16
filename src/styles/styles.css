@@ -672,10 +672,6 @@ body {
   bottom: 0px;
 }
 
-.bottom-full {
-  bottom: 100%;
-}
-
 .left-0 {
   left: 0px;
 }
@@ -760,6 +756,10 @@ body {
 
 .mt-8 {
   margin-top: 2rem;
+}
+
+.block {
+  display: block;
 }
 
 .flex {
@@ -852,10 +852,6 @@ body {
 
 .w-64 {
   width: 16rem;
-}
-
-.w-96 {
-  width: 24rem;
 }
 
 .w-\[800px\] {
@@ -1084,6 +1080,10 @@ body {
   white-space: pre-wrap;
 }
 
+.text-wrap {
+  text-wrap: wrap;
+}
+
 .rounded {
   border-radius: 0.25rem;
 }
@@ -1175,11 +1175,6 @@ body {
 .bg-gray-100 {
   --tw-bg-opacity: 1;
   background-color: rgb(243 244 246 / var(--tw-bg-opacity));
-}
-
-.bg-gray-900 {
-  --tw-bg-opacity: 1;
-  background-color: rgb(17 24 39 / var(--tw-bg-opacity));
 }
 
 .bg-green-500 {
@@ -1471,16 +1466,16 @@ body {
   color: rgb(234 179 8 / var(--tw-text-opacity));
 }
 
-.text-primary {
-  color: hsl(var(--primary));
-}
-
 .placeholder-textSecondary::-moz-placeholder {
   color: rgba(86, 119, 153, 1.000);
 }
 
 .placeholder-textSecondary::placeholder {
   color: rgba(86, 119, 153, 1.000);
+}
+
+.\!opacity-100 {
+  opacity: 1 !important;
 }
 
 .opacity-25 {
@@ -1632,22 +1627,12 @@ body {
   border-color: transparent;
 }
 
-.hover\:bg-blue-500:hover {
-  --tw-bg-opacity: 1;
-  background-color: rgb(59 130 246 / var(--tw-bg-opacity));
-}
-
 .hover\:bg-buttonColor:hover {
   background-color: rgba(4, 28, 47, 1.000);
 }
 
 .hover\:bg-buttonHoverColor:hover {
   background-color: rgba(4, 30, 51, 1.000);
-}
-
-.hover\:bg-gray-500:hover {
-  --tw-bg-opacity: 1;
-  background-color: rgb(107 114 128 / var(--tw-bg-opacity));
 }
 
 .hover\:bg-green-500:hover {
@@ -1735,10 +1720,6 @@ body {
 
 .focus\:ring-opacity-50:focus {
   --tw-ring-opacity: 0.5;
-}
-
-.group:hover .group-hover\:block {
-  display: block;
 }
 
 .peer:checked ~ .peer-checked\:block {
