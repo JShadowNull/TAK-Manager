@@ -1,5 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { io } from 'socket.io-client';
+import React, { useRef, useState } from 'react';
 import { Chart } from 'chart.js/auto';
 import { 
   CategoryScale,
@@ -14,6 +13,7 @@ import {
 } from 'chart.js';
 import 'chartjs-adapter-date-fns';
 import CustomScrollbar from '../components/CustomScrollbar';
+import useSocket from '../hooks/useSocket';
 
 // Register Chart.js components
 Chart.register(
@@ -34,60 +34,54 @@ function Dashboard() {
   const cpuChart = useRef(null);
   const ramChart = useRef(null);
   const [isScrolling, setIsScrolling] = useState(false);
-  const socketRef = useRef(null);
-  const ipSocketRef = useRef(null);
 
-  useEffect(() => {
-    // Initialize Socket.IO connections
-    socketRef.current = io('/services-monitor', { 
-      transports: ['websocket']
-    });
-
-    ipSocketRef.current = io('/ip-fetcher', { 
-      transports: ['websocket']
-    });
-
-    // Create charts
-    createCharts();
-
-    // Services monitor socket event listeners
-    socketRef.current.on('connect', () => {
-      console.log('Services monitor socket connected');
-    });
-
-    socketRef.current.on('connect_error', (error) => {
-      console.error('Services monitor socket connection error:', error);
-    });
-
-    socketRef.current.on('cpu_usage', (data) => {
+  // Setup socket handlers
+  const servicesSocketHandlers = {
+    cpu_usage: (data) => {
       updateChart(cpuChart.current, data.cpu_usage, 'cpu');
       saveChartData('cpuData', cpuChart.current.data.datasets[0].data);
-    });
-
-    socketRef.current.on('ram_usage', (data) => {
+    },
+    ram_usage: (data) => {
       updateChart(ramChart.current, data.ram_usage, 'ram');
       saveChartData('ramData', ramChart.current.data.datasets[0].data);
-    });
-
-    socketRef.current.on('services', (data) => {
+    },
+    services: (data) => {
       updateServicesList(data.services);
-    });
+    },
+    onConnect: () => {
+      console.log('Services monitor socket connected');
+    },
+    onError: (error) => {
+      console.error('Services monitor socket connection error:', error);
+    }
+  };
 
-    // IP fetcher socket event listeners
-    ipSocketRef.current.on('connect', () => {
-      console.log('IP socket connected');
-    });
-
-    ipSocketRef.current.on('connect_error', (error) => {
-      console.error('IP socket connection error:', error);
-    });
-
-    ipSocketRef.current.on('ip_address_update', (data) => {
+  const ipSocketHandlers = {
+    ip_address_update: (data) => {
       console.log('Received IP update:', data.ip_address);
       updateIpAddress(data.ip_address);
-    });
+    },
+    onConnect: () => {
+      console.log('IP socket connected');
+    },
+    onError: (error) => {
+      console.error('IP socket connection error:', error);
+    }
+  };
 
-    // Cleanup function
+  // Initialize sockets using the hook
+  const servicesSocket = useSocket('/services-monitor', {
+    eventHandlers: servicesSocketHandlers
+  });
+
+  const ipSocket = useSocket('/ip-fetcher', {
+    eventHandlers: ipSocketHandlers
+  });
+
+  // Initialize charts when components mount
+  React.useEffect(() => {
+    createCharts();
+
     return () => {
       // Cleanup charts
       if (cpuChart.current) {
@@ -97,20 +91,6 @@ function Dashboard() {
       if (ramChart.current) {
         ramChart.current.destroy();
         ramChart.current = null;
-      }
-
-      // Cleanup sockets
-      if (socketRef.current) {
-        console.log('Disconnecting services monitor socket');
-        socketRef.current.removeAllListeners();
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
-      if (ipSocketRef.current) {
-        console.log('Disconnecting IP fetcher socket');
-        ipSocketRef.current.removeAllListeners();
-        ipSocketRef.current.disconnect();
-        ipSocketRef.current = null;
       }
     };
   }, []);

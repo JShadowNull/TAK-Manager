@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import io from 'socket.io-client';
 import axios from 'axios';
 import Popup from '../Popup';
 import Button from '../Button';
+import useSocket from '../../../hooks/useSocket';
 
 const DockerPopup = ({ isVisible }) => {
   const [dockerStatus, setDockerStatus] = useState({
@@ -11,6 +11,52 @@ const DockerPopup = ({ isVisible }) => {
     error: null
   });
   const [isStartingDocker, setIsStartingDocker] = useState(false);
+
+  // Use the socket hook
+  const {
+    isConnected,
+    error: socketError,
+    state: socketState
+  } = useSocket('/docker-manager', {
+    initialState: {
+      isInstalled: true,
+      isRunning: false,
+      error: null
+    },
+    eventHandlers: {
+      onConnect: () => {
+        console.log('Connected to Docker manager socket');
+      },
+      onError: (error) => {
+        console.error('Docker manager socket connection error:', error);
+      },
+      docker_status: (data, { updateState }) => {
+        updateState({
+          isInstalled: data.isInstalled,
+          isRunning: data.isRunning,
+          error: data.error || null
+        });
+        if (data.isRunning) {
+          setIsStartingDocker(false);
+        }
+      },
+      docker_operation: (data, { updateState }) => {
+        console.log('Docker operation result:', data);
+        if (data.status === 'error') {
+          updateState(prev => ({
+            ...prev,
+            error: data.message
+          }));
+          setIsStartingDocker(false);
+        }
+      }
+    }
+  });
+
+  // Update local state when socket state changes
+  useEffect(() => {
+    setDockerStatus(socketState);
+  }, [socketState]);
 
   // Initial Docker status check
   useEffect(() => {
@@ -32,50 +78,6 @@ const DockerPopup = ({ isVisible }) => {
       }
     };
     checkInitialStatus();
-  }, []);
-
-  // Socket connection for real-time updates
-  useEffect(() => {
-    const socket = io('/docker-manager', {
-      transports: ['websocket'],
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000
-    });
-
-    socket.on('connect', () => {
-      console.log('Connected to Docker manager socket');
-    });
-
-    socket.on('connect_error', (error) => {
-      console.error('Docker manager socket connection error:', error);
-    });
-
-    socket.on('docker_status', (data) => {
-      setDockerStatus({
-        isInstalled: data.isInstalled,
-        isRunning: data.isRunning,
-        error: data.error || null
-      });
-      if (data.isRunning) {
-        setIsStartingDocker(false);
-      }
-    });
-
-    socket.on('docker_operation', (data) => {
-      console.log('Docker operation result:', data);
-      if (data.status === 'error') {
-        setDockerStatus(prev => ({
-          ...prev,
-          error: data.message
-        }));
-        setIsStartingDocker(false);
-      }
-    });
-
-    return () => {
-      socket.disconnect();
-    };
   }, []);
 
   const handleStartDocker = async () => {

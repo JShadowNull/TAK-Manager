@@ -9,6 +9,7 @@ import useSocket from '../../hooks/useSocket';
 import io from 'socket.io-client';
 import InstallationPopup from './InstallationPopup';
 import UninstallationPopup from './UninstallationPopup';
+import useFetch from '../../hooks/useFetch';
 
 function TakServerStatus({ handleStartStop }) {
   const [showInstallForm, setShowInstallForm] = useState(false);
@@ -51,6 +52,7 @@ function TakServerStatus({ handleStartStop }) {
   const [installationFailed, setInstallationFailed] = useState(false);
   const [installationError, setInstallationError] = useState(null);
   const [showNextButton, setShowNextButton] = useState(false);
+  const { post, loading: fetchLoading, error: fetchError } = useFetch();
 
   // Docker Manager Socket
   const {
@@ -204,99 +206,53 @@ function TakServerStatus({ handleStartStop }) {
       onConnect: () => {
         console.log('Connected to installer service');
       },
-      installation_started: (data, { updateState }) => {
-        updateState({ isInstalling: true });
+      installation_started: () => {
         setIsInstalling(true);
+        setInstallationFailed(false);
+        setInstallationError(null);
+        setShowNextButton(false);
+        setInstallationSuccessful(false);
+        setIsStoppingInstallation(false);
       },
-      installation_failed: (data, { updateState }) => {
-        updateState({
-          isInstalling: false,
-          installationComplete: true,
-          installationSuccess: false,
-          installationError: data.error
-        });
+      installation_complete: (data) => {
+        setIsInstalling(false);
+        setInstallationSuccessful(true);
+        setIsStoppingInstallation(false);
+        setShowNextButton(data.status === 'success');
+      },
+      installation_failed: (data) => {
         setIsInstalling(false);
         setInstallationFailed(true);
         setInstallationError(data.error);
+        setShowNextButton(false);
+        setInstallationSuccessful(false);
+        setIsStoppingInstallation(false);
       },
-      rollback_started: (data, { updateState }) => {
-        updateState({ isRollingBack: true });
+      rollback_started: () => {
         setIsRollingBack(true);
+        setShowNextButton(false);
+        setInstallationSuccessful(false);
       },
-      rollback_failed: (data, { updateState }) => {
-        updateState({ isRollingBack: false });
+      rollback_complete: () => {
         setIsRollingBack(false);
+        setIsStoppingInstallation(false);
+        setIsInstalling(false);
+        setInstallationFailed(true);
+        setInstallationError('Installation cancelled by user');
+        setShowNextButton(true);
+        appendInstallOutput('Rollback completed successfully');
+      },
+      rollback_failed: (data) => {
+        setIsRollingBack(false);
+        setIsStoppingInstallation(false);
+        setInstallationError(data.error || 'Rollback failed');
+        setShowNextButton(true);
+        setInstallationSuccessful(false);
+        appendInstallOutput(`Rollback failed: ${data.error || 'Unknown error'}`);
       },
       handleTerminalOutput: true
     }
   });
-
-  // Socket connection for real-time updates
-  useEffect(() => {
-    const socket = io('/takserver-installer', {
-      path: '/socket.io'
-    });
-
-    socket.on('connect', () => {
-      console.log('Connected to TAK server installer service');
-    });
-
-    socket.on('installation_started', () => {
-      setIsInstalling(true);
-      setInstallationFailed(false);
-      setInstallationError(null);
-      setShowNextButton(false);
-      setInstallationSuccessful(false);
-      setIsStoppingInstallation(false);
-    });
-
-    socket.on('installation_complete', (data) => {
-      setIsInstalling(false);
-      setInstallationSuccessful(true);
-      setIsStoppingInstallation(false);
-      // Show next button only on successful installation
-      setShowNextButton(data.status === 'success');
-    });
-
-    socket.on('installation_failed', (data) => {
-      setIsInstalling(false);
-      setInstallationFailed(true);
-      setInstallationError(data.error);
-      setShowNextButton(false);
-      setInstallationSuccessful(false);
-      setIsStoppingInstallation(false);
-    });
-
-    socket.on('rollback_started', () => {
-      setIsRollingBack(true);
-      setShowNextButton(false);
-      setInstallationSuccessful(false);
-      // Keep isStoppingInstallation true during rollback
-    });
-
-    socket.on('rollback_complete', () => {
-      setIsRollingBack(false);
-      setIsStoppingInstallation(false);
-      setIsInstalling(false);
-      setInstallationFailed(true);
-      setInstallationError('Installation cancelled by user');
-      setShowNextButton(true);
-      appendInstallOutput('Rollback completed successfully');
-    });
-
-    socket.on('rollback_failed', (data) => {
-      setIsRollingBack(false);
-      setIsStoppingInstallation(false);
-      setInstallationError(data.error || 'Rollback failed');
-      setShowNextButton(true);
-      setInstallationSuccessful(false);
-      appendInstallOutput(`Rollback failed: ${data.error || 'Unknown error'}`);
-    });
-
-    return () => {
-      socket.disconnect();
-    };
-  }, []);
 
   const handleInputChange = (e) => {
     const { id, value, files, type } = e.target;
@@ -382,17 +338,8 @@ function TakServerStatus({ handleStartStop }) {
         formDataToSend.append(field, formData[field]);
       });
 
-      const response = await fetch('/api/takserver/install-takserver', {
-        method: 'POST',
-        body: formDataToSend,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Installation failed');
-      }
-
-      const data = await response.json();
+      const data = await post('/api/takserver/install-takserver', formDataToSend);
+      
       if (!data.installation_id) {
         throw new Error('No installation ID received from server');
       }
@@ -431,18 +378,9 @@ function TakServerStatus({ handleStartStop }) {
       // Set stopping state
       setIsStoppingInstallation(true);
 
-      const response = await fetch('/api/takserver/rollback-takserver', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ installation_id: installationId }),
+      await post('/api/takserver/rollback-takserver', { 
+        installation_id: installationId 
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to stop installation');
-      }
 
     } catch (error) {
       console.error('Error stopping installation:', error);
@@ -464,18 +402,8 @@ function TakServerStatus({ handleStartStop }) {
       }
 
       const endpoint = isRunning ? '/api/takserver/takserver-stop' : '/api/takserver/takserver-start';
+      await post(endpoint);
       
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Failed to ${isRunning ? 'stop' : 'start'} TAK Server`);
-      }
     } catch (error) {
       setOperationError(error.message);
       // Reset loading state on error
@@ -490,17 +418,8 @@ function TakServerStatus({ handleStartStop }) {
       // Set loading state immediately
       setIsRestarting(true);
 
-      const response = await fetch('/api/takserver/takserver-restart', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to restart TAK Server');
-      }
+      await post('/api/takserver/takserver-restart');
+      
     } catch (error) {
       setOperationError(error.message);
       // Reset loading state on error

@@ -12,12 +12,14 @@ socketio = SocketIO(
     engineio_logger=True,
     logger=True,
     ping_timeout=60,
-    cors_allowed_origins="*",
-    path='/socket.io',  # Explicitly set the Socket.IO path
-    manage_session=False,  # Disable session management to avoid thread issues
-    always_connect=True,  # Allow connections even if initial handshake fails
-    max_http_buffer_size=1e8,  # 100MB max http buffer size
-    async_handlers=True  # Enable async handlers for better performance
+    cors_allowed_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    path='/socket.io',
+    manage_session=False,
+    always_connect=True,
+    max_http_buffer_size=1e8,
+    async_handlers=True,
+    allow_upgrades=True,
+    transports=['websocket', 'polling']
 )
 
 def safe_emit(event, data, namespace=None, broadcast=False):

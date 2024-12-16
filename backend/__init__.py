@@ -1,6 +1,6 @@
 # backend/__init__.py
 import os
-from flask import Flask, send_from_directory, send_file, Response
+from flask import Flask, send_from_directory, send_file, Response, request
 from backend.routes.socketio import socketio
 import logging
 from flask_cors import CORS
@@ -14,15 +14,27 @@ def create_app():
                 static_folder=static_folder,
                 static_url_path='')
 
-    # Enable CORS with maximum permissiveness
-    CORS(app, resources={r"/*": {"origins": "*", "allow_headers": "*", "expose_headers": "*"}})
+    # Enable CORS with maximum permissiveness for development
+    CORS(app, 
+         resources={
+             r"/*": {
+                 "origins": ["http://localhost:5173", "http://127.0.0.1:5173"],
+                 "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                 "allow_headers": "*",
+                 "expose_headers": "*",
+                 "supports_credentials": False
+             }
+         })
 
     # Initialize socketio with the app
     socketio.init_app(app, 
                      async_mode='eventlet',
                      ping_timeout=60,
-                     cors_allowed_origins="*",
-                     manage_session=False)
+                     cors_allowed_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+                     manage_session=False,
+                     always_connect=True,
+                     logger=True,
+                     engineio_logger=True)
 
     # Enable debug logging
     app.logger.setLevel(logging.DEBUG)
@@ -30,20 +42,35 @@ def create_app():
     # Add CORS headers to all responses
     @app.after_request
     def after_request(response):
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+        origin = request.headers.get('Origin')
+        if origin in ["http://localhost:5173", "http://127.0.0.1:5173"]:
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Headers'] = '*'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+            response.headers['Access-Control-Max-Age'] = '3600'
+            response.headers['Access-Control-Expose-Headers'] = '*'
+            response.headers['Vary'] = 'Origin'
+            
         # Add headers specifically for pywebview
-        response.headers.add('Cache-Control', 'no-cache, no-store, must-revalidate')
-        response.headers.add('Pragma', 'no-cache')
-        response.headers.add('Expires', '0')
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
         return response
 
-    # Handle OPTIONS requests
+    # Handle OPTIONS requests explicitly
     @app.route('/', defaults={'path': ''}, methods=['OPTIONS'])
     @app.route('/<path:path>', methods=['OPTIONS'])
     def options_handler(path):
-        return Response('', status=200)
+        response = app.make_default_options_response()
+        origin = request.headers.get('Origin')
+        if origin in ["http://localhost:5173", "http://127.0.0.1:5173"]:
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Headers'] = '*'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+            response.headers['Access-Control-Max-Age'] = '3600'
+            response.headers['Access-Control-Expose-Headers'] = '*'
+            response.headers['Vary'] = 'Origin'
+        return response
 
     # Serve static files directly
     @app.route('/assets/<path:filename>')

@@ -14,8 +14,8 @@ class DockerChecker:
             result = self.run_command.run_command(
                 ["docker", "--version"],
                 namespace='docker-status',
-                capture_output=True,
-                emit_output=False
+                capture_output=False,
+                emit_output=True
             )
             return True
         except (subprocess.CalledProcessError, FileNotFoundError):
@@ -35,8 +35,8 @@ class DockerChecker:
                 result = self.run_command.run_command(
                     ["docker", "info"],
                     namespace='docker-status',
-                    capture_output=True,
-                    emit_output=False
+                    capture_output=False,
+                    emit_output=True
                 )
                 
                 # If the command succeeds and doesn't contain error messages, Docker is running
@@ -48,8 +48,8 @@ class DockerChecker:
                 result = self.run_command.run_command(
                     ["systemctl", "is-active", "--quiet", "docker"],
                     namespace='docker-status',
-                    capture_output=True,
-                    emit_output=False
+                    capture_output=False,
+                    emit_output=True
                 )
                 return result.returncode == 0
             else:

@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import io from 'socket.io-client';
 import Switch from '@mui/material/Switch';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import { styled } from '@mui/material/styles';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlay, faStop, faSpinner } from '@fortawesome/free-solid-svg-icons';
-import axios from 'axios';
 import DockerPopup from '../components/shared/docker/DockerPopup';
+import useSocket from '../hooks/useSocket';
+import useFetch from '../hooks/useFetch';
 
 // Create a styled Switch component using Tailwind-like styles
 const StyledSwitch = styled(Switch)({
@@ -36,51 +36,11 @@ function Services() {
   const [isStoppingDocker, setIsStoppingDocker] = useState(false);
   const [containers, setContainers] = useState([]);
   const [pendingContainerActions, setPendingContainerActions] = useState({});
+  const { get, post, loading, error } = useFetch();
 
-  // Initial Docker status check
-  useEffect(() => {
-    const checkInitialStatus = async () => {
-      try {
-        const response = await axios.get('/docker-manager/docker/status');
-        const { isInstalled, isRunning, containers: containerList, error } = response.data;
-        setDockerStatus({
-          isInstalled,
-          isRunning,
-          error
-        });
-        if (containerList) {
-          setContainers(containerList);
-        }
-      } catch (error) {
-        console.error('Error checking Docker status:', error);
-        setDockerStatus(prev => ({
-          ...prev,
-          error: 'Error checking Docker status'
-        }));
-      }
-    };
-    checkInitialStatus();
-  }, []);
-
-  // Socket connection for real-time updates
-  useEffect(() => {
-    const socket = io('/docker-manager', {
-      transports: ['websocket'],
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000
-    });
-
-    socket.on('connect', () => {
-      console.log('Connected to Docker manager socket');
-    });
-
-    socket.on('connect_error', (error) => {
-      console.error('Docker manager socket connection error:', error);
-    });
-
-    // Listen for Docker status updates
-    socket.on('docker_status', (data) => {
+  // Define socket event handlers
+  const dockerManagerHandlers = {
+    docker_status: (data) => {
       console.log('Received Docker status:', data);
       setDockerStatus({
         isInstalled: data.isInstalled,
@@ -94,10 +54,8 @@ function Services() {
       } else {
         setIsStoppingDocker(false);
       }
-    });
-
-    // Listen for container updates
-    socket.on('containers', (data) => {
+    },
+    containers: (data) => {
       console.log('Received containers update:', data.containers);
       setContainers(data.containers || []);
       
@@ -118,10 +76,8 @@ function Services() {
           return newPending;
         });
       }
-    });
-
-    // Listen for Docker operation results
-    socket.on('docker_operation', (data) => {
+    },
+    docker_operation: (data) => {
       console.log('Docker operation result:', data);
       if (data.status === 'error') {
         setDockerStatus(prev => ({
@@ -131,10 +87,8 @@ function Services() {
         setIsStartingDocker(false);
         setIsStoppingDocker(false);
       }
-    });
-
-    // Listen for container operation results
-    socket.on('container_operation', (data) => {
+    },
+    container_operation: (data) => {
       console.log('Container operation result:', data);
       if (data.status === 'error' && data.container) {
         setPendingContainerActions(prev => {
@@ -143,12 +97,49 @@ function Services() {
           return newPending;
         });
       }
-    });
+    },
+    onConnect: () => {
+      console.log('Connected to Docker manager socket');
+    },
+    onError: (error) => {
+      console.error('Docker manager socket connection error:', error);
+    }
+  };
 
-    return () => {
-      socket.disconnect();
+  // Initialize socket using the hook
+  const dockerSocket = useSocket('/docker-manager', {
+    eventHandlers: dockerManagerHandlers,
+    options: {
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000
+    }
+  });
+
+  // Initial Docker status check
+  useEffect(() => {
+    const checkInitialStatus = async () => {
+      try {
+        const data = await get('/docker-manager/docker/status');
+        const { isInstalled, isRunning, containers: containerList, error } = data;
+        setDockerStatus({
+          isInstalled,
+          isRunning,
+          error
+        });
+        if (containerList) {
+          setContainers(containerList);
+        }
+      } catch (error) {
+        console.error('Error checking Docker status:', error);
+        setDockerStatus(prev => ({
+          ...prev,
+          error: 'Error checking Docker status'
+        }));
+      }
     };
-  }, []);
+    checkInitialStatus();
+  }, [get]);
 
   const handleDockerToggle = async (e) => {
     const isChecked = e.target.checked;
@@ -158,7 +149,7 @@ function Services() {
       setIsStoppingDocker(true);
     }
     try {
-      await axios.post(`/docker-manager/docker/${isChecked ? 'start' : 'stop'}`);
+      await post(`/docker-manager/docker/${isChecked ? 'start' : 'stop'}`);
     } catch (error) {
       console.error('Error toggling Docker:', error);
       setDockerStatus(prev => ({
@@ -177,7 +168,7 @@ function Services() {
       [containerName]: action
     }));
     try {
-      await axios.post(`/docker-manager/docker/containers/${containerName}/${action}`);
+      await post(`/docker-manager/docker/containers/${containerName}/${action}`);
     } catch (error) {
       console.error(`Error ${action}ing container:`, error);
       setPendingContainerActions(prev => {

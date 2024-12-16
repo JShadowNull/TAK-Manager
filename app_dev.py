@@ -16,6 +16,7 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import subprocess
 import threading
+import eventlet
 
 # Configure logging
 logging.basicConfig(
@@ -98,9 +99,16 @@ def start_flask():
         # Configure Socket.IO for development
         socketio.server.eio.ping_timeout = 120000  # Increase ping timeout for development
         socketio.server.eio.ping_interval = 25000  # Standard ping interval
+        socketio.server.eio.cors_allowed_origins = ['http://localhost:5173']  # Allow Vite dev server
+        socketio.server.eio.max_http_buffer_size = 1e8  # 100MB max buffer
         
         # Run without reloader
-        socketio.run(flask_app, host='127.0.0.1', port=5000, debug=True, use_reloader=False)
+        socketio.run(flask_app, 
+                    host='127.0.0.1', 
+                    port=5000, 
+                    debug=True, 
+                    use_reloader=False,
+                    allow_unsafe_werkzeug=True)  # Allow unsafe Werkzeug in dev
     except Exception as e:
         logger.error(f"Error starting Flask server: {e}")
         raise
@@ -149,6 +157,76 @@ def setup_watchers():
     observer.start()
     logger.info("File watchers started")
 
+def start_vite():
+    """Start the Vite development server."""
+    try:
+        # Change to the project root directory
+        os.chdir(os.path.dirname(os.path.abspath(__file__)))
+        
+        # Start Vite in development mode
+        process = subprocess.Popen(
+            'npm run dev',
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env={**os.environ, 'FORCE_COLOR': '1'}  # Enable colored output
+        )
+        
+        logger.info("Started Vite development server")
+        return process
+    except Exception as e:
+        logger.error(f"Error starting Vite server: {e}")
+        raise
+
+def main():
+    try:
+        # Register cleanup
+        atexit.register(cleanup)
+
+        # Start the Flask server first
+        start_server()
+
+        # Wait for Flask server to be ready
+        if not wait_for_port(5000):
+            logger.error("Error: Flask server did not start properly")
+            return
+
+        # Start Vite development server
+        vite_process = start_vite()
+
+        # Wait for Vite server to be ready
+        if not wait_for_port(5173):
+            logger.error("Error: Vite server did not start properly")
+            if vite_process:
+                vite_process.terminate()
+            return
+
+        # Setup file watchers
+        setup_watchers()
+
+        # Add a small delay to ensure servers are fully initialized
+        time.sleep(2)
+        logger.info("All servers are ready, starting PyWebview...")
+
+        try:
+            # Create and start the window
+            window = create_window()
+            if not window:
+                raise Exception("Failed to create window")
+        except Exception as e:
+            logger.error(f"Failed to start PyWebview: {e}")
+            raise
+        finally:
+            # Clean up processes
+            if vite_process:
+                vite_process.terminate()
+                vite_process.wait()
+
+    except Exception as e:
+        logger.error(f"Error in main: {e}")
+        raise
+
 def create_window():
     """Create and configure the pywebview window."""
     try:
@@ -166,10 +244,10 @@ def create_window():
         # Create API instance
         api = API()
         
-        # Basic window configuration
+        # Use Vite development server URL instead of Flask URL
         window = webview.create_window(
             'Tak Manager (Dev)',
-            'http://127.0.0.1:5173',  # Vite dev server URL
+            'http://localhost:5173',  # Changed to Vite dev server URL
             js_api=api,
             min_size=(800, 600),
             width=1280,
@@ -217,44 +295,6 @@ def reloader_thread():
         restart_event.wait()
         restart_event.clear()
         restart_server()
-
-def main():
-    try:
-        # Register cleanup
-        atexit.register(cleanup)
-
-        # Start the Flask server first
-        start_server()
-
-        # Wait for Flask server to be ready
-        if not wait_for_port(5000):
-            logger.error("Error: Flask server did not start properly")
-            return
-
-        # Setup file watchers
-        setup_watchers()
-
-        # Start reloader thread
-        reloader = threading.Thread(target=reloader_thread, daemon=True)
-        reloader.start()
-
-        # Add a small delay to ensure server is fully initialized
-        time.sleep(5)
-        logger.info("Flask server is ready, starting PyWebview...")
-
-        try:
-            # Create and start the window
-            window = create_window()
-            if not window:
-                raise Exception("Failed to create window")
-        except Exception as e:
-            logger.error(f"Failed to start PyWebview: {e}")
-            raise
-
-    except Exception as e:
-        logger.error(f"Error in development server: {e}", exc_info=True)
-        cleanup()
-        raise
 
 if __name__ == '__main__':
     multiprocessing.freeze_support()

@@ -69,18 +69,22 @@ function useSocket(namespace, {
 
     // Only create socket if it doesn't exist
     if (!activeSocketRef.current) {
-      activeSocketRef.current = io(namespace, {
-        transports: ['websocket'],
+      activeSocketRef.current = io(`http://127.0.0.1:5000${namespace}`, {
+        transports: ['websocket', 'polling'],
         path: '/socket.io',
         reconnection: true,
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,
+        forceNew: true,
+        autoConnect: true,
+        withCredentials: false,
         ...options
       });
 
       // Handle connection events
       activeSocketRef.current.on('connect', () => {
         if (mountedRef.current) {
+          console.log('Socket connected successfully');
           setIsConnected(true);
           setError(null);
           
@@ -93,6 +97,7 @@ function useSocket(namespace, {
 
       activeSocketRef.current.on('connect_error', (err) => {
         if (mountedRef.current) {
+          console.error('Socket connection error:', err);
           setError(err);
           setIsConnected(false);
           

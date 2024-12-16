@@ -7,7 +7,7 @@ import autoprefixer from 'autoprefixer';
 export default defineConfig({
   plugins: [react()],
   root: './src',
-  base: './',
+  base: '/',
   css: {
     postcss: {
       plugins: [
@@ -36,14 +36,12 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    proxy: {
-      '/socket.io': {
-        target: 'http://localhost:5000',
-        ws: true
-      },
-      '/api': {
-        target: 'http://localhost:5000'
-      }
+    strictPort: true,
+    host: true,
+    open: false,
+    cors: true,
+    hmr: {
+      port: 5173
     }
   }
 }); 
