@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Chart } from 'chart.js/auto';
 import { 
   CategoryScale,
@@ -34,22 +34,48 @@ function Dashboard() {
   const cpuChart = useRef(null);
   const ramChart = useRef(null);
   const [isScrolling, setIsScrolling] = useState(false);
+  const [cpuUsage, setCpuUsage] = useState('Loading...');
+  const [ramUsage, setRamUsage] = useState('Loading...');
+  const [ipAddress, setIpAddress] = useState('Loading...');
+  const [services, setServices] = useState([]);
 
   // Setup socket handlers
   const servicesSocketHandlers = {
     cpu_usage: (data) => {
-      updateChart(cpuChart.current, data.cpu_usage, 'cpu');
-      saveChartData('cpuData', cpuChart.current.data.datasets[0].data);
+      console.log('Received CPU usage:', data);
+      if (data && typeof data.cpu_usage === 'number') {
+        setCpuUsage(`${data.cpu_usage}%`);
+        updateChart(cpuChart.current, data.cpu_usage, 'cpu');
+      }
     },
     ram_usage: (data) => {
-      updateChart(ramChart.current, data.ram_usage, 'ram');
-      saveChartData('ramData', ramChart.current.data.datasets[0].data);
+      console.log('Received RAM usage:', data);
+      if (data && typeof data.ram_usage === 'number') {
+        setRamUsage(`${data.ram_usage}%`);
+        updateChart(ramChart.current, data.ram_usage, 'ram');
+      }
     },
     services: (data) => {
-      updateServicesList(data.services);
+      console.log('Received services:', data);
+      if (data && Array.isArray(data.services)) {
+        setServices(data.services);
+      }
+    },
+    error: (data) => {
+      console.error('Services monitor error:', data.message);
     },
     onConnect: () => {
       console.log('Services monitor socket connected');
+      // Request initial metrics
+      if (servicesSocket.socket) {
+        console.log('Requesting initial metrics...');
+        servicesSocket.socket.emit('request_metrics');
+      } else {
+        console.error('Socket not available for requesting metrics');
+      }
+    },
+    onDisconnect: () => {
+      console.log('Services monitor socket disconnected');
     },
     onError: (error) => {
       console.error('Services monitor socket connection error:', error);
@@ -58,11 +84,19 @@ function Dashboard() {
 
   const ipSocketHandlers = {
     ip_address_update: (data) => {
-      console.log('Received IP update:', data.ip_address);
-      updateIpAddress(data.ip_address);
+      if (data && data.ip_address) {
+        setIpAddress(data.ip_address);
+      }
+    },
+    error: (data) => {
+      console.error('IP fetcher error:', data.message);
     },
     onConnect: () => {
       console.log('IP socket connected');
+      // Request current IP
+      if (ipSocket.socket) {
+        ipSocket.socket.emit('get_ip_address');
+      }
     },
     onError: (error) => {
       console.error('IP socket connection error:', error);
@@ -79,11 +113,12 @@ function Dashboard() {
   });
 
   // Initialize charts when components mount
-  React.useEffect(() => {
-    createCharts();
+  useEffect(() => {
+    if (cpuChartRef.current && ramChartRef.current) {
+      createCharts();
+    }
 
     return () => {
-      // Cleanup charts
       if (cpuChart.current) {
         cpuChart.current.destroy();
         cpuChart.current = null;
@@ -114,39 +149,41 @@ function Dashboard() {
             above: 'rgba(106, 167, 248, 0.25)',
           },
           pointRadius: 0,
+          tension: 0.4
         }]
       },
       options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: {
+          duration: 0
+        },
         scales: {
           y: {
             beginAtZero: true,
-            max: 100
+            max: 100,
+            grid: {
+              color: 'rgba(255, 255, 255, 0.1)'
+            }
           },
           x: {
             type: 'time',
-            display: false,
             time: {
-              tooltipFormat: 'MMM d, h:mm:ss a',
+              unit: 'second',
+              tooltipFormat: 'HH:mm:ss',
+              displayFormats: {
+                second: 'HH:mm:ss'
+              }
+            },
+            grid: {
+              display: false
             }
           }
         },
         plugins: {
-          tooltip: {
-            mode: 'index',
-            intersect: false,
-            callbacks: {
-              label: function(tooltipItem) {
-                const value = tooltipItem.raw;
-                const time = tooltipItem.label;
-                const formattedTime = new Date(time).toLocaleTimeString();
-                return `Time: ${formattedTime}, Usage: ${value}%`;
-              }
-            }
+          legend: {
+            display: false
           }
-        },
-        hover: {
-          mode: 'index',
-          intersect: false
         }
       }
     });
@@ -166,81 +203,60 @@ function Dashboard() {
             above: 'rgba(246, 89, 33, 0.25)',
           },
           pointRadius: 0,
+          tension: 0.4
         }]
       },
       options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: {
+          duration: 0
+        },
         scales: {
           y: {
             beginAtZero: true,
-            max: 100
+            max: 100,
+            grid: {
+              color: 'rgba(255, 255, 255, 0.1)'
+            }
           },
           x: {
             type: 'time',
-            display: false,
             time: {
-              tooltipFormat: 'MMM d, h:mm:ss a',
+              unit: 'second',
+              tooltipFormat: 'HH:mm:ss',
+              displayFormats: {
+                second: 'HH:mm:ss'
+              }
+            },
+            grid: {
+              display: false
             }
           }
         },
         plugins: {
-          tooltip: {
-            mode: 'index',
-            intersect: false,
-            callbacks: {
-              label: function(tooltipItem) {
-                const value = tooltipItem.raw;
-                const time = tooltipItem.label;
-                const formattedTime = new Date(time).toLocaleTimeString();
-                return `Time: ${formattedTime}, Usage: ${value}%`;
-              }
-            }
+          legend: {
+            display: false
           }
-        },
-        hover: {
-          mode: 'index',
-          intersect: false
         }
       }
     });
   };
 
-  const updateChart = (chart, value, elementId) => {
+  const updateChart = (chart, value, type) => {
+    if (!chart) return;
+
     const currentTime = new Date();
     chart.data.labels.push(currentTime);
     chart.data.datasets[0].data.push(value);
 
-    if (chart.data.labels.length > 1000) {
+    // Keep last 30 data points (1 minute of data with 2-second intervals)
+    if (chart.data.labels.length > 30) {
       chart.data.labels.shift();
       chart.data.datasets[0].data.shift();
     }
 
-    document.getElementById(elementId).textContent = value + '%';
-    chart.update();
-    saveChartData('chartLabels', chart.data.labels);
-  };
-
-  const updateServicesList = (services) => {
-    const servicesList = document.getElementById('services');
-    if (!servicesList) return;
-
-    servicesList.innerHTML = '';
-    services.forEach(service => {
-      const listItem = document.createElement('li');
-      listItem.textContent = `${service.name} (PID: ${service.pid})`;
-      listItem.className = 'p-4 rounded-lg hover:bg-buttonColor transition-colors duration-200 text-textSecondary border border-transparent hover:border-accentBoarder';
-      servicesList.appendChild(listItem);
-    });
-  };
-
-  const updateIpAddress = (ipAddress) => {
-    const ipElement = document.getElementById('ip-address');
-    if (ipElement) {
-      ipElement.textContent = ipAddress;
-    }
-  };
-
-  const saveChartData = (key, data) => {
-    localStorage.setItem(key, JSON.stringify(data));
+    chart.update('none'); // Use 'none' mode for better performance
   };
 
   return (
@@ -250,15 +266,19 @@ function Dashboard() {
         {/* CPU Usage Section */}
         <div className="flex-1 bg-cardBg p-6 rounded-lg shadow-lg text-white max-w-md border border-accentBoarder min-w-[28rem]">
           <h2 className="text-base mb-4">CPU Usage</h2>
-          <p id="cpu" className="mt-2 text-cpuChartColor text-center">Loading...</p>
-          <canvas ref={cpuChartRef} className="mt-4 text-textSecondary"></canvas>
+          <p className="mt-2 text-cpuChartColor text-center">{cpuUsage}</p>
+          <div className="h-64">
+            <canvas ref={cpuChartRef}></canvas>
+          </div>
         </div>
 
         {/* RAM Usage Section */}
         <div className="flex-1 bg-cardBg p-6 rounded-lg shadow-lg text-white max-w-md border border-accentBoarder min-w-[28rem]">
           <h2 className="text-base mb-4">RAM Usage</h2>
-          <p id="ram" className="mt-2 text-ramChartColor text-center">Loading...</p>
-          <canvas ref={ramChartRef} className="mt-4"></canvas>
+          <p className="mt-2 text-ramChartColor text-center">{ramUsage}</p>
+          <div className="h-64">
+            <canvas ref={ramChartRef}></canvas>
+          </div>
         </div>
 
         {/* Running Services Section */}
@@ -267,10 +287,19 @@ function Dashboard() {
           <div className="h-64 overflow-hidden rounded-lg border border-accentBoarder">
             <CustomScrollbar>
               <div className="h-full">
-                <ul id="services" className="list-none text-sm m-0 p-0">
-                  <li className="p-4 hover:bg-buttonColor transition-colors duration-200 text-textSecondary border-b border-accentBoarder last:border-b-0">
-                    Loading...
-                  </li>
+                <ul className="list-none text-sm m-0 p-0">
+                  {services.length > 0 ? (
+                    services.map((service) => (
+                      <li
+                        key={service.pid}
+                        className="p-4 hover:bg-buttonColor transition-colors duration-200 text-textSecondary border-b border-accentBoarder last:border-b-0"
+                      >
+                        {service.name} (PID: {service.pid})
+                      </li>
+                    ))
+                  ) : (
+                    <li className="p-4 text-textSecondary">Loading services...</li>
+                  )}
                 </ul>
               </div>
             </CustomScrollbar>
@@ -281,7 +310,7 @@ function Dashboard() {
         <div className="flex-1 flex items-start max-w-md">
           <div className="bg-cardBg px-6 py-4 rounded-lg shadow-lg text-white w-full border border-accentBoarder min-w-[28rem]">
             <h2 className="text-base mb-2">IP Address</h2>
-            <p id="ip-address" className="text-center">Loading...</p>
+            <p className="text-center">{ipAddress}</p>
           </div>
         </div>
       </div>

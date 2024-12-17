@@ -21,11 +21,33 @@ import eventlet
 # Configure logging
 logging.basicConfig(
     level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
 )
-logger = logging.getLogger(__name__)
+
+# Set log levels for all loggers
+logging.getLogger('werkzeug').setLevel(logging.INFO)
+logging.getLogger('engineio').setLevel(logging.INFO)
+logging.getLogger('socketio').setLevel(logging.DEBUG)  # Keep Socket.IO debug logs
+logging.getLogger('watchdog').setLevel(logging.INFO)
+logging.getLogger('backend').setLevel(logging.DEBUG)
+logging.getLogger('flask').setLevel(logging.INFO)
+
+# Enable debug logging for your application modules
+for logger_name in ['backend', 'services', 'routes']:
+    module_logger = logging.getLogger(logger_name)
+    module_logger.setLevel(logging.DEBUG)
+    # Ensure logger propagates to root
+    module_logger.propagate = True
+
+# Configure webview logger separately
 webview_logger = logging.getLogger('webview')
-webview_logger.setLevel(logging.DEBUG)
+webview_logger.setLevel(logging.INFO)
+
+logger = logging.getLogger(__name__)
+logger.info("Starting application in development mode with debug logging enabled")
 
 # Initialize OS detector
 os_detector = OSDetector()
@@ -91,10 +113,14 @@ def start_flask():
         # Set development environment
         os.environ['FLASK_ENV'] = 'development'
         os.environ['FLASK_DEBUG'] = '1'
+        os.environ['PYTHONUNBUFFERED'] = '1'  # Ensure Python output is unbuffered
+        os.environ['WERKZEUG_DEBUG_PIN'] = 'off'  # Disable Werkzeug debug PIN
+        os.environ['EVENTLET_DEBUG'] = 'true'  # Enable eventlet debug
         
         # Create Flask app with debug mode
         flask_app = create_app()
         flask_app.debug = True
+        flask_app.config['PROPAGATE_EXCEPTIONS'] = True  # Ensure exceptions are propagated
         
         # Configure Socket.IO for development
         socketio.server.eio.ping_timeout = 120000  # Increase ping timeout for development
@@ -102,15 +128,20 @@ def start_flask():
         socketio.server.eio.cors_allowed_origins = ['http://localhost:5173']  # Allow Vite dev server
         socketio.server.eio.max_http_buffer_size = 1e8  # 100MB max buffer
         
+        # Enable Socket.IO logging
+        socketio.server.logger.setLevel(logging.DEBUG)
+        socketio.server.eio.logger.setLevel(logging.DEBUG)
+        
         # Run without reloader
         socketio.run(flask_app, 
                     host='127.0.0.1', 
                     port=5000, 
                     debug=True, 
                     use_reloader=False,
+                    log_output=True,
                     allow_unsafe_werkzeug=True)  # Allow unsafe Werkzeug in dev
     except Exception as e:
-        logger.error(f"Error starting Flask server: {e}")
+        logger.error(f"Error starting Flask server: {e}", exc_info=True)
         raise
 
 def restart_server():

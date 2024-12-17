@@ -43,8 +43,8 @@ function Services() {
     docker_status: (data) => {
       console.log('Received Docker status:', data);
       setDockerStatus({
-        isInstalled: data.isInstalled,
-        isRunning: data.isRunning,
+        isInstalled: data.isInstalled ?? true,
+        isRunning: data.isRunning ?? false,
         error: data.error || null
       });
       
@@ -54,13 +54,18 @@ function Services() {
       } else {
         setIsStoppingDocker(false);
       }
+
+      // If Docker is not running, clear containers
+      if (!data.isRunning) {
+        setContainers([]);
+      }
     },
     containers: (data) => {
       console.log('Received containers update:', data.containers);
-      setContainers(data.containers || []);
-      
-      // Clear pending actions for containers that reached target state
-      if (data.containers) {
+      if (Array.isArray(data.containers)) {
+        setContainers(data.containers);
+        
+        // Clear pending actions for containers that reached target state
         setPendingContainerActions(prev => {
           const newPending = { ...prev };
           data.containers.forEach(container => {
@@ -100,9 +105,15 @@ function Services() {
     },
     onConnect: () => {
       console.log('Connected to Docker manager socket');
+      // Request immediate status update on connection
+      dockerSocket.emit('check_status');
     },
     onError: (error) => {
       console.error('Docker manager socket connection error:', error);
+      setDockerStatus(prev => ({
+        ...prev,
+        error: 'Connection error with Docker manager'
+      }));
     }
   };
 

@@ -207,6 +207,15 @@ function Popup({
   // Create internal ref if none provided for terminal variant
   const internalTerminalRef = useRef(null);
   const actualTerminalRef = terminalRef || internalTerminalRef;
+  const scrollContainerRef = useRef(null);
+
+  // Auto-scroll effect when terminal output changes
+  useEffect(() => {
+    if (showTerminal && scrollContainerRef.current) {
+      const scrollContainer = scrollContainerRef.current;
+      scrollContainer.scrollTop = scrollContainer.scrollHeight;
+    }
+  }, [terminalOutput, showTerminal]);
 
   const getTerminalButtons = () => {
     if (isInProgress) {
@@ -310,8 +319,8 @@ function Popup({
 
   const terminalContent = showTerminal && (
     <div className="mt-1 bg-primaryBg text-white rounded-lg h-64 border text-wrap border-accentBoarder">
-      <CustomScrollbar>
-        <div className="p-4">
+      <CustomScrollbar ref={scrollContainerRef}>
+        <div className="p-4 break-words">
           {renderTerminalOutput()}
         </div>
       </CustomScrollbar>

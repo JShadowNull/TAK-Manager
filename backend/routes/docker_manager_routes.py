@@ -20,6 +20,9 @@ class DockerManagerNamespace(Namespace):
         self.monitor_thread = None
         self.operation_in_progress = False
         self.operation_threads = []  # Track operation threads
+        self.should_monitor = False  # Flag to control monitoring loop
+        self.last_status = None
+        self.last_containers = None
 
     def cleanup_operation_threads(self):
         """Clean up completed operation threads"""
@@ -27,6 +30,7 @@ class DockerManagerNamespace(Namespace):
 
     def on_connect(self):
         print('Client connected to /docker-manager namespace')
+        self.should_monitor = True
         if not self.monitor_thread:
             self.monitor_thread = socketio.start_background_task(self.monitor_docker_status)
             thread_manager.add_thread(self.monitor_thread)
@@ -35,38 +39,55 @@ class DockerManagerNamespace(Namespace):
 
     def on_disconnect(self):
         print('Client disconnected from /docker-manager namespace')
+        self.should_monitor = False  # Signal monitoring thread to stop
         self.cleanup_operation_threads()
+        self.last_status = None
+        self.last_containers = None
 
     def emit_status_update(self, status=None):
         """Emit Docker status updates"""
-        if status is None:
-            status = self.docker_checker.get_status()
-        socketio.emit('docker_status', status, namespace='/docker-manager')
+        try:
+            if status is None:
+                status = self.docker_checker.get_status()
+            socketio.emit('docker_status', status, namespace='/docker-manager')
+        except Exception as e:
+            print(f"Error emitting status update: {str(e)}")
+            error_status = {
+                'isInstalled': False,
+                'isRunning': False,
+                'error': f"Error checking Docker status: {str(e)}"
+            }
+            socketio.emit('docker_status', error_status, namespace='/docker-manager')
 
     def monitor_docker_status(self):
         """Monitor Docker status and containers"""
-        last_status = None
-        last_containers = None
-
-        while True:
+        while self.should_monitor:
             try:
                 # Skip status check if operation is in progress
                 if not self.operation_in_progress:
                     # Get Docker status
                     docker_status = self.docker_checker.get_status()
-                    current_status = docker_status['isRunning']
+                    current_status = {
+                        'isInstalled': docker_status.get('isInstalled', False),
+                        'isRunning': docker_status.get('isRunning', False),
+                        'error': docker_status.get('error')
+                    }
                     
                     # Emit status update if changed
-                    if current_status != last_status:
-                        self.emit_status_update(docker_status)
-                        last_status = current_status
+                    if current_status != self.last_status:
+                        self.emit_status_update(current_status)
+                        self.last_status = current_status
 
                     # Get and emit container list if Docker is running
-                    if current_status:
-                        current_containers = self.docker_manager.list_containers()
-                        if current_containers != last_containers:
-                            socketio.emit('containers', {'containers': current_containers}, namespace='/docker-manager')
-                            last_containers = current_containers
+                    if current_status['isRunning']:
+                        try:
+                            current_containers = self.docker_manager.list_containers()
+                            if current_containers != self.last_containers:
+                                socketio.emit('containers', {'containers': current_containers}, namespace='/docker-manager')
+                                self.last_containers = current_containers
+                        except Exception as e:
+                            print(f"Error listing containers: {str(e)}")
+                            self.last_containers = None
 
             except Exception as e:
                 error_status = {
@@ -76,7 +97,10 @@ class DockerManagerNamespace(Namespace):
                 }
                 self.emit_status_update(error_status)
 
-            socketio.sleep(2)
+            socketio.sleep(2)  # Check every 2 seconds
+        
+        print('Docker status monitoring stopped')
+        self.monitor_thread = None  # Clear the thread reference
 
     def _execute_operation(self, operation_func, *args):
         """Execute a Docker operation in a thread-safe manner"""
@@ -146,7 +170,7 @@ class DockerManagerNamespace(Namespace):
                 }, namespace='/docker-manager')
             return {'error': error_message}
 
-    def on_check_status(self):
+    def on_check_status(self, data=None):
         """Handle manual status check requests"""
         try:
             if not self.operation_in_progress:

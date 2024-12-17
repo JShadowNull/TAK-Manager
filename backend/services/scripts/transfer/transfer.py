@@ -5,7 +5,7 @@ from backend.services.helpers.os_detector import OSDetector
 import eventlet
 from pathlib import Path
 from backend.services.scripts.transfer.adb_controller import ADBController
-
+import time
 
 class RapidFileTransfer:
     def __init__(self):
@@ -32,6 +32,38 @@ class RapidFileTransfer:
             os.makedirs(self.temp_dir)
 
         self.adb = ADBController()
+
+    def emit_transfer_update(self, status_type="status", device_id=None, **data):
+        """Unified transfer status/progress emission"""
+        base_status = {
+            'timestamp': time.time(),
+            'type': status_type,  # 'status', 'progress', or 'error'
+            'isRunning': self.is_transfer_running,
+        }
+        
+        if device_id:
+            base_status['device_id'] = device_id
+            
+        status = {**base_status, **data}
+        socketio.emit('transfer_update', status, namespace='/transfer')
+
+    def emit_device_update(self, event_type, device_data):
+        """Unified device state emission"""
+        update = {
+            'timestamp': time.time(),
+            'type': event_type,  # 'connection', 'state_change'
+            'devices': device_data if isinstance(device_data, list) else [device_data]
+        }
+        socketio.emit('device_update', update, namespace='/transfer')
+
+    def emit_file_update(self, event_type, files_data):
+        """Unified file system update emission"""
+        update = {
+            'timestamp': time.time(),
+            'type': event_type,  # 'list', 'change'
+            'files': files_data
+        }
+        socketio.emit('file_update', update, namespace='/transfer')
 
     def get_default_working_directory(self):
         """Determine the default working directory based on the OS."""
@@ -98,32 +130,37 @@ class RapidFileTransfer:
                 # Calculate overall progress for this specific device
                 overall_progress = min(int((files_completed * 100 + progress) / total_files), 100)
                 
-                socketio.emit('transfer_progress', {
-                    'device_id': device_id,
-                    'current_file': filename,
-                    'file_progress': progress,
-                    'overall_progress': overall_progress,
-                    'current_file_number': files_completed + 1,
-                    'total_files': total_files,
-                    'status': 'transferring'
-                }, namespace='/transfer')
+                self.emit_transfer_update(
+                    device_id=device_id,
+                    status_type="progress",
+                    current_file=filename,
+                    file_progress=progress,
+                    overall_progress=overall_progress,
+                    files_completed=files_completed + 1,
+                    total_files=total_files
+                )
 
             success = self.adb.push_file(device_id, src_file, dest_file, progress_callback)
             
             if not success:
                 # Preserve the current progress state for failed device
                 failed_progress = self.device_progress.get(device_id, {})
-                socketio.emit('transfer_status', {
-                    'device_id': device_id,
-                    'status': 'failed',
-                    'current_file': filename,
-                    'progress': failed_progress.get('last_progress', 0)
-                }, namespace='/transfer')
+                self.emit_transfer_update(
+                    device_id=device_id,
+                    status_type="error",
+                    state="failed",
+                    error=f"Failed to push file {filename}",
+                    last_progress=failed_progress.get('last_progress', 0)
+                )
                 
             return success
 
         except Exception as e:
-            socketio.emit('terminal_output', {'data': f'Error during file transfer: {str(e)}'}, namespace='/transfer')
+            self.emit_transfer_update(
+                device_id=device_id,
+                status_type="error",
+                error=f"Error during file transfer: {str(e)}"
+            )
             return False
 
     def get_file_destination(self, filename):
@@ -139,7 +176,11 @@ class RapidFileTransfer:
             return self.file_paths['prefs']
 
     def monitor_devices(self):
-        socketio.emit('terminal_output', {'data': 'Starting device monitoring...'}, namespace='/transfer')
+        self.emit_transfer_update(
+            status_type="status",
+            state="starting",
+            message="Starting device monitoring..."
+        )
         self.monitoring = True
         last_device_states = {}  # Track last known device states
         
@@ -166,14 +207,16 @@ class RapidFileTransfer:
                     
                     eventlet.sleep(0.1)
                 except Exception as line_error:
-                    socketio.emit('terminal_output', {
-                        'data': f'Error reading device update: {str(line_error)}'
-                    }, namespace='/transfer')
+                    self.emit_transfer_update(
+                        status_type="error",
+                        error=f"Error reading device update: {str(line_error)}"
+                    )
                     eventlet.sleep(1)
         except Exception as e:
-            socketio.emit('terminal_output', {
-                'data': f'Error during device monitoring: {str(e)}'
-            }, namespace='/transfer')
+            self.emit_transfer_update(
+                status_type="error",
+                error=f"Error during device monitoring: {str(e)}"
+            )
         finally:
             if process:
                 process.kill()
@@ -184,9 +227,12 @@ class RapidFileTransfer:
             device_display = f"{device_name} ({device_id})"
 
             if new_state == 'device':
-                socketio.emit('terminal_output', {
-                    'data': f'📱 Device connected: {device_display}'
-                }, namespace='/transfer')
+                self.emit_device_update('connection', {
+                    'id': device_id,
+                    'name': device_name,
+                    'status': 'connected',
+                    'message': f'📱 Device connected: {device_display}'
+                })
                 
                 # Initialize device state
                 self.device_states[device_id] = {
@@ -208,28 +254,32 @@ class RapidFileTransfer:
                         if device_id in self.transferred_files:
                             del self.transferred_files[device_id]
                             
-                        socketio.emit('transfer_status', {
-                            'isRunning': True,
-                            'device_id': device_id,
-                            'status': 'preparing'
-                        }, namespace='/transfer')
+                        self.emit_transfer_update(
+                            device_id=device_id,
+                            status_type="status",
+                            state="preparing"
+                        )
                         
-                        # Start transfer in background thread
-                        eventlet.spawn(self.start_transfer, device_id)
+                        # Let the route handle thread creation
+                        self.start_transfer(device_id)
 
             elif new_state in ['offline', 'unauthorized']:
-                socketio.emit('terminal_output', {
-                    'data': f'📱 Device disconnected: {device_display}'
-                }, namespace='/transfer')
+                self.emit_device_update('connection', {
+                    'id': device_id,
+                    'name': device_name,
+                    'status': 'disconnected',
+                    'message': f'📱 Device disconnected: {device_display}'
+                })
                 
                 # Mark transfer as failed if device was transferring
                 if device_id in self.device_states and self.device_states[device_id].get('status') == 'transferring':
-                    socketio.emit('transfer_status', {
-                        'device_id': device_id,
-                        'status': 'failed',
-                        'current_file': 'Device Disconnected',
-                        'progress': self.device_progress.get(device_id, {}).get('last_progress', 0)
-                    }, namespace='/transfer')
+                    self.emit_transfer_update(
+                        device_id=device_id,
+                        status_type="error",
+                        state="failed",
+                        error="Device Disconnected",
+                        last_progress=self.device_progress.get(device_id, {}).get('last_progress', 0)
+                    )
 
                 # Remove device from tracking
                 self.device_states.pop(device_id, None)
@@ -237,37 +287,60 @@ class RapidFileTransfer:
                 self.device_progress.pop(device_id, None)
 
             # Update connected devices list
-            current_devices = [
-                {
-                    'id': did,
-                    'name': data['name'],
-                    'status': data['status']
-                }
-                for did, data in self.device_states.items()
-                if data['state'] == 'device'
-            ]
-            
-            socketio.emit('connected_devices', {
-                'devices': current_devices,
-                'isTransferRunning': self.is_transfer_running
-            }, namespace='/transfer')
+            self.emit_connected_devices()
 
         except Exception as e:
-            socketio.emit('terminal_output', {
-                'data': f'Error handling device update: {str(e)}'
-            }, namespace='/transfer')
+            self.emit_transfer_update(
+                status_type="error",
+                error=f"Error handling device update: {str(e)}"
+            )
+
+    def start_monitoring(self):
+        """Signal that monitoring should start"""
+        if not self.monitoring:
+            self.monitoring = True
+            self.emit_transfer_update(
+                status_type="status",
+                state="starting",
+                message="Starting monitoring..."
+            )
+
+    def start_transfer_all_devices(self):
+        """Prepare transfer for all connected devices"""
+        # Set transfer running state first
+        self.is_transfer_running = True
+        
+        # Get list of files to transfer
+        files = [f for f in os.listdir(self.temp_dir) 
+                if os.path.isfile(os.path.join(self.temp_dir, f))]
+        
+        if not files:
+            self.emit_transfer_update(
+                status_type="error",
+                error="No files to transfer"
+            )
+            return None
+        
+        self.emit_transfer_update(
+            status_type="status",
+            state="starting",
+            total_files=len(files)
+        )
+            
+        # Return list of device IDs that need transfer
+        return [
+            device_id for device_id, data in self.device_states.items()
+            if data['state'] == 'device'
+        ]
 
     def start_transfer(self, device_id):
         try:
             if not self.is_transfer_running:
                 self.is_transfer_running = True
-                socketio.emit('transfer_status', {
-                    'isRunning': True,
-                    'device_id': None,
-                    'status': 'preparing', 
-                    'progress': 0,
-                    'current_file': ''
-                }, namespace='/transfer')
+                self.emit_transfer_update(
+                    status_type="status",
+                    state="preparing"
+                )
             
             if device_id not in self.transferred_files:
                 self.transferred_files[device_id] = set()
@@ -276,7 +349,12 @@ class RapidFileTransfer:
             files_to_transfer = [f for f in all_files if f not in self.transferred_files[device_id]]
 
             if not files_to_transfer:
-                socketio.emit('terminal_output', {'data': f'No new files to transfer for device {device_id}'}, namespace='/transfer')
+                self.emit_transfer_update(
+                    device_id=device_id,
+                    status_type="status",
+                    state="completed",
+                    message=f'No new files to transfer for device {device_id}'
+                )
                 return
 
             total_files = len(files_to_transfer)
@@ -284,27 +362,32 @@ class RapidFileTransfer:
             
             # Check if device is still connected before proceeding
             if device_id not in self.device_states:
-                socketio.emit('transfer_status', {
-                    'device_id': device_id,
-                    'status': 'failed',
-                    'current_file': 'Device Disconnected',
-                    'progress': self.device_progress.get(device_id, {}).get('last_progress', 0)
-                }, namespace='/transfer')
+                self.emit_transfer_update(
+                    device_id=device_id,
+                    status_type="error",
+                    state="failed",
+                    error="Device Disconnected",
+                    last_progress=self.device_progress.get(device_id, {}).get('last_progress', 0)
+                )
                 return
 
             self.device_states[device_id]['status'] = 'transferring'
-            
-            socketio.emit('terminal_output', {'data': f'Starting transfer of {total_files} file/s for device {device_id}...'}, namespace='/transfer')
-            
+            self.emit_device_update('state_change', {
+                'id': device_id,
+                'status': 'transferring',
+                'message': f'Starting transfer of {total_files} file/s'
+            })
+
             for filename in files_to_transfer:
                 # Check if device is still connected before each file
                 if not self.is_transfer_running or device_id not in self.device_states:
-                    socketio.emit('transfer_status', {
-                        'device_id': device_id,
-                        'status': 'failed',
-                        'current_file': 'Device Disconnected',
-                        'progress': self.device_progress.get(device_id, {}).get('last_progress', 0)
-                    }, namespace='/transfer')
+                    self.emit_transfer_update(
+                        device_id=device_id,
+                        status_type="error",
+                        state="failed",
+                        error="Device Disconnected",
+                        last_progress=self.device_progress.get(device_id, {}).get('last_progress', 0)
+                    )
                     return
                 
                 src_file = os.path.join(self.temp_dir, filename)
@@ -317,45 +400,49 @@ class RapidFileTransfer:
                     # Only try to update device state if it still exists
                     if device_id in self.device_states:
                         self.device_states[device_id]['status'] = 'failed'
-                    socketio.emit('transfer_status', {
-                        'device_id': device_id,
-                        'status': 'failed',
-                        'current_file': filename
-                    }, namespace='/transfer')
+                    self.emit_transfer_update(
+                        device_id=device_id,
+                        status_type="error",
+                        state="failed",
+                        error=f"Failed to transfer {filename}"
+                    )
                     return
                     
             # Only emit completed if device is still connected and all files transferred
             if self.is_transfer_running and device_id in self.device_states and files_completed == total_files:
                 self.device_states[device_id]['status'] = 'completed'
-                socketio.emit('transfer_status', {
-                    'device_id': device_id,
-                    'status': 'completed',
-                    'current_file': '',
-                    'isRunning': True
-                }, namespace='/transfer')
+                self.emit_transfer_update(
+                    device_id=device_id,
+                    status_type="status",
+                    state="completed",
+                    files_transferred=files_completed
+                )
                 
         except Exception as e:
-            socketio.emit('terminal_output', {'data': f'Error during transfer for device {device_id}: {str(e)}'}, namespace='/transfer')
+            self.emit_transfer_update(
+                device_id=device_id,
+                status_type="error",
+                state="failed",
+                error=str(e)
+            )
             # Only try to update device state if it still exists
             if device_id in self.device_states:
                 self.device_states[device_id]['status'] = 'failed'
-            socketio.emit('transfer_status', {
-                'device_id': device_id,
-                'status': 'failed',
-                'current_file': '',
-                'isRunning': True
-            }, namespace='/transfer')
 
     def stop_transfer(self):
         try:
-            socketio.emit('terminal_output', {'data': 'Stopping active transfers...'}, namespace='/transfer')
+            self.emit_transfer_update(
+                status_type="status",
+                state="stopping",
+                message="Stopping active transfers..."
+            )
             
             # Store current progress only for actively transferring devices
             final_device_states = {}
             for device_id, progress_data in self.device_progress.items():
                 if (device_id in self.device_states and 
                     self.device_states[device_id]['state'] == 'device' and 
-                    self.device_states[device_id]['status'] == 'transferring'):  # Only track actively transferring devices
+                    self.device_states[device_id]['status'] == 'transferring'):
                     final_device_states[device_id] = {
                         'current_file': progress_data.get('current_file', ''),
                         'progress': progress_data.get('last_progress', 0)
@@ -369,80 +456,76 @@ class RapidFileTransfer:
             self.transferred_files.clear()
             self.device_progress.clear()
             
-            # Single terminal output for process termination
-            socketio.emit('terminal_output', {'data': 'Terminated all push processes'}, namespace='/transfer')
-            
             # Emit failed status only for devices that were actively transferring
             for device_id, state in final_device_states.items():
                 if device_id in self.device_states:
                     # Update device state to failed only if it was transferring
                     self.device_states[device_id]['status'] = 'failed'
-                    # Then emit single status update with progress
-                    socketio.emit('transfer_status', {
-                        'device_id': device_id,
-                        'status': 'failed',
-                        'current_file': state['current_file'],
-                        'progress': state['progress']
-                    }, namespace='/transfer')
+                    self.emit_transfer_update(
+                        device_id=device_id,
+                        status_type="error",
+                        state="failed",
+                        error="Transfer stopped",
+                        last_file=state['current_file'],
+                        last_progress=state['progress']
+                    )
             
             # Emit final transfer stopped status
-            socketio.emit('transfer_status', {
-                'isRunning': False,
-                'status': 'stopped'
-            }, namespace='/transfer')
+            self.emit_transfer_update(
+                status_type="status",
+                state="stopped"
+            )
             
-            # Update connected devices list once with final states
-            current_devices = [
-                {
-                    'id': did,
-                    'name': data['name'],
-                    'status': data['status']  # This will now preserve completed status for successful transfers
-                }
-                for did, data in self.device_states.items()
-                if data['state'] == 'device'
-            ]
-            
-            socketio.emit('connected_devices', {
-                'devices': current_devices,
-                'isTransferRunning': False
-            }, namespace='/transfer')
+            # Update connected devices list
+            self.emit_connected_devices()
             
         except Exception as e:
-            socketio.emit('terminal_output', {'data': f'Error stopping transfer: {e}'}, namespace='/transfer')
-            socketio.emit('transfer_status', {
-                'isRunning': False,
-                'status': 'stopped'
-            }, namespace='/transfer')
-
-    def start_monitoring(self):
-        try:
-            if not self.monitoring:
-                self.monitoring = True
-                # Let socketio namespace handle the task creation
-                socketio.emit('monitoring_started', namespace='/transfer')
-        except Exception as e:
-            socketio.emit('terminal_output', {'data': f'Error starting monitoring: {e}'}, namespace='/transfer')
+            self.emit_transfer_update(
+                status_type="error",
+                error=f"Error stopping transfer: {str(e)}"
+            )
 
     def stop_monitoring(self):
         self.monitoring = False
-        socketio.emit('monitoring_stopped', namespace='/transfer')
+        self.emit_transfer_update(
+            status_type="status",
+            state="stopping",
+            message="Stopping monitoring..."
+        )
 
     def get_transfer_status(self):
         """Get current transfer status"""
-        socketio.emit('transfer_status', {
-            'isRunning': self.is_transfer_running
-        }, namespace='/transfer')
+        self.emit_transfer_update(
+            status_type="status",
+            state="current",
+            is_running=self.is_transfer_running
+        )
         
         # Re-emit current progress for all devices if transfer is running
         if self.is_transfer_running:
             for device_id, progress in self.device_progress.items():
                 if device_id in self.device_states:
-                    socketio.emit('transfer_progress', {
-                        'device_id': device_id,
-                        'current_file': progress.get('current_file', ''),
-                        'file_progress': progress.get('last_progress', 0),
-                        'overall_progress': min(int((progress.get('files_completed', 0) * 100 + progress.get('last_progress', 0)) / progress.get('total_files', 1)), 100),
-                        'current_file_number': progress.get('files_completed', 0) + 1,
-                        'total_files': progress.get('total_files', 1),
-                        'status': self.device_states[device_id].get('status', 'transferring')
-                    }, namespace='/transfer')
+                    self.emit_transfer_update(
+                        device_id=device_id,
+                        status_type="progress",
+                        current_file=progress.get('current_file', ''),
+                        file_progress=progress.get('last_progress', 0),
+                        overall_progress=min(int((progress.get('files_completed', 0) * 100 + progress.get('last_progress', 0)) / progress.get('total_files', 1)), 100),
+                        files_completed=progress.get('files_completed', 0) + 1,
+                        total_files=progress.get('total_files', 1),
+                        state=self.device_states[device_id].get('status', 'transferring')
+                    )
+
+    def emit_connected_devices(self):
+        """Emit current device list to clients"""
+        devices = [
+            {
+                'id': did,
+                'name': data['name'],
+                'status': data['status']
+            }
+            for did, data in self.device_states.items()
+            if data['state'] == 'device'
+        ]
+        
+        self.emit_device_update('list', devices)

@@ -21,17 +21,47 @@ export const DeviceProgress = ({ deviceId, progress, onRemoveFailed, isTransferR
         return 'bg-red-500';
       case 'transferring':
         return 'bg-selectedColor';
-      default:
+      case 'preparing':
         return 'bg-yellow-500';
+      default:
+        return 'bg-buttonColor';
     }
   };
 
-  // Get progress text based on status
+  // Get progress text based on status and progress info
   const getProgressText = () => {
-    if (progress.status === 'failed') {
-      return `${progress.progress}% (Failed)`;
+    if (!progress) return '';
+    
+    switch (progress.status) {
+      case 'failed':
+        return `${progress.progress || 0}% (Failed)`;
+      case 'completed':
+        return '100% (Complete)';
+      case 'preparing':
+        return 'Preparing...';
+      case 'transferring':
+        return `${progress.progress}% (File ${progress.fileNumber}/${progress.totalFiles}: ${progress.fileProgress}%)`;
+      default:
+        return `${progress.progress || 0}%`;
     }
-    return `${progress.progress}% (File ${progress.fileNumber}/${progress.totalFiles}: ${progress.fileProgress}%)`;
+  };
+
+  // Get status text with proper formatting
+  const getStatusText = () => {
+    if (!progress) return '';
+    
+    switch (progress.status) {
+      case 'failed':
+        return 'Transfer Failed';
+      case 'completed':
+        return 'Transfer Complete';
+      case 'preparing':
+        return 'Preparing Transfer';
+      case 'transferring':
+        return 'Transferring Files';
+      default:
+        return progress.status || 'Unknown';
+    }
   };
 
   return (
@@ -48,7 +78,8 @@ export const DeviceProgress = ({ deviceId, progress, onRemoveFailed, isTransferR
                 <TooltipTrigger asChild>
                   <button
                     onClick={() => onRemoveFailed(deviceId)}
-                    className="focus:outline-none"
+                    className="focus:outline-none hover:opacity-80 transition-opacity"
+                    aria-label="Remove failed transfer"
                   >
                     <CloseIcon 
                       color="#ef4444"
@@ -69,15 +100,25 @@ export const DeviceProgress = ({ deviceId, progress, onRemoveFailed, isTransferR
           className={`absolute top-0 left-0 h-full rounded-full transition-all duration-300 ease-in-out ${
             getProgressBarColor(progress.status)
           } ${progress.status === 'preparing' ? 'animate-pulse' : ''}`}
-          style={{ width: `${progress.progress}%` }}
+          style={{ width: `${progress.progress || 0}%` }}
+          role="progressbar"
+          aria-valuenow={progress.progress || 0}
+          aria-valuemin="0"
+          aria-valuemax="100"
         />
       </div>
       <div className="flex flex-col gap-1 mt-2">
-        <span className="text-sm text-textSecondary">
-          {progress.currentFile}
-        </span>
-        <span className={`text-sm ${progress.status === 'failed' ? 'text-red-500' : 'text-textSecondary'}`}>
-          Status: {progress.status}
+        {progress.currentFile && (
+          <span className="text-sm text-textSecondary truncate" title={progress.currentFile}>
+            Current File: {progress.currentFile}
+          </span>
+        )}
+        <span className={`text-sm ${
+          progress.status === 'failed' ? 'text-red-500' : 
+          progress.status === 'completed' ? 'text-green-500' : 
+          'text-textSecondary'
+        }`}>
+          Status: {getStatusText()}
         </span>
       </div>
     </div>

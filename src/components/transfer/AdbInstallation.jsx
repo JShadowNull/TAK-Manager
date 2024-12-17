@@ -1,16 +1,27 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import Popup from '../shared/Popup';
 import Button from '../shared/Button';
+import useFetch from '../../hooks/useFetch';
 
 function AdbInstallation({
   adbInstallation,
   setAdbInstallation,
   socketRef
 }) {
+  const { get, post } = useFetch();
+  const hasCheckedAdb = useRef(false);
+
   useEffect(() => {
-    // Check ADB installation status when component mounts
-    fetch('/transfer/check_adb')
-      .then(response => response.json())
+    // Only check ADB installation status once
+    if (!hasCheckedAdb.current) {
+      hasCheckedAdb.current = true;
+      
+      get('/transfer/check_adb', {
+        validateResponse: (data) => ({
+          isValid: typeof data.success === 'boolean',
+          error: 'Invalid response format'
+        })
+      })
       .then(data => {
         if (!data.success) {
           setAdbInstallation(prev => ({
@@ -22,59 +33,70 @@ function AdbInstallation({
       })
       .catch(error => {
         console.error('Error checking ADB status:', error);
-      });
-
-    // Add socket event handlers for ADB installation
-    if (socketRef.current) {
-      socketRef.current.on('terminal_output', (data) => {
         setAdbInstallation(prev => ({
           ...prev,
-          terminalOutput: [...prev.terminalOutput, data.data]
-        }));
-      });
-
-      socketRef.current.on('installation_started', () => {
-        setAdbInstallation(prev => ({
-          ...prev,
-          isInstalling: true,
-          currentStep: 2,
-          terminalOutput: [...prev.terminalOutput, "Installation started..."]
-        }));
-      });
-
-      socketRef.current.on('installation_complete', () => {
-        setAdbInstallation(prev => ({
-          ...prev,
-          isInstalling: false,
-          isComplete: true,
-          isSuccess: true,
-          currentStep: 3,
-          terminalOutput: [...prev.terminalOutput, "Installation completed successfully"]
-        }));
-      });
-
-      socketRef.current.on('installation_failed', (data) => {
-        setAdbInstallation(prev => ({
-          ...prev,
-          isInstalling: false,
-          isComplete: true,
-          isSuccess: false,
-          currentStep: 4,
-          terminalOutput: [...prev.terminalOutput, `Installation failed: ${data.error}`]
+          currentStep: 1,
+          isComplete: false
         }));
       });
     }
 
-    // Cleanup socket listeners
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.off('terminal_output');
-        socketRef.current.off('installation_started');
-        socketRef.current.off('installation_complete');
-        socketRef.current.off('installation_failed');
-      }
-    };
-  }, [socketRef, setAdbInstallation]);
+    // Socket event handlers setup
+    const socket = socketRef.current;
+    if (socket) {
+      const handlers = {
+        'terminal_output': (data) => {
+          setAdbInstallation(prev => ({
+            ...prev,
+            terminalOutput: [...prev.terminalOutput, data.data]
+          }));
+        },
+        'installation_started': () => {
+          setAdbInstallation(prev => ({
+            ...prev,
+            isInstalling: true,
+            currentStep: 2,
+            terminalOutput: [...prev.terminalOutput, "Installation started..."]
+          }));
+        },
+        'installation_complete': () => {
+          setAdbInstallation(prev => ({
+            ...prev,
+            isInstalling: false,
+            isComplete: true,
+            isSuccess: true,
+            currentStep: 3,
+            terminalOutput: [...prev.terminalOutput, "Installation completed successfully"]
+          }));
+        },
+        'installation_failed': (data) => {
+          setAdbInstallation(prev => ({
+            ...prev,
+            isInstalling: false,
+            isComplete: true,
+            isSuccess: false,
+            currentStep: 4,
+            terminalOutput: [...prev.terminalOutput, `Installation failed: ${data.error}`]
+          }));
+        }
+      };
+
+      // Register all handlers
+      Object.entries(handlers).forEach(([event, handler]) => {
+        socket.on(event, handler);
+      });
+
+      // Cleanup function
+      return () => {
+        // Only cleanup if socket still exists
+        if (socket) {
+          Object.keys(handlers).forEach(event => {
+            socket.off(event);
+          });
+        }
+      };
+    }
+  }, [get, socketRef, setAdbInstallation]);
 
   const handleInstallAdb = () => {
     setAdbInstallation(prev => ({ 
@@ -84,21 +106,29 @@ function AdbInstallation({
       terminalOutput: [...prev.terminalOutput, "Starting ADB installation..."]
     }));
     
-    fetch('/transfer/install_adb', { method: 'POST' })
-      .catch(error => {
-        console.error('Error installing ADB:', error);
-        setAdbInstallation(prev => ({
-          ...prev,
-          isInstalling: false,
-          isSuccess: false,
-          isComplete: true,
-          currentStep: 4,
-          terminalOutput: [
-            ...prev.terminalOutput,
-            `Error installing ADB: ${error.message}`
-          ]
-        }));
-      });
+    post('/transfer/install_adb', null, {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      validateResponse: (data) => ({
+        isValid: true, // Installation status is handled by socket events
+        error: null
+      })
+    })
+    .catch(error => {
+      console.error('Error installing ADB:', error);
+      setAdbInstallation(prev => ({
+        ...prev,
+        isInstalling: false,
+        isSuccess: false,
+        isComplete: true,
+        currentStep: 4,
+        terminalOutput: [
+          ...prev.terminalOutput,
+          `Error installing ADB: ${error.message}`
+        ]
+      }));
+    });
   };
 
   const getTitle = () => {

@@ -24,9 +24,20 @@ const Button = forwardRef(({
   leadingIcon = null,
   trailingIcon = null,
   iconOnly = false,
+  href = '',
+  target = '',
+  rel = '',
   ...props
 }, ref) => {
-  const Comp = asChild ? Slot : 'button';
+  const Comp = href && !asChild ? 'a' : asChild ? Slot : 'button';
+  
+  // Define linkProps object
+  const linkProps = href ? {
+    href,
+    target,
+    rel: rel || (target === '_blank' ? 'noopener noreferrer' : undefined)
+  } : {};
+
   const baseStyles = 'rounded-lg transition-all duration-200 text-sm border inline-flex items-center justify-center gap-2';
   const paddingStyles = iconOnly ? 'p-2' : 'px-4 py-2';
   
@@ -64,7 +75,7 @@ const Button = forwardRef(({
   const buttonElement = (
     <Comp
       ref={ref}
-      type={type}
+      type={!href ? type : undefined}
       onClick={onClick}
       disabled={disabled || loading}
       className={`
@@ -75,6 +86,7 @@ const Button = forwardRef(({
         ${(disabled || loading) && !className.includes('opacity-') ? 'opacity-50 cursor-not-allowed' : ''}
         ${className}
       `}
+      {...linkProps}
       {...props}
     >
       {renderContent()}
@@ -145,6 +157,9 @@ Button.propTypes = {
   trailingIcon: PropTypes.node,
   iconOnly: PropTypes.bool,
   tooltipDelay: PropTypes.number,
+  href: PropTypes.string,
+  target: PropTypes.string,
+  rel: PropTypes.string,
 };
 
 Button.displayName = 'Button';

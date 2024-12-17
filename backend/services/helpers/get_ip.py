@@ -25,7 +25,7 @@ class IPFetcher:
         else:
             return 'Unsupported OS'
 
-        result = self.run_command.run_command(command, 'ip-fetcher', capture_output=True)
+        result = self.run_command.run_command(command, 'ip-fetcher', capture_output=True, emit_output=False)
         
         if result.returncode == 0:
             if os_type == 'windows':
@@ -52,11 +52,9 @@ class IPFetcher:
         while self.monitoring:
             try:
                 ip_address = self.get_ip_address()
-                print(f"Emitting IP address: {ip_address}")
                 socketio.emit('ip_address_update', {'ip_address': ip_address}, namespace='/ip-fetcher')
                 eventlet.sleep(2)
             except Exception as e:
-                print(f"Error monitoring IP: {e}")
                 eventlet.sleep(2)
 
     def stop_monitoring(self):

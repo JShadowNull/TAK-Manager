@@ -1,22 +1,18 @@
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import React, { useState } from 'react';
 import Popup from '../Popup';
 import Button from '../Button';
 import useSocket from '../../../hooks/useSocket';
+import useFetch from '../../../hooks/useFetch';
 
 const DockerPopup = ({ isVisible }) => {
-  const [dockerStatus, setDockerStatus] = useState({
-    isInstalled: true,
-    isRunning: false,
-    error: null
-  });
   const [isStartingDocker, setIsStartingDocker] = useState(false);
+  const { post } = useFetch();
 
-  // Use the socket hook
   const {
-    isConnected,
+    state: dockerStatus,
+    updateState,
     error: socketError,
-    state: socketState
+    isConnected
   } = useSocket('/docker-manager', {
     initialState: {
       isInstalled: true,
@@ -29,69 +25,68 @@ const DockerPopup = ({ isVisible }) => {
       },
       onError: (error) => {
         console.error('Docker manager socket connection error:', error);
+        updateState({ error: 'Connection error: ' + error.message });
       },
-      docker_status: (data, { updateState }) => {
-        updateState({
-          isInstalled: data.isInstalled,
-          isRunning: data.isRunning,
-          error: data.error || null
-        });
+      docker_status: (data) => {
         if (data.isRunning) {
-          setIsStartingDocker(false);
+          updateState({
+            isInstalled: data.isInstalled,
+            isRunning: true,
+            error: null
+          });
+          if (isStartingDocker) {
+            setIsStartingDocker(false);
+          }
+        } else {
+          updateState({
+            isInstalled: data.isInstalled,
+            isRunning: false,
+            error: data.error || null
+          });
         }
       },
-      docker_operation: (data, { updateState }) => {
+      docker_operation: (data) => {
         console.log('Docker operation result:', data);
         if (data.status === 'error') {
-          updateState(prev => ({
-            ...prev,
-            error: data.message
-          }));
+          updateState({ error: data.message });
           setIsStartingDocker(false);
+        } else if (data.status === 'success') {
+          console.log('Docker operation successful:', data.message);
         }
       }
     }
   });
 
-  // Update local state when socket state changes
-  useEffect(() => {
-    setDockerStatus(socketState);
-  }, [socketState]);
-
-  // Initial Docker status check
-  useEffect(() => {
-    const checkInitialStatus = async () => {
-      try {
-        const response = await axios.get('/docker-manager/docker/status');
-        const { isInstalled, isRunning, error } = response.data;
-        setDockerStatus({
-          isInstalled,
-          isRunning,
-          error
-        });
-      } catch (error) {
-        console.error('Error checking Docker status:', error);
-        setDockerStatus(prev => ({
-          ...prev,
-          error: 'Error checking Docker status'
-        }));
-      }
-    };
-    checkInitialStatus();
-  }, []);
-
   const handleStartDocker = async () => {
-    setIsStartingDocker(true);
-    try {
-      await axios.post('/docker-manager/docker/start');
-    } catch (error) {
-      console.error('Error starting Docker:', error);
-      setDockerStatus(prev => ({
-        ...prev,
-        error: 'Failed to start Docker'
-      }));
-      setIsStartingDocker(false);
+    if (!isStartingDocker) {
+      setIsStartingDocker(true);
+      try {
+        const response = await post('/docker-manager/docker/start');
+        console.log('Start Docker response:', response);
+        if (response.error && !response.status) {
+          updateState({ error: response.error });
+          setIsStartingDocker(false);
+        }
+      } catch (error) {
+        console.error('Error starting Docker:', error);
+        updateState({
+          error: 'Failed to start Docker'
+        });
+        setIsStartingDocker(false);
+      }
     }
+  };
+
+  const isButtonDisabled = dockerStatus.isRunning || isStartingDocker;
+
+  const getLoadingText = () => {
+    if (isStartingDocker) {
+      return 'Starting Docker Desktop...';
+    }
+    if (dockerStatus.error) {
+      return 'Error starting Docker';
+    }
+    return 'Start Docker';
   };
 
   return (
@@ -107,25 +102,21 @@ const DockerPopup = ({ isVisible }) => {
           <Button
             onClick={handleStartDocker}
             loading={isStartingDocker}
-            loadingText="Starting Docker..."
+            loadingText={getLoadingText()}
             variant="primary"
             className="hover:bg-green-500"
+            disabled={isButtonDisabled}
           >
-            Start Docker
+            {dockerStatus.isRunning ? 'Docker Running' : 'Start Docker'}
           </Button>
         ) : (
           <Button
-            asChild
             variant="primary"
             className="hover:bg-green-500"
+            href="https://www.docker.com/products/docker-desktop/"
+            target="_blank"
           >
-            <a
-              href="https://www.docker.com/products/docker-desktop/"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Download Docker Desktop
-            </a>
+            Download Docker Desktop
           </Button>
         )
       }
