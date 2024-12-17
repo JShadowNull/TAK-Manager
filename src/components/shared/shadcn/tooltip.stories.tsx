@@ -29,7 +29,7 @@ export const ButtonTooltips: Story = {
     <div className="flex flex-col gap-8">
       {/* Basic Button Tooltip */}
       <div className="flex flex-col gap-2">
-        <span className="text-white text-sm mb-2">Basic Button Tooltip:</span>
+        <span className="foreground text-sm mb-2">Basic Button Tooltip:</span>
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -44,7 +44,7 @@ export const ButtonTooltips: Story = {
 
       {/* Different Positions */}
       <div className="flex flex-col gap-2">
-        <span className="text-white text-sm mb-2">Different Positions:</span>
+        <span className="foreground text-sm mb-2">Different Positions:</span>
         <div className="flex gap-4">
           {['top', 'right', 'bottom', 'left'].map((side) => (
             <TooltipProvider key={side}>
@@ -63,7 +63,7 @@ export const ButtonTooltips: Story = {
 
       {/* Different Button Variants */}
       <div className="flex flex-col gap-2">
-        <span className="text-white text-sm mb-2">Button Variants:</span>
+        <span className="foreground text-sm mb-2">Button Variants:</span>
         <div className="flex gap-4">
           <TooltipProvider>
             <Tooltip>
@@ -102,7 +102,7 @@ export const ButtonTooltips: Story = {
 
       {/* Rich Content */}
       <div className="flex flex-col gap-2">
-        <span className="text-white text-sm mb-2">Rich Content:</span>
+        <span className="foreground text-sm mb-2">Rich Content:</span>
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>

@@ -450,7 +450,7 @@ function TakServerStatus({ handleStartStop }) {
 
   return (
     <>
-      <div className="w-full border border-accentBoarder bg-cardBg p-6 rounded-lg">
+      <div className="w-full border border-accentBoarder bg-card p-6 rounded-lg">
         <div className="flex flex-col h-full justify-between">
           <div>
             <h3 className="text-base font-bold mb-4">TAK Server Status</h3>
@@ -601,12 +601,12 @@ function TakServerStatus({ handleStartStop }) {
 
       {/* Installation Form Popup */}
       {!isInstalled && showInstallForm && (
-        <div className="w-full border border-accentBoarder bg-cardBg p-6 rounded-lg">
+        <div className="w-full border border-accentBoarder bg-card p-6 rounded-lg">
           <h3 className="text-base font-bold mb-4">Installation Configuration</h3>
           
           <div className="flex flex-col gap-4">
             {/* Purpose Section */}
-            <div className="bg-primaryBg border border-accentBoarder p-4 rounded-lg mb-4">
+            <div className="bg-background border border-accentBoarder p-4 rounded-lg mb-4">
               <h4 className="text-sm font-semibold text-selectedColor mb-2">Purpose</h4>
               <p className="text-sm text-gray-300 leading-relaxed">
                 TAK Server is a powerful middleware solution that enables real-time situational awareness and information sharing. 
@@ -616,13 +616,13 @@ function TakServerStatus({ handleStartStop }) {
             </div>
 
             {/* Installation Summary */}
-            <div className="bg-primaryBg border border-accentBoarder p-4 rounded-lg mb-4">
+            <div className="bg-background border border-accentBoarder p-4 rounded-lg mb-4">
               <h4 className="text-sm font-semibold text-selectedColor mb-2">Installation Summary</h4>
               <ul className="text-sm text-gray-300 list-disc list-inside space-y-1">
                 <li>This will install TAK Server and PostgreSQL database within Docker Desktop</li>
                 <li>Certificate enrollment will be configured by default for client authentication</li>
                 <li>All data will be stored in your Documents folder using Docker volumes</li>
-                <li>For the TAK Server ZIP file, please download the Docker version from <a href="https://tak.gov/products/tak-server" target="_blank" rel="noopener noreferrer" className="text-white hover:text-textSecondary">TAK.gov</a></li>
+                <li>For the TAK Server ZIP file, please download the Docker version from <a href="https://tak.gov/products/tak-server" target="_blank" rel="noopener noreferrer" className="foreground hover:text-textSecondary">TAK.gov</a></li>
               </ul>
             </div>
 
@@ -633,7 +633,7 @@ function TakServerStatus({ handleStartStop }) {
 
             {/* File Upload Section */}
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-semibold text-textPrimary">
+              <label className="text-sm font-semibold text-foreground">
                 Docker ZIP File <span className="text-red-500">*</span>
               </label>
               <p className="text-sm text-textSecondary">Example: takserver-docker-5.2-RELEASE-43.zip</p>
@@ -651,7 +651,7 @@ function TakServerStatus({ handleStartStop }) {
             <div className="grid grid-cols-2 gap-4">
               {/* Password Fields */}
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-semibold text-textPrimary">
+                <label className="text-sm font-semibold text-foreground">
                   Database Password <span className="text-red-500">*</span>
                 </label>
                 <InputField
@@ -665,7 +665,7 @@ function TakServerStatus({ handleStartStop }) {
               </div>
 
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-semibold text-textPrimary">
+                <label className="text-sm font-semibold text-foreground">
                   Certificate Password <span className="text-red-500">*</span>
                 </label>
                 <InputField
@@ -680,7 +680,7 @@ function TakServerStatus({ handleStartStop }) {
 
               {/* Organization Details */}
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-semibold text-textPrimary">
+                <label className="text-sm font-semibold text-foreground">
                   Organization <span className="text-red-500">*</span>
                 </label>
                 <InputField
@@ -694,7 +694,7 @@ function TakServerStatus({ handleStartStop }) {
               </div>
 
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-semibold text-textPrimary">
+                <label className="text-sm font-semibold text-foreground">
                   Organizational Unit <span className="text-red-500">*</span>
                 </label>
                 <InputField
@@ -708,7 +708,7 @@ function TakServerStatus({ handleStartStop }) {
               </div>
 
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-semibold text-textPrimary">
+                <label className="text-sm font-semibold text-foreground">
                   State/Province <span className="text-red-500">*</span>
                 </label>
                 <InputField
@@ -722,7 +722,7 @@ function TakServerStatus({ handleStartStop }) {
               </div>
 
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-semibold text-textPrimary">
+                <label className="text-sm font-semibold text-foreground">
                   City <span className="text-red-500">*</span>
                 </label>
                 <InputField
@@ -736,7 +736,7 @@ function TakServerStatus({ handleStartStop }) {
               </div>
 
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-semibold text-textPrimary">
+                <label className="text-sm font-semibold text-foreground">
                   Name <span className="text-red-500">*</span>
                 </label>
                 <InputField

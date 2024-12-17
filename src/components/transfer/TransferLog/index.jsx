@@ -2,7 +2,7 @@ import CustomScrollbar from '../../CustomScrollbar';
 
 export const TransferLog = ({ logs }) => {
   return (
-    <div className="bg-cardBg p-6 rounded-lg shadow-lg text-white border-1 border-accentBoarder">
+    <div className="bg-card p-6 rounded-lg shadow-lg foreground border-1 border-accentBoarder">
       <h2 className="text-base mb-4">Transfer Log</h2>
       <div className="h-64 border border-accentBoarder rounded-lg mt-4">
         <CustomScrollbar>

@@ -191,16 +191,16 @@ function ExistingCertificates({
   );
 
   return (
-    <div className="border border-accentBoarder bg-cardBg p-4 rounded-lg">
+    <div className="border border-accentBoarder bg-card p-4 rounded-lg">
       <div className="flex items-center mb-4 gap-4">
-        <h3 className="text-base font-bold text-textPrimary">Existing Certificates</h3>
+        <h3 className="text-base font-bold text-foreground">Existing Certificates</h3>
         <div className="flex-1 mx-4">
           <InputField
             type="text"
             placeholder="Search certificates..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-primaryBg border-accentBoarder"
+            className="w-full bg-background border-accentBoarder"
           />
         </div>
         <div className="flex gap-2 items-center">
@@ -250,18 +250,18 @@ function ExistingCertificates({
               filteredCertificates.map((cert) => (
                 <div 
                   key={cert.identifier} 
-                  className="flex items-center justify-between p-3 border border-accentBoarder rounded-lg bg-primaryBg hover:bg-buttonColor transition-all duration-200"
+                  className="flex items-center justify-between p-3 border border-accentBoarder rounded-lg bg-background hover:bg-buttonColor transition-all duration-200"
                 >
                   <div className="flex items-center gap-4 flex-1">
                     <input
                       type="checkbox"
                       checked={selectedCerts.has(cert.identifier)}
                       onChange={() => handleSelectCert(cert.identifier)}
-                      className="w-4 h-4 rounded border-accentBoarder bg-primaryBg"
+                      className="w-4 h-4 rounded border-accentBoarder bg-background"
                       disabled={deletingCerts.has(cert.identifier)}
                     />
                     <div className="flex items-center gap-2">
-                      <span className="text-textPrimary font-medium">{cert.identifier}</span>
+                      <span className="text-foreground font-medium">{cert.identifier}</span>
                       {cert.role === 'ROLE_ADMIN' && (
                         <span className="text-sm text-accentBlue">(Admin)</span>
                       )}
@@ -305,7 +305,7 @@ function ExistingCertificates({
                     </div>
                   </div>
                   <button
-                    className={`p-2 rounded-lg text-buttonTextColor hover:text-textPrimary hover:bg-buttonColor transition-all duration-200
+                    className={`p-2 rounded-lg text-buttonTextColor hover:text-foreground hover:bg-buttonColor transition-all duration-200
                       ${deletingCerts.has(cert.identifier) ? 'opacity-50 cursor-not-allowed' : ''}`}
                     onClick={() => deleteCertificate(cert.identifier)}
                     disabled={deletingCerts.has(cert.identifier)}

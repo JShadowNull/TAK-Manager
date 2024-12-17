@@ -68,7 +68,7 @@ export const TransferInfo = ({ steps = defaultSteps }) => {
   };
 
   return (
-    <div className="bg-cardBg p-4 rounded-lg shadow-lg text-white border border-accentBoarder">
+    <div className="bg-card p-4 rounded-lg shadow-lg foreground border border-accentBoarder">
       <h2 className="text-base font-bold">Setup Android Device for Rapid Transfer</h2>
       <div className="h-[400px] bg-backgroundPrimary rounded-lg">
         <CustomScrollbar>
@@ -111,7 +111,7 @@ export const TransferInfo = ({ steps = defaultSteps }) => {
                       <Typography>{step.label}</Typography>
                     </StepLabel>
                     <StepContent>
-                      <div className="space-y-2 text-sm text-white">
+                      <div className="space-y-2 text-sm foreground">
                         {step.description.map((item, itemIndex) => (
                           <div key={itemIndex} className="flex items-start gap-2">
                             <span className="min-w-[20px]">{itemIndex + 1}.</span>

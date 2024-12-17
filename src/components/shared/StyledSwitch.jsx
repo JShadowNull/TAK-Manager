@@ -21,7 +21,7 @@ const StyledSwitchBase = styled(Switch)({
   },
 });
 
-const StyledSwitch = ({ checked, onChange, label, labelClassName = "text-sm text-white" }) => {
+const StyledSwitch = ({ checked, onChange, label, labelClassName = "text-sm foreground" }) => {
   return (
     <FormControlLabel
       control={

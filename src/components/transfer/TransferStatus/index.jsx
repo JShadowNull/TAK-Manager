@@ -34,7 +34,7 @@ export const TransferStatus = ({
   };
 
   return (
-    <div className="bg-cardBg p-6 rounded-lg shadow-lg text-white border-1 border-accentBoarder">
+    <div className="bg-card p-6 rounded-lg shadow-lg foreground border-1 border-accentBoarder">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-base">Transfer Status</h2>
         <StatusButtons
@@ -48,7 +48,7 @@ export const TransferStatus = ({
 
       <div className="space-y-4">
         {/* Device Status Section */}
-        <div className="flex items-center gap-4 p-3 bg-primaryBg rounded-lg">
+        <div className="flex items-center gap-4 p-3 bg-background rounded-lg">
           <span className="text-sm font-medium">Device Status:</span>
           <span className={`text-sm ${getDeviceStatusColor()}`}>
             {getDeviceStatusText()}

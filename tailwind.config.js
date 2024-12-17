@@ -1,31 +1,35 @@
 // tailwind.config.js
 
 /** @type {import('tailwindcss').Config} */
-export default {
+module.exports = {
+  darkMode: ["class"],
   content: [
+    './src/**/*.{ts,tsx}',
+    "./.storybook/**/*.{js,jsx,ts,tsx}",
     "./src/**/*.{js,jsx,ts,tsx}",
     "./src/**/*.html",
-    "./.storybook/**/*.{js,jsx,ts,tsx}",
-    "./src/stories/**/*.{js,jsx,ts,tsx}"
-  ],
-  darkMode: ["class"],
+	],
   theme: {
+    container: {
+      center: true,
+      padding: "2rem",
+      screens: {
+        "2xl": "1400px",
+      },
+    },
     extend: {
       colors: {
-        primaryBg: 'rgba(0, 8, 15, 1.000)',
-        cardBg: 'rgba(3, 13, 25, 1.000)',
-        textPrimary: '#FFFFFF',
-        textSecondary: 'rgba(86, 119, 153, 1.000)',
-        accentBoarder: 'rgba(17, 41, 67, 1.000)',
-        accentBlue: '#5993F6',
-        ramChartColor: 'rgba(246, 89, 33, 1.000)',
-        cpuChartColor: 'rgba(106, 167, 248, 1.000)',
-        selectedColor: 'rgba(106, 167, 248, 1.000)',
-        selectedTextColor: 'rgba(1, 8, 14, 1.000)',
-        buttonColor: 'rgba(4, 28, 47, 1.000)',
-        buttonBorder: 'rgba(21, 39, 67, 1.000)',
-        buttonHoverColor: 'rgba(4, 30, 51, 1.000)',
-        buttonTextColor: 'rgba(208, 219, 229, 1.000)',
+        textSecondary: "hsl(var(--muted-foreground))",
+        accentBoarder: "hsl(var(--border))",
+        accentBlue: "hsl(var(--primary))",
+        ramChartColor: "hsl(var(--chart-2))",
+        cpuChartColor: "hsl(var(--chart-1))",
+        selectedColor: "hsl(var(--primary))",
+        selectedTextColor: "hsl(var(--primary-foreground))",
+        buttonColor: "hsl(var(--secondary))",
+        buttonBorder: "hsl(var(--border))",
+        buttonHoverColor: "hsl(var(--accent))",
+        buttonTextColor: "hsl(var(--secondary-foreground))",
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -60,27 +64,19 @@ export default {
           foreground: "hsl(var(--card-foreground))",
         },
       },
-      boxShadow: {
-        soft: '0 2px 10px rgba(0, 0, 0, 0.5)',
-        hard: '0 8px 16px rgba(0, 0, 0, 0.75)',
-      },
       borderRadius: {
-        card: '12px',
-        md: '6px',
         lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
-      },
-      borderWidth: {
-        '1': '1px',
       },
       keyframes: {
         "accordion-down": {
-          from: { height: "0" },
+          from: { height: 0 },
           to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
           from: { height: "var(--radix-accordion-content-height)" },
-          to: { height: "0" },
+          to: { height: 0 },
         },
       },
       animation: {

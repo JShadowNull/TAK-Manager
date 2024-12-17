@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 
 function Card({ children, title, className, headerActions }) {
   return (
-    <div className={`bg-cardBg p-6 rounded-lg shadow-lg text-white border border-accentBoarder ${className || ''}`}>
+    <div className={`bg-card p-6 rounded-lg shadow-lg foreground border border-accentBoarder ${className || ''}`}>
       {(title || headerActions) && (
         <div className="flex justify-between items-center mb-4">
           {title && <h2 className="text-base">{title}</h2>}

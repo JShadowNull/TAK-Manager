@@ -218,7 +218,7 @@ function Services() {
     <div className="flex gap-8 pt-14">
       <div className="flex flex-col gap-8 w-1/3">
         {/* Start/Stop Services */}
-        <div className="bg-cardBg p-6 rounded-lg shadow-lg text-white w-full border-1 border-accentBoarder">
+        <div className="bg-card p-6 rounded-lg shadow-lg foreground w-full border-1 border-accentBoarder">
           <h2 className="text-base mb-4 text-center">Start/Stop Services</h2>
           <div className="flex items-center justify-between px-2">
             <FormControlLabel
@@ -232,7 +232,7 @@ function Services() {
                 />
               }
               label={
-                <span className="text-sm text-white">
+                <span className="text-sm foreground">
                   {isStartingDocker ? 'Starting Docker...' :
                    isStoppingDocker ? 'Stopping Docker...' :
                    dockerStatus.isRunning ? 'Docker is running' : 'Docker is stopped'}
@@ -245,7 +245,7 @@ function Services() {
       </div>
 
       {/* Docker Containers */}
-      <div className="w-2/3 bg-cardBg p-6 rounded-lg shadow-lg text-white border-1 border-accentBoarder">
+      <div className="w-2/3 bg-card p-6 rounded-lg shadow-lg foreground border-1 border-accentBoarder">
         <h2 className="text-base mb-4 text-center">Docker Containers</h2>
         <ul className="list-none space-y-2 text-sm">
           {!dockerStatus.isInstalled ? (

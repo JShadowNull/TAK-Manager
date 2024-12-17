@@ -1186,7 +1186,7 @@ body {
   background-color: rgb(34 197 94 / var(--tw-bg-opacity));
 }
 
-.bg-primaryBg {
+.bg-background {
   background-color: rgba(0, 8, 15, 1.000);
 }
 
@@ -1455,7 +1455,7 @@ body {
   color: rgba(86, 119, 153, 1.000);
 }
 
-.text-white {
+.textPrimary {
   --tw-text-opacity: 1;
   color: rgb(255 255 255 / var(--tw-text-opacity));
 }
@@ -1693,7 +1693,7 @@ body {
   color: rgba(86, 119, 153, 1.000);
 }
 
-.hover\:text-white:hover {
+.hover\:textPrimary:hover {
   --tw-text-opacity: 1;
   color: rgb(255 255 255 / var(--tw-text-opacity));
 }

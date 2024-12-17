@@ -76,7 +76,7 @@ function Sidebar() {
   ];
 
   return (
-    <nav className="w-64 bg-cardBg p-6 text-textPrimary border-r border-accentBoarder">
+    <nav className="w-64 bg-card p-6 text-foreground border-r border-accentBoarder">
       <ul>
         {navItems.filter(item => item.alwaysShow || item.showWhen()).map(({ path, icon: Icon, text, iconColor }) => {
           const isActive = location.pathname === path;
@@ -93,7 +93,7 @@ function Sidebar() {
                 className={`flex items-center p-2 rounded-lg ${
                   isActive 
                     ? 'bg-selectedColor text-selectedTextColor' 
-                    : 'text-textSecondary hover:text-white'
+                    : 'text-textSecondary hover:foreground'
                 } text-sm`}
               >
                 <Icon 

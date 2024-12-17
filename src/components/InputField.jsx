@@ -37,7 +37,7 @@ const InputField = ({
           disabled={disabled || (min !== undefined && parseInt(value || '0') <= min)}
           className={`
             p-1 rounded-lg border border-buttonBorder bg-buttonColor
-            hover:bg-selectedColor hover:text-white transition-colors duration-200
+            hover:bg-selectedColor hover:foreground transition-colors duration-200
             ${disabled || (min !== undefined && parseInt(value || '0') <= min) ? 'opacity-50 cursor-not-allowed' : ''}
           `}
         >
@@ -73,7 +73,7 @@ const InputField = ({
           disabled={disabled || (max !== undefined && parseInt(value || '0') >= max)}
           className={`
             p-1 rounded-lg border border-buttonBorder bg-buttonColor
-            hover:bg-selectedColor hover:text-white transition-colors duration-200
+            hover:bg-selectedColor hover:foreground transition-colors duration-200
             ${disabled || (max !== undefined && parseInt(value || '0') >= max) ? 'opacity-50 cursor-not-allowed' : ''}
           `}
         >

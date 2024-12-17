@@ -74,7 +74,7 @@ export const Standard_Basic = {
   args: {
     ...baseArgs,
     title: 'Basic Standard Popup',
-    children: <p className="p-4 text-textPrimary">Basic popup with no buttons or special configuration.</p>
+    children: <p className="p-4 text-foreground">Basic popup with no buttons or special configuration.</p>
   }
 };
 
@@ -82,7 +82,7 @@ export const Standard_WithButtons = {
   args: {
     ...baseArgs,
     title: 'Standard Popup with Buttons',
-    children: <p className="p-4 text-textPrimary">Popup demonstrating button configurations.</p>,
+    children: <p className="p-4 text-foreground">Popup demonstrating button configurations.</p>,
     buttons: (
       <>
         <Button variant="secondary" onClick={() => console.log('Cancel clicked')}>Cancel</Button>
@@ -96,7 +96,7 @@ export const Standard_FullscreenBlur = {
   args: {
     ...baseArgs,
     title: 'Fullscreen Standard Popup',
-    children: <p className="p-4 text-textPrimary">This popup blurs the entire screen including sidebar.</p>,
+    children: <p className="p-4 text-foreground">This popup blurs the entire screen including sidebar.</p>,
     blurSidebar: true,
     buttons: (
       <Button variant="primary" onClick={() => console.log('OK clicked')}>OK</Button>

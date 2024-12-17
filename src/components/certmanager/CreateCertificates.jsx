@@ -279,7 +279,7 @@ function CreateCertificates({ onOperationProgress }) {
   };
 
   return (
-    <div className="border border-accentBoarder bg-cardBg p-4 rounded-lg">
+    <div className="border border-accentBoarder bg-card p-4 rounded-lg">
       <div className="flex items-center gap-4 mb-4">
         <h3 className="text-base font-bold">Create Certificates</h3>
         {!isBatchMode && (

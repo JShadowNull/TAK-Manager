@@ -13,16 +13,25 @@ from backend.services.helpers.os_detector import OSDetector
 import atexit
 import webview
 import signal
-import eventlet
+import sys
 
 # Configure logging for both Flask and webview
 logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.ERROR,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('app.log'),
+        logging.StreamHandler()
+    ]
 )
 logger = logging.getLogger(__name__)
 webview_logger = logging.getLogger('webview')
-webview_logger.setLevel(logging.DEBUG)
+webview_logger.setLevel(logging.ERROR)
+
+# Suppress unnecessary warnings
+logging.getLogger('werkzeug').setLevel(logging.ERROR)
+logging.getLogger('engineio').setLevel(logging.ERROR)
+logging.getLogger('socketio').setLevel(logging.ERROR)
 
 # Initialize OS detector
 os_detector = OSDetector()
@@ -76,14 +85,18 @@ def start_flask():
         # Create Flask app
         flask_app = create_app()
         
+        # Configure Socket.IO CORS - only allow our specific origin
+        socketio.server.eio.cors_allowed_origins = ['http://127.0.0.1:5000']
+        
         # Run with eventlet
         socketio.run(flask_app, 
                     host='127.0.0.1', 
                     port=5000, 
                     debug=False, 
-                    use_reloader=False)
+                    use_reloader=False,
+                    log_output=False)  # Disable default Socket.IO logging
     except Exception as e:
-        logger.error(f"Error starting Flask server: {e}")
+        logger.error(f"Error starting Flask server: {e}", exc_info=True)
         raise
 
 def cleanup():
@@ -96,7 +109,7 @@ def create_window():
         # Configure GUI based on OS
         gui = None
         if current_os == 'linux':
-            os.environ['QTWEBENGINE_REMOTE_DEBUGGING'] = '8228'
+            os.environ['QTWEBENGINE_REMOTE_DEBUGGING'] = '0'  # Disable remote debugging
             gui = 'qt'
         elif current_os == 'macos':
             gui = None
@@ -117,15 +130,21 @@ def create_window():
             height=720
         )
         
-        # Start webview with appropriate GUI
+        # Start webview without debug mode
         if gui:
-            webview.start(debug=True, gui=gui)
+            webview.start(debug=False, gui=gui)
         else:
-            webview.start(debug=True)
+            webview.start(debug=False)
             
         return window
     except Exception as e:
         logger.error(f"Error creating window: {e}", exc_info=True)
+        # In production, we should handle this more gracefully
+        if window:
+            try:
+                window.destroy()
+            except:
+                pass
         return None
 
 def main():
@@ -155,17 +174,22 @@ def main():
             if not window:
                 raise Exception("Failed to create window")
         except Exception as e:
-            logger.error(f"Failed to start PyWebview: {e}")
+            logger.error(f"Failed to start PyWebview: {e}", exc_info=True)
             raise
         finally:
             # Clean up the server process
             logger.info("Cleaning up server process...")
-            server_process.terminate()
-            server_process.join()
+            try:
+                server_process.terminate()
+                server_process.join(timeout=5)
+                if server_process.is_alive():
+                    server_process.kill()
+            except Exception as e:
+                logger.error(f"Error during server cleanup: {e}", exc_info=True)
 
     except Exception as e:
-        logger.error(f"Error in main: {e}", exc_info=True)
-        raise
+        logger.error(f"Critical error in main: {e}", exc_info=True)
+        sys.exit(1)  # Exit with error code
 
 if __name__ == '__main__':
     # This is needed for Windows support

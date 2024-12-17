@@ -65,11 +65,11 @@ export const DeviceProgress = ({ deviceId, progress, onRemoveFailed, isTransferR
   };
 
   return (
-    <div className="device-progress bg-primaryBg border-1 border-buttonBorder rounded-lg p-4">
+    <div className="device-progress bg-background border-1 border-buttonBorder rounded-lg p-4">
       <div className="flex justify-between items-center mb-2">
-        <span className="text-sm font-medium text-white">Device: {deviceId}</span>
+        <span className="text-sm font-medium foreground">Device: {deviceId}</span>
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-white">
+          <span className="text-sm font-medium foreground">
             {getProgressText()}
           </span>
           {progress.status === 'failed' && (

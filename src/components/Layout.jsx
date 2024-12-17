@@ -6,7 +6,7 @@ import CustomScrollbar from './CustomScrollbar';
 
 function Layout() {
   return (
-    <div className="flex h-screen bg-primaryBg">
+    <div className="flex h-screen bg-background">
       <Sidebar />
       <div className="flex-1 flex flex-col h-full">
         <TitleBar />

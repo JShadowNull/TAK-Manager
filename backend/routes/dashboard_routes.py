@@ -24,9 +24,7 @@ class ServicesMonitorNamespace(Namespace):
 
     def cleanup_operation_threads(self):
         """Clean up completed operation threads"""
-        # Remove dead threads
         self.operation_threads = [t for t in self.operation_threads if not t.dead]
-        # Kill any remaining threads that are still alive
         for thread in self.operation_threads:
             try:
                 if not thread.dead:
@@ -39,15 +37,12 @@ class ServicesMonitorNamespace(Namespace):
         """Monitor system with initial data emission"""
         try:
             print("Starting system monitoring with initial data")
-            # Get initial CPU usage to establish baseline
             psutil.cpu_percent(interval=None)
-            eventlet.sleep(0.1)  # Short delay for accurate initial reading
+            eventlet.sleep(0.1)
             
-            # Get and emit initial data
             metrics = self.system_monitor.get_current_metrics()
             print(f"Initial metrics: {metrics}")
             
-            # Emit each metric with a small delay to prevent congestion
             socketio.emit('cpu_usage', {'cpu_usage': metrics['cpu']}, namespace='/services-monitor')
             eventlet.sleep(0.1)
             
@@ -56,22 +51,18 @@ class ServicesMonitorNamespace(Namespace):
             
             socketio.emit('services', {'services': metrics['services']}, namespace='/services-monitor')
             
-            # Start regular monitoring
             self.system_monitor.monitor_system()
         except Exception as e:
             print(f"Error in monitor_system_with_initial_data: {e}")
-            # Emit error to client
             socketio.emit('error', {'message': str(e)}, namespace='/services-monitor')
 
     def on_connect(self):
         print('Client connected to /services-monitor namespace')
         try:
             if not self.monitor_thread or self.monitor_thread.dead:
-                # Use thread_manager to spawn the monitor thread with initial data
                 self.monitor_thread = thread_manager.spawn(self.monitor_system_with_initial_data)
                 self.operation_threads.append(self.monitor_thread)
             else:
-                # If thread exists and is alive, just send current data
                 metrics = self.system_monitor.get_current_metrics()
                 socketio.emit('cpu_usage', {'cpu_usage': metrics['cpu']}, namespace='/services-monitor')
                 eventlet.sleep(0.1)
@@ -88,7 +79,6 @@ class ServicesMonitorNamespace(Namespace):
             if self.system_monitor:
                 self.system_monitor.stop_monitoring()
             self.cleanup_operation_threads()
-            # Kill the monitor thread if it exists
             if self.monitor_thread and not self.monitor_thread.dead:
                 self.monitor_thread.kill()
             self.monitor_thread = None
@@ -120,9 +110,7 @@ class IPFetcherNamespace(Namespace):
 
     def cleanup_operation_threads(self):
         """Clean up completed operation threads"""
-        # Remove dead threads
         self.operation_threads = [t for t in self.operation_threads if not t.dead]
-        # Kill any remaining threads that are still alive
         for thread in self.operation_threads:
             try:
                 if not thread.dead:
@@ -131,52 +119,52 @@ class IPFetcherNamespace(Namespace):
                 print(f"Error killing thread: {e}")
         self.operation_threads = []
 
-    def monitor_ip_with_initial_data(self):
-        """Monitor IP with initial data emission"""
+    def monitor_network_with_initial_data(self):
+        """Monitor network metrics with initial data emission"""
         try:
-            # Send initial IP immediately
-            initial_ip = self.ip_fetcher.get_ip_address()
-            socketio.emit('ip_address_update', {'ip_address': initial_ip}, namespace='/ip-fetcher')
+            # Send initial metrics immediately
+            initial_metrics = self.ip_fetcher.get_metrics()
+            socketio.emit('network_metrics', initial_metrics, namespace='/ip-fetcher')
             
             # Then start regular monitoring
             self.ip_fetcher.monitor_ip()
         except Exception as e:
-            print(f"Error in monitor_ip_with_initial_data: {e}")
+            print(f"Error in monitor_network_with_initial_data: {e}")
+            socketio.emit('error', {'message': str(e)}, namespace='/ip-fetcher')
 
     def on_connect(self):
         print('Client connected to /ip-fetcher namespace')
-        if not self.monitor_thread:
-            # Use thread_manager to spawn the monitor thread with initial data
-            self.monitor_thread = thread_manager.spawn(self.monitor_ip_with_initial_data)
-            self.operation_threads.append(self.monitor_thread)
-        else:
-            # If thread exists, just send current IP
-            try:
-                current_ip = self.ip_fetcher.get_ip_address()
-                socketio.emit('ip_address_update', {'ip_address': current_ip}, namespace='/ip-fetcher')
-            except Exception as e:
-                print(f"Error sending current IP: {e}")
+        try:
+            if not self.monitor_thread or self.monitor_thread.dead:
+                self.monitor_thread = thread_manager.spawn(self.monitor_network_with_initial_data)
+                self.operation_threads.append(self.monitor_thread)
+            else:
+                # If thread exists, just send current metrics
+                current_metrics = self.ip_fetcher.get_metrics()
+                socketio.emit('network_metrics', current_metrics, namespace='/ip-fetcher')
+        except Exception as e:
+            print(f"Error in on_connect: {e}")
+            socketio.emit('error', {'message': str(e)}, namespace='/ip-fetcher')
 
     def on_disconnect(self):
         print('Client disconnected from /ip-fetcher namespace')
-        if self.ip_fetcher:
-            self.ip_fetcher.stop_monitoring()
-        self.cleanup_operation_threads()
-        # Kill the monitor thread if it exists
-        if self.monitor_thread and not self.monitor_thread.dead:
-            try:
+        try:
+            if self.ip_fetcher:
+                self.ip_fetcher.stop_monitoring()
+            self.cleanup_operation_threads()
+            if self.monitor_thread and not self.monitor_thread.dead:
                 self.monitor_thread.kill()
-            except Exception as e:
-                print(f"Error killing monitor thread: {e}")
-        self.monitor_thread = None
+            self.monitor_thread = None
+        except Exception as e:
+            print(f"Error in on_disconnect: {e}")
 
     def on_get_ip_address(self):
-        """Handle manual IP address request"""
+        """Handle manual metrics request"""
         try:
-            ip_address = self.ip_fetcher.get_ip_address()
-            socketio.emit('ip_address_update', {'ip_address': ip_address}, namespace='/ip-fetcher')
+            metrics = self.ip_fetcher.get_metrics()
+            socketio.emit('network_metrics', metrics, namespace='/ip-fetcher')
         except Exception as e:
-            print(f"Error getting IP address: {e}")
+            print(f"Error getting network metrics: {e}")
             socketio.emit('error', {'message': str(e)}, namespace='/ip-fetcher')
 
 # Register the namespaces

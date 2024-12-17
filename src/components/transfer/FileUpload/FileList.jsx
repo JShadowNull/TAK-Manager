@@ -12,7 +12,7 @@ export const FileList = ({ files, uploadingFiles, onDeleteFile, disabled }) => {
 
   return (
     (files.length > 0 || uploadingFiles.size > 0) && (
-      <div id="file-list" className="text-buttonTextColor rounded-lg text-sm border-1 border-buttonBorder bg-primaryBg">
+      <div id="file-list" className="text-buttonTextColor rounded-lg text-sm border-1 border-buttonBorder bg-background">
         <div style={{ height: `${containerHeight}px` }} className="overflow-hidden">
           <CustomScrollbar>
             <div className="divide-y px-4 py-0 divide-accentBoarder rounded-lg">
