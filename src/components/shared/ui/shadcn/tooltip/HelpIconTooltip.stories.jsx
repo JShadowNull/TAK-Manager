@@ -1,6 +1,6 @@
 import React from 'react';
 import HelpIconTooltip from './HelpIconTooltip';
-import Button from './Button';
+import Button from '../../Button';
 
 export default {
   title: 'Shared/HelpIconTooltip',

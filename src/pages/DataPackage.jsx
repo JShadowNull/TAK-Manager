@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import useSocket from '../hooks/useSocket';
-import Popup from '../components/shared/Popup';
-import CustomScrollbar from '../components/CustomScrollbar';
+import Popup from '../components/shared/ui/popups/Popup';
+import CustomScrollbar from '../components/shared/ui/CustomScrollbar';
 import ZipNameSection from '../components/datapackage/ZipNameSection/ZipNameSection';
 import CotStreamsSection from '../components/datapackage/CotStreamsSection/CotStreamsSection';
 import AtakPreferencesSection from '../components/datapackage/AtakPreferencesSection/AtakPreferencesSection';
-import Button from '../components/shared/Button';
+import Button from '../components/shared/ui/Button';
 import axios from 'axios';
 
 function DataPackage() {

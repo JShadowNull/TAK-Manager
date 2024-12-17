@@ -2,8 +2,8 @@ import React, { forwardRef } from 'react';
 import PropTypes from 'prop-types';
 import { Slot } from '@radix-ui/react-slot';
 import { Loader2 } from 'lucide-react';
-import { HelpIconTooltip } from './HelpIconTooltip';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './shadcn/tooltip';
+import { HelpIconTooltip } from './shadcn/tooltip/HelpIconTooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './shadcn/tooltip/tooltip';
 
 const Button = forwardRef(({ 
   children, 

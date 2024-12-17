@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import InputField from '../InputField';
-import Popup from '../shared/Popup';
+import InputField from '../shared/ui/InputField';
+import Popup from '../shared/ui/popups/Popup';
 import AdvancedFeatures from './AdvancedFeatures';
 import Configuration from './Configuration';
-import DockerPopup from '../shared/docker/DockerPopup';
-import Button from '../shared/Button';
+import DockerPopup from '../shared/ui/popups/DockerPopup';
+import Button from '../shared/ui/Button';
 import useSocket from '../../hooks/useSocket';
 import io from 'socket.io-client';
 import InstallationPopup from './InstallationPopup';

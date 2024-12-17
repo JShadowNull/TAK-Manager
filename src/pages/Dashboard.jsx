@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import CustomScrollbar from '../components/CustomScrollbar';
+import CustomScrollbar from '../components/shared/ui/CustomScrollbar';
 import useSocket from '../hooks/useSocket';
-import { AnalyticsChart } from '../components/shared/shadcn/AnalyticsChart';
+import { AnalyticsChart } from '../components/shared/ui/shadcn/charts/AnalyticsChart';
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "../components/ui/card"
+} from "../components/shared/ui/shadcn/card/card"
 
 function Dashboard() {
   const [cpuData, setCpuData] = useState([]);

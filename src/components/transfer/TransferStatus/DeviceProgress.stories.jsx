@@ -1,6 +1,6 @@
 import { DeviceProgress } from './DeviceProgress.jsx';
 import { TransferStatus } from './index.jsx';
-import { CloseIcon } from '../../shared/icons/CloseIcon.jsx';
+import { CloseIcon } from '../../shared/ui/icons/CloseIcon.jsx';
 
 export default {
   title: 'Transfer/DeviceProgress',

@@ -1,5 +1,5 @@
-import { CloseIcon } from '../../shared/icons/CloseIcon';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../shared/shadcn/tooltip';
+import { CloseIcon } from '../../shared/ui/icons/CloseIcon';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../shared/ui/shadcn/tooltip/tooltip';
 
 export const DeviceProgress = ({ deviceId, progress, onRemoveFailed, isTransferRunning, isDeviceConnected }) => {
   // Different visibility rules:

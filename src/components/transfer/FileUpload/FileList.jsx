@@ -1,6 +1,6 @@
-import { CloseIcon } from '../../shared/icons/CloseIcon';
+import { CloseIcon } from '../../shared/ui/icons/CloseIcon';
 import { LoadingSpinner } from '../Icons/LoadingSpinner';
-import CustomScrollbar from '../../CustomScrollbar';
+import CustomScrollbar from '../../shared/ui/CustomScrollbar';
 
 export const FileList = ({ files, uploadingFiles, onDeleteFile, disabled }) => {
   const itemHeight = 36; // py-2 (8px top + 8px bottom) + line height (16px)

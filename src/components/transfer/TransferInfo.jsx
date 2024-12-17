@@ -6,8 +6,8 @@ import StepLabel from '@mui/material/StepLabel';
 import StepContent from '@mui/material/StepContent';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
-import CustomScrollbar from '../../components/CustomScrollbar';
-import Button from '../shared/Button';
+import CustomScrollbar from '../shared/ui/CustomScrollbar';
+import Button from '../shared/ui/Button';
 
 const defaultSteps = [
   {

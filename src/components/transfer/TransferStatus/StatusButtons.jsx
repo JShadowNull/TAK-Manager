@@ -1,5 +1,5 @@
-import Button from '../../shared/Button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../shared/shadcn/tooltip';
+import Button from '../../shared/ui/Button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../shared/ui/shadcn/tooltip/tooltip';
 
 export const StatusButtons = ({ 
   isTransferRunning, 

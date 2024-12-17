@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import Popup from '../shared/Popup';
+import Popup from '../shared/ui/popups/Popup';
 import useSocket from '../../hooks/useSocket';
-import Button from '../shared/Button';
+import Button from '../shared/ui/Button';
 
 function AdvancedFeatures() {
   const [showOtaForm, setShowOtaForm] = useState(false);

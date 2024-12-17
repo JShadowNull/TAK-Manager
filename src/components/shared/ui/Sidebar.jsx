@@ -10,7 +10,7 @@ import {
   ServerIcon,
   KeyIcon
 } from '@heroicons/react/24/outline';
-import useSocket from '../hooks/useSocket';
+import useSocket from '../../../hooks/useSocket';
 
 function Sidebar() {
   const location = useLocation();

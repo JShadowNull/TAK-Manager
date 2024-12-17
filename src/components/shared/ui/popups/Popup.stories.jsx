@@ -1,5 +1,5 @@
 import Popup from './Popup';
-import Button from './Button';
+import Button from '../Button';
 
 // Generate mock terminal output for testing
 const generateMockOutput = (lines = 50) => {

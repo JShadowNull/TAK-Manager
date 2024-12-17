@@ -6,7 +6,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from './shadcn/tooltip';
+} from './tooltip';
 
 interface StyledHelpIconProps {
   $isOpen?: boolean;

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import CustomScrollbar from '../CustomScrollbar';
-import Button from './Button';
+import Button from '../Button';
 
 /*
 Usage Examples:

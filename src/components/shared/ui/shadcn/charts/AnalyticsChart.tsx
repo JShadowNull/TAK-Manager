@@ -5,7 +5,7 @@ import { TrendingUp } from "lucide-react"
 import { Area, AreaChart, CartesianGrid, Tooltip, XAxis, YAxis, ResponsiveContainer } from "recharts"
 import { format } from "date-fns"
 
-import { cn } from "../../../lib/utils"
+import { cn } from "../../../../../lib/utils"
 import {
   Card,
   CardContent,
@@ -13,7 +13,7 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "../../ui/card"
+} from "../card/card"
 
 interface AnalyticsChartProps extends React.HTMLAttributes<HTMLDivElement> {
   data: Array<{

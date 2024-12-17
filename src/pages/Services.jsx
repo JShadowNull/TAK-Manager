@@ -4,9 +4,9 @@ import FormControlLabel from '@mui/material/FormControlLabel';
 import { styled } from '@mui/material/styles';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlay, faStop, faSpinner } from '@fortawesome/free-solid-svg-icons';
-import DockerPopup from '../components/shared/docker/DockerPopup';
-import useSocket from '../hooks/useSocket';
-import useFetch from '../hooks/useFetch';
+import DockerPopup from '../components/shared/ui/popups/DockerPopup';
+import useSocket from '../hooks/useSocket.js';
+import useFetch from '../hooks/useFetch.js';
 
 // Create a styled Switch component using Tailwind-like styles
 const StyledSwitch = styled(Switch)({

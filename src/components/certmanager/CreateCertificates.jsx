@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import InputField from '../InputField';
+import InputField from '../shared/ui/InputField';
 import useSocket from '../../hooks/useSocket';
-import StyledSwitch from '../shared/StyledSwitch';
-import Button from '../shared/Button';
-import { HelpIconTooltip } from '../shared/HelpIconTooltip';
+import StyledSwitch from '../shared/ui/StyledSwitch';
+import Button from '../shared/ui/Button';
+import { HelpIconTooltip } from '../shared/ui/shadcn/tooltip/HelpIconTooltip';
 
 // Checkmark icon component
 const CheckmarkIcon = () => (

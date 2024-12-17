@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
-import Popup from '../shared/Popup';
-import Button from '../shared/Button';
-import useFetch from '../../hooks/useFetch';
+import Popup from '../shared/ui/popups/Popup';
+import Button from '../shared/ui/Button';
+import useFetch from '../../hooks/useFetch.js';
 
 function AdbInstallation({
   adbInstallation,

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
-import CustomScrollbar from '../CustomScrollbar';
-import InputField from '../InputField';
+import CustomScrollbar from '../shared/ui/CustomScrollbar';
+import InputField from '../shared/ui/InputField';
 import { Chip, Tooltip } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import LockIcon from '@mui/icons-material/Lock';

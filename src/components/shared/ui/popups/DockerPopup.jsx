@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import Popup from '../Popup';
+import Popup from './Popup';
 import Button from '../Button';
-import useSocket from '../../../hooks/useSocket';
-import useFetch from '../../../hooks/useFetch';
+import useSocket from '../../../../hooks/useSocket';
+import useFetch from '../../../../hooks/useFetch';
 
 const DockerPopup = ({ isVisible }) => {
   const [isStartingDocker, setIsStartingDocker] = useState(false);
