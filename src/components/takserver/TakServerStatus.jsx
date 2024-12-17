@@ -5,11 +5,11 @@ import AdvancedFeatures from './AdvancedFeatures';
 import Configuration from './Configuration';
 import DockerPopup from '../shared/ui/popups/DockerPopup';
 import Button from '../shared/ui/Button';
-import useSocket from '../../hooks/useSocket';
+import useSocket from '../shared/hooks/useSocket';
 import io from 'socket.io-client';
 import InstallationPopup from './InstallationPopup';
 import UninstallationPopup from './UninstallationPopup';
-import useFetch from '../../hooks/useFetch';
+import useFetch from '../shared/hooks/useFetch';
 
 function TakServerStatus({ handleStartStop }) {
   const [showInstallForm, setShowInstallForm] = useState(false);

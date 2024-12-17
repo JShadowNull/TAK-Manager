@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import CustomScrollbar from '../components/shared/ui/CustomScrollbar';
-import useSocket from '../hooks/useSocket';
+import useSocket from '../components/shared/hooks/useSocket';
 import { AnalyticsChart } from '../components/shared/ui/shadcn/charts/AnalyticsChart';
 import {
   Card,

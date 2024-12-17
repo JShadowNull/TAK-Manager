@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import Popup from '../shared/ui/popups/Popup';
-import useSocket from '../../hooks/useSocket';
+import useSocket from '../shared/hooks/useSocket';
 import Button from '../shared/ui/Button';
 
 function AdvancedFeatures() {

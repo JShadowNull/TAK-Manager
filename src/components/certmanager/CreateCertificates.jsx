@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import InputField from '../shared/ui/InputField';
-import useSocket from '../../hooks/useSocket';
+import useSocket from '../shared/hooks/useSocket';
 import StyledSwitch from '../shared/ui/StyledSwitch';
 import Button from '../shared/ui/Button';
 import { HelpIconTooltip } from '../shared/ui/shadcn/tooltip/HelpIconTooltip';

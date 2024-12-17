@@ -4,8 +4,8 @@ import { FileUpload } from '../components/transfer/FileUpload';
 import { TransferStatus } from '../components/transfer/TransferStatus';
 import { TransferLog } from '../components/transfer/TransferLog';
 import { TransferInfo } from '../components/transfer/TransferInfo';
-import useFetch from '../hooks/useFetch';
-import useSocket from '../hooks/useSocket';
+import useFetch from '../components/shared/hooks/useFetch';
+import useSocket from '../components/shared/hooks/useSocket';
 
 function Transfer() {
   // State management
