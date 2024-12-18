@@ -9,6 +9,7 @@ import {
   ArrowLeftRight,
 } from "lucide-react"
 import useSocket from "@/components/shared/hooks/useSocket"
+import { ModeToggle } from "@/components/shared/ui/shadcn/mode-toggle"
 
 import {
   Sidebar,
@@ -19,6 +20,7 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
+  SidebarFooter,
 } from "@/components/shared/ui/shadcn/sidebar"
 
 const items = [
@@ -131,6 +133,11 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter className="flex items-center justify-center p-4">
+        <div className="flex items-center justify-center w-full">
+          <ModeToggle />
+        </div>
+      </SidebarFooter>
     </Sidebar>
   )
 }
