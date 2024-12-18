@@ -306,7 +306,7 @@ function CreateCertificates({ onOperationProgress }) {
           <div key={index} className="flex gap-4 items-end">
             <div className="flex-1">
               <div className="mb-2">
-                <span className="text-sm text-buttonTextColor font-medium flex items-center">
+                <span className="text-sm text-primary-foreground font-medium flex items-center">
                   Certificate Name
                   <HelpIconTooltip 
                     tooltip="The unique identifier for this certificate"
@@ -321,12 +321,12 @@ function CreateCertificates({ onOperationProgress }) {
                 value={field.name}
                 onChange={(e) => handleCertFieldChange(index, 'name', e.target.value)}
                 placeholder="Enter certificate name"
-                className="text-buttonTextColor placeholder-textSecondary"
+                className="text-primary-foreground placeholder-textSecondary"
               />
             </div>
             <div className="flex-1">
               <div className="mb-2">
-                <span className="text-sm text-buttonTextColor font-medium flex items-center">
+                <span className="text-sm text-primary-foreground font-medium flex items-center">
                   Groups
                   <HelpIconTooltip 
                     tooltip="The groups this certificate belongs to (separate multiple groups with commas)"
@@ -341,12 +341,12 @@ function CreateCertificates({ onOperationProgress }) {
                 value={field.group}
                 onChange={(e) => handleCertFieldChange(index, 'group', e.target.value)}
                 placeholder="Enter group names (comma-separated)"
-                className="text-buttonTextColor placeholder-textSecondary"
+                className="text-primary-foreground placeholder-textSecondary"
               />
             </div>
             <div className="flex-1">
               <div className="mb-2">
-                <span className="text-sm text-buttonTextColor font-medium flex items-center">
+                <span className="text-sm text-primary-foreground font-medium flex items-center">
                   Login Password (Optional)
                   <HelpIconTooltip 
                     tooltip="Optional password for certificate authentication"
@@ -361,7 +361,7 @@ function CreateCertificates({ onOperationProgress }) {
                 value={field.password || ''}
                 onChange={(e) => handleCertFieldChange(index, 'password', e.target.value)}
                 placeholder="Enter password"
-                className="text-buttonTextColor placeholder-textSecondary"
+                className="text-primary-foreground placeholder-textSecondary"
               />
             </div>
             <div className="flex items-center gap-4 mt-8">
@@ -388,7 +388,7 @@ function CreateCertificates({ onOperationProgress }) {
             <div className="flex gap-4">
               <div className="flex-1">
                 <div className="mb-2">
-                  <span className="text-sm text-buttonTextColor font-medium flex items-center">
+                  <span className="text-sm text-primary-foreground font-medium flex items-center">
                     Base Name
                     <HelpIconTooltip 
                       tooltip="The prefix used for all generated certificates (e.g. 'user')"
@@ -403,12 +403,12 @@ function CreateCertificates({ onOperationProgress }) {
                   value={batchName}
                   onChange={(e) => setBatchName(e.target.value)}
                   placeholder="Enter base name (e.g. jake)"
-                  className="text-buttonTextColor placeholder-textSecondary"
+                  className="text-primary-foreground placeholder-textSecondary"
                 />
               </div>
               <div className="flex-1">
                 <div className="mb-2">
-                  <span className="text-sm text-buttonTextColor font-medium flex items-center">
+                  <span className="text-sm text-primary-foreground font-medium flex items-center">
                     Groups
                     <HelpIconTooltip 
                       tooltip="The groups all certificates will belong to (separate multiple groups with commas)"
@@ -423,12 +423,12 @@ function CreateCertificates({ onOperationProgress }) {
                   value={batchGroup}
                   onChange={(e) => setBatchGroup(e.target.value)}
                   placeholder="Enter group names (comma-separated)"
-                  className="text-buttonTextColor placeholder-textSecondary"
+                  className="text-primary-foreground placeholder-textSecondary"
                 />
               </div>
               <div className="flex-1">
                 <div className="mb-2">
-                  <span className="text-sm text-buttonTextColor font-medium flex items-center">
+                  <span className="text-sm text-primary-foreground font-medium flex items-center">
                     Suffix Type
                     <HelpIconTooltip 
                       tooltip="How to number the certificates (e.g. 1,2,3 or a,b,c)"
@@ -443,12 +443,12 @@ function CreateCertificates({ onOperationProgress }) {
                   value={prefixType}
                   onChange={setPrefixType}
                   options={prefixOptions}
-                  className="text-buttonTextColor"
+                  className="text-primary-foreground"
                 />
               </div>
               <div className="flex-1">
                 <div className="mb-2">
-                  <span className="text-sm text-buttonTextColor font-medium flex items-center">
+                  <span className="text-sm text-primary-foreground font-medium flex items-center">
                     Number of Certificates
                     <HelpIconTooltip 
                       tooltip="How many certificates to generate in this batch"
@@ -463,7 +463,7 @@ function CreateCertificates({ onOperationProgress }) {
                   value={count}
                   onChange={(e) => setCount(parseInt(e.target.value, 10))}
                   min={1}
-                  className="text-buttonTextColor"
+                  className="text-primary-foreground"
                 />
               </div>
             </div>

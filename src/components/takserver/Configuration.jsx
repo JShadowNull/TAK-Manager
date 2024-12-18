@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import Button from '../shared/ui/Button';
 
 function Configuration() {
   const navigate = useNavigate();
@@ -9,22 +10,22 @@ function Configuration() {
       <div className="flex flex-col gap-4">
         <h3 className="text-base font-bold">Configuration</h3>
         <div className="flex gap-4">
-          <button
-            className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
+          <Button
+            variant="primary"
             onClick={() => navigate('/data-package')}
           >
             Generate Data Package
-          </button>
-          <button
-            className="text-buttonTextColor rounded-lg p-2 text-sm border border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-black hover:bg-green-500 transition-all duration-200"
+          </Button>
+          <Button
+            variant="primary" 
             onClick={() => console.log('make certs')}
           >
             Generate Certs
-          </button>
+          </Button>
         </div>
       </div>
     </div>
   );
 }
 
-export default Configuration; 
+export default Configuration;

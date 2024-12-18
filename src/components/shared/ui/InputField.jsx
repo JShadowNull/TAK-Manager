@@ -36,7 +36,7 @@ const InputField = ({
           onClick={handleDecrement}
           disabled={disabled || (min !== undefined && parseInt(value || '0') <= min)}
           className={`
-            p-1 rounded-lg border border-buttonBorder bg-buttonColor
+            p-1 rounded-lg border border-border bg-primary
             hover:bg-selectedColor hover:foreground transition-colors duration-200
             ${disabled || (min !== undefined && parseInt(value || '0') <= min) ? 'opacity-50 cursor-not-allowed' : ''}
           `}
@@ -60,8 +60,8 @@ const InputField = ({
           disabled={disabled}
           required={required}
           className={`
-            w-16 text-center bg-buttonColor text-sm border border-buttonBorder 
-            p-2 rounded-lg text-buttonTextColor
+            w-16 text-center bg-primary text-sm border border-border 
+            p-2 rounded-lg text-primary-foreground
             focus:outline-none focus:ring-2 focus:ring-selectedColor
             ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
             ${className}
@@ -72,7 +72,7 @@ const InputField = ({
           onClick={handleIncrement}
           disabled={disabled || (max !== undefined && parseInt(value || '0') >= max)}
           className={`
-            p-1 rounded-lg border border-buttonBorder bg-buttonColor
+            p-1 rounded-lg border border-border bg-primary
             hover:bg-selectedColor hover:foreground transition-colors duration-200
             ${disabled || (max !== undefined && parseInt(value || '0') >= max) ? 'opacity-50 cursor-not-allowed' : ''}
           `}
@@ -92,7 +92,7 @@ const InputField = ({
         <select 
           className={`
             ${isCertificateDropdown ? 'cert-select' : ''} 
-            dropdown w-full bg-buttonColor text-sm border border-buttonBorder 
+            dropdown w-full bg-primary text-sm border border-border 
             p-2 pl-3 pr-10 rounded-lg cursor-pointer appearance-none 
             focus:outline-none focus:ring-2 focus:ring-selectedColor focus:border-selectedColor 
             transition-colors duration-200
@@ -162,8 +162,8 @@ const InputField = ({
         disabled={disabled}
         required={required}
         className={`
-          w-full bg-buttonColor text-sm border border-buttonBorder 
-          p-2 rounded-lg cursor-pointer text-buttonTextColor 
+          w-full bg-primary text-sm border border-border 
+          p-2 rounded-lg cursor-pointer text-primary-foreground 
           placeholder-textSecondary
           focus:outline-none focus:ring-2 focus:ring-selectedColor 
           ${disabled ? 'opacity-50 cursor-not-allowed' : ''}

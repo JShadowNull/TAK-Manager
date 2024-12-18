@@ -205,7 +205,7 @@ function ExistingCertificates({
         </div>
         <div className="flex gap-2 items-center">
           <button
-            className="text-buttonTextColor rounded-lg px-3 py-2 text-sm border border-buttonBorder bg-buttonColor hover:bg-buttonHoverColor transition-all duration-200"
+            className="text-primary-foreground rounded-lg px-3 py-2 text-sm border border-border bg-primary hover:bg-buttonHoverColor transition-all duration-200"
             onClick={handleSelectAll}
           >
             {selectedCerts.size === filteredCertificates.length && filteredCertificates.length > 0 
@@ -214,7 +214,7 @@ function ExistingCertificates({
           </button>
           {selectedCerts.size > 0 && (
             <button
-              className={`text-buttonTextColor rounded-lg px-3 py-2 text-sm border border-buttonBorder bg-buttonColor 
+              className={`text-primary-foreground rounded-lg px-3 py-2 text-sm border border-border bg-primary 
                 ${selectedCerts.size === deletingCerts.size ? 'opacity-50 cursor-not-allowed' : 'hover:bg-buttonHoverColor'} 
                 transition-all duration-200`}
               onClick={handleDeleteSelected}
@@ -231,7 +231,7 @@ function ExistingCertificates({
             </button>
           )}
           <button
-            className="text-buttonTextColor rounded-lg px-3 py-2 text-sm border border-buttonBorder bg-buttonColor hover:bg-buttonHoverColor transition-all duration-200"
+            className="text-primary-foreground rounded-lg px-3 py-2 text-sm border border-border bg-primary hover:bg-buttonHoverColor transition-all duration-200"
             onClick={onCreateDataPackage}
           >
             Create Data Packages
@@ -250,7 +250,7 @@ function ExistingCertificates({
               filteredCertificates.map((cert) => (
                 <div 
                   key={cert.identifier} 
-                  className="flex items-center justify-between p-3 border border-border rounded-lg bg-background hover:bg-buttonColor transition-all duration-200"
+                  className="flex items-center justify-between p-3 border border-border rounded-lg bg-background hover:bg-primary transition-all duration-200"
                 >
                   <div className="flex items-center gap-4 flex-1">
                     <input
@@ -305,7 +305,7 @@ function ExistingCertificates({
                     </div>
                   </div>
                   <button
-                    className={`p-2 rounded-lg text-buttonTextColor hover:text-foreground hover:bg-buttonColor transition-all duration-200
+                    className={`p-2 rounded-lg text-primary-foreground hover:text-foreground hover:bg-primary transition-all duration-200
                       ${deletingCerts.has(cert.identifier) ? 'opacity-50 cursor-not-allowed' : ''}`}
                     onClick={() => deleteCertificate(cert.identifier)}
                     disabled={deletingCerts.has(cert.identifier)}

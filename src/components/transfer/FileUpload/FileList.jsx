@@ -12,7 +12,7 @@ export const FileList = ({ files, uploadingFiles, onDeleteFile, disabled }) => {
 
   return (
     (files.length > 0 || uploadingFiles.size > 0) && (
-      <div id="file-list" className="text-buttonTextColor rounded-lg text-sm border-1 border-buttonBorder bg-background">
+      <div id="file-list" className="text-primary-foreground rounded-lg text-sm border-1 border-border bg-background">
         <div style={{ height: `${containerHeight}px` }} className="overflow-hidden">
           <CustomScrollbar>
             <div className="divide-y px-4 py-0 divide-border rounded-lg">
@@ -22,9 +22,9 @@ export const FileList = ({ files, uploadingFiles, onDeleteFile, disabled }) => {
                   key={`uploading-${filename}`} 
                   className="flex justify-between items-center py-2"
                 >
-                  <span className="text-buttonTextColor opacity-75">{filename}</span>
+                  <span className="text-primary-foreground opacity-75">{filename}</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-buttonTextColor">Uploading...</span>
+                    <span className="text-xs text-primary-foreground">Uploading...</span>
                     <LoadingSpinner />
                   </div>
                 </div>
@@ -36,7 +36,7 @@ export const FileList = ({ files, uploadingFiles, onDeleteFile, disabled }) => {
                   key={filename} 
                   className="flex justify-between items-center py-2"
                 >
-                  <span className="text-buttonTextColor">{filename}</span>
+                  <span className="text-primary-foreground">{filename}</span>
                   <button
                     onClick={() => onDeleteFile(filename)}
                     className="text-red-500 hover:text-red-700"

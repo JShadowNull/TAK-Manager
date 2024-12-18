@@ -3,7 +3,7 @@ import { TakServerStatus, AdvancedFeatures, Configuration } from '../components/
 
 function Takserver() {
   return (
-    <div className="flex flex-col gap-8 pt-14">
+    <div className="flex flex-col gap-6">
       <TakServerStatus />
     </div>
   );

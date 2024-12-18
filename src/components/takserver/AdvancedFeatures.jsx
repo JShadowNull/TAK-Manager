@@ -220,7 +220,7 @@ function AdvancedFeatures() {
         <div className="flex flex-col gap-4">
           <h3 className="text-base font-bold">Advanced Features</h3>
 
-          <div className="bg-background border border-border p-4 rounded-lg mb-4">
+          <div className="bg-sidebar border border-border p-4 rounded-lg mb-4">
             <p className="text-sm foreground">
               Once configured, use https://your-ip-address:8443/ota/plugins in ATAK for update url to check for plugins and install them
             </p>

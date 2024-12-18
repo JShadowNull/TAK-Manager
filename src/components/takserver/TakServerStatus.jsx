@@ -104,7 +104,9 @@ function TakServerStatus({ handleStartStop }) {
       isStarting: false,
       isStopping: false,
       isRestarting: false,
-      error: null
+      error: null,
+      dockerRunning: false,
+      version: null
     },
     eventHandlers: {
       onConnect: (socket) => {
@@ -118,7 +120,9 @@ function TakServerStatus({ handleStartStop }) {
           isStarting: status.isStarting || false,
           isStopping: status.isStopping || false,
           isRestarting: status.isRestarting || false,
-          error: status.error
+          error: status.error,
+          dockerRunning: status.dockerRunning,
+          version: status.version
         });
         
         // Update component state
@@ -182,7 +186,7 @@ function TakServerStatus({ handleStartStop }) {
           appendToTerminal(`Error: ${result.message}`);
         }
       },
-      handleTerminalOutput: true // Explicitly enable terminal output handling
+      handleTerminalOutput: true
     }
   });
 
@@ -249,6 +253,13 @@ function TakServerStatus({ handleStartStop }) {
         setShowNextButton(true);
         setInstallationSuccessful(false);
         appendInstallOutput(`Rollback failed: ${data.error || 'Unknown error'}`);
+      },
+      docker_installed_status: (status) => {
+        setDockerStatus({
+          isInstalled: status.isInstalled,
+          isRunning: status.isRunning,
+          error: status.error
+        });
       },
       handleTerminalOutput: true
     }
@@ -445,7 +456,7 @@ function TakServerStatus({ handleStartStop }) {
   };
 
   const LoadingSpinner = () => (
-    <div className="animate-spin rounded-full h-4 w-4 border-2 border-buttonTextColor border-t-transparent"/>
+    <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground border-t-transparent"/>
   );
 
   return (

@@ -1,30 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import Switch from '@mui/material/Switch';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import { styled } from '@mui/material/styles';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlay, faStop, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import DockerPopup from '../components/shared/ui/popups/DockerPopup';
 import useSocket from '../components/shared/hooks/useSocket.js';
 import useFetch from '../components/shared/hooks/useFetch.js';
 import CustomScrollbar from '../components/shared/ui/CustomScrollbar';
-// Create a styled Switch component using Tailwind-like styles
-const StyledSwitch = styled(Switch)({
-  '& .MuiSwitch-switchBase': {
-    color: '#ffffff', // white
-    '&.Mui-checked': {
-      color: '#ffffff', // white
-      '& + .MuiSwitch-track': {
-        backgroundColor: '#22C55E', // green-500
-        opacity: 1,
-      },
-    },
-  },
-  '& .MuiSwitch-track': {
-    backgroundColor: '#EF4444', // red-500
-    opacity: 1,
-  },
-});
+import { Switch } from '../components/shared/ui/shadcn/switch';
 
 function Services() {
   const [dockerStatus, setDockerStatus] = useState({
@@ -152,8 +133,7 @@ function Services() {
     checkInitialStatus();
   }, [get]);
 
-  const handleDockerToggle = async (e) => {
-    const isChecked = e.target.checked;
+  const handleDockerToggle = async (isChecked) => {
     if (isChecked) {
       setIsStartingDocker(true);
     } else {
@@ -220,26 +200,18 @@ function Services() {
         {/* Start/Stop Services */}
         <div className="bg-card p-6 rounded-lg shadow-lg foreground w-full border border-border max-w-fit max-h-[8rem]">
           <h2 className="text-base mb-4 text-center">Start/Stop Services</h2>
-          <div className="flex items-center justify-between px-2">
-            <FormControlLabel
-              className="m-0" // Override MUI margin
-              control={
-                <StyledSwitch
-                  checked={dockerStatus.isRunning}
-                  onChange={handleDockerToggle}
-                  disabled={isStartingDocker || isStoppingDocker}
-                  className="mr-3"
-                />
-              }
-              label={
-                <span className="text-sm foreground">
-                  {isStartingDocker ? 'Starting Docker...' :
-                   isStoppingDocker ? 'Stopping Docker...' :
-                   dockerStatus.isRunning ? 'Docker is running' : 'Docker is stopped'}
-                </span>
-              }
-              labelPlacement="end"
+          <div className="flex items-center justify-between px-2 gap-3">
+            <Switch
+              checked={dockerStatus.isRunning}
+              onCheckedChange={handleDockerToggle}
+              disabled={isStartingDocker || isStoppingDocker}
+              className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-red-500"
             />
+            <span className="text-sm foreground">
+              {isStartingDocker ? 'Starting Docker...' :
+               isStoppingDocker ? 'Stopping Docker...' :
+               dockerStatus.isRunning ? 'Docker is running' : 'Docker is stopped'}
+            </span>
           </div>
         </div>
       </div>
@@ -269,7 +241,7 @@ function Services() {
                       <button
                         className={`focus:outline-none text-lg ${
                           inTransition
-                            ? 'text-gray-500'
+                            ? 'text-primary'
                             : running
                               ? 'text-red-500 hover:text-red-600'
                               : 'text-green-500 hover:text-green-600'

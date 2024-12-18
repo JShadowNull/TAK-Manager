@@ -38,19 +38,25 @@ const Button = forwardRef(({
     rel: rel || (target === '_blank' ? 'noopener noreferrer' : undefined)
   } : {};
 
-  const baseStyles = 'rounded-lg transition-all duration-200 text-sm border inline-flex items-center justify-center gap-2';
-  const paddingStyles = iconOnly ? 'p-2' : 'px-4 py-2';
-  
+  const baseStyles = 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0';
+  const paddingStyles = iconOnly ? 'h-10 w-10' : 'h-10 px-4 py-2';
+
   const variants = {
-    primary: 'text-buttonTextColor border-buttonBorder bg-buttonColor hover:text-black hover:shadow-md hover:border-transparent',
-    secondary: 'text-buttonTextColor border-buttonBorder bg-transparent hover:text-black hover:shadow-md hover:border-transparent',
-    danger: 'text-red-500 border-red-500 bg-transparent hover:text-black hover:shadow-md hover:border-transparent'
+    primary: 'bg-primary text-primary-foreground hover:bg-primary/90',
+    secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+    danger: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
+    outline: 'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
+    ghost: 'hover:bg-accent hover:text-accent-foreground',
+    link: 'text-primary underline-offset-4 hover:underline'
   };
 
   const defaultHoverStyles = {
-    primary: 'hover:bg-selectedColor',
-    secondary: 'hover:bg-selectedColor',
-    danger: 'hover:bg-red-500'
+    primary: 'hover:bg-primary/90',
+    secondary: 'hover:bg-secondary/80', 
+    danger: 'hover:bg-destructive/90',
+    outline: 'hover:bg-accent hover:text-accent-foreground',
+    ghost: 'hover:bg-accent hover:text-accent-foreground',
+    link: 'hover:underline'
   };
 
   const renderContent = () => {
