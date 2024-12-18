@@ -29,6 +29,8 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   rel?: string;
 }
 
+export type { ButtonProps };
+
 const Button = forwardRef<HTMLElement, ButtonProps>(({
   children,
   onClick,

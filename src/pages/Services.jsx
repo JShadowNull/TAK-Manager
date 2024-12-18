@@ -40,6 +40,11 @@ function Services() {
         
         // Only update if not in a loading state
         if (!state.operationInProgress) {
+          // If Docker is running but we have no containers, request container list
+          if (data.isRunning && (!state.containers || state.containers.length === 0)) {
+            emit('check_status');
+          }
+          
           updateState({
             ...state,
             isInstalled: data.isInstalled,
@@ -68,6 +73,11 @@ function Services() {
             state.status === 'stopping' || data.status === 'stoping' ? 'stopping' : state.status
           )
         };
+        
+        // If operation is complete and Docker is running, request container list
+        if (isComplete && newState.isRunning) {
+          emit('check_status');
+        }
         
         updateState(newState);
       },

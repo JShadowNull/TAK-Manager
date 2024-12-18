@@ -5,6 +5,7 @@ from backend.services.helpers.run_command import RunCommand
 from backend.services.scripts.docker.docker_manager import DockerManager
 from backend.services.scripts.docker.docker_checker import DockerChecker
 from backend.routes.socketio import socketio
+from backend.services.helpers.operation_status import OperationStatus
 import eventlet
 
 class TakServerStatus:
@@ -14,6 +15,7 @@ class TakServerStatus:
         self.docker_checker = DockerChecker()
         self.os_detector = OSDetector()
         self.working_dir = self.get_default_working_directory()
+        self.operation_status = OperationStatus('/takserver-status')
 
     def get_default_working_directory(self):
         """Determine the default working directory based on the OS."""
@@ -165,16 +167,16 @@ class TakServerStatus:
 
             docker_compose_dir = self.get_docker_compose_dir()
             
-            # Emit starting status
+            # Start operation status
+            self.operation_status.start_operation('start', "Starting TAK Server containers...")
+            
+            # Emit status without isStarting flag
             socketio.emit('takserver_status', {
                 'isInstalled': True,
                 'isRunning': False,
                 'dockerRunning': True,
                 'version': self.get_takserver_version(),
                 'error': None,
-                'isStarting': True,
-                'isStopping': False,
-                'isRestarting': False,
                 'isUninstalling': False
             }, namespace='/takserver-status')
             
@@ -195,6 +197,9 @@ class TakServerStatus:
             if not self.wait_for_containers_state(True):
                 raise Exception("Timeout waiting for containers to start")
 
+            # Complete operation status
+            self.operation_status.complete_operation('start', "TAK Server containers started successfully")
+            
             # Emit success status
             socketio.emit('takserver_status', {
                 'isInstalled': True,
@@ -202,9 +207,6 @@ class TakServerStatus:
                 'dockerRunning': True,
                 'version': self.get_takserver_version(),
                 'error': None,
-                'isStarting': False,
-                'isStopping': False,
-                'isRestarting': False,
                 'isUninstalling': False
             }, namespace='/takserver-status')
 
@@ -215,6 +217,9 @@ class TakServerStatus:
             return True
 
         except Exception as e:
+            # Fail operation status
+            self.operation_status.fail_operation('start', str(e))
+            
             # Emit error status
             socketio.emit('takserver_status', {
                 'isInstalled': True,
@@ -222,9 +227,6 @@ class TakServerStatus:
                 'dockerRunning': True,
                 'version': self.get_takserver_version(),
                 'error': str(e),
-                'isStarting': False,
-                'isStopping': False,
-                'isRestarting': False,
                 'isUninstalling': False
             }, namespace='/takserver-status')
             
@@ -242,16 +244,16 @@ class TakServerStatus:
 
             docker_compose_dir = self.get_docker_compose_dir()
             
-            # Emit stopping status
+            # Start operation status
+            self.operation_status.start_operation('stop', "Stopping TAK Server containers...")
+            
+            # Emit status without isStopping flag
             socketio.emit('takserver_status', {
                 'isInstalled': True,
                 'isRunning': True,
                 'dockerRunning': True,
                 'version': self.get_takserver_version(),
                 'error': None,
-                'isStarting': False,
-                'isStopping': True,
-                'isRestarting': False,
                 'isUninstalling': False
             }, namespace='/takserver-status')
             
@@ -272,6 +274,9 @@ class TakServerStatus:
             if not self.wait_for_containers_state(False):
                 raise Exception("Timeout waiting for containers to stop")
 
+            # Complete operation status
+            self.operation_status.complete_operation('stop', "TAK Server containers stopped successfully")
+            
             # Emit success status
             socketio.emit('takserver_status', {
                 'isInstalled': True,
@@ -279,9 +284,6 @@ class TakServerStatus:
                 'dockerRunning': True,
                 'version': self.get_takserver_version(),
                 'error': None,
-                'isStarting': False,
-                'isStopping': False,
-                'isRestarting': False,
                 'isUninstalling': False
             }, namespace='/takserver-status')
 
@@ -292,6 +294,9 @@ class TakServerStatus:
             return True
 
         except Exception as e:
+            # Fail operation status
+            self.operation_status.fail_operation('stop', str(e))
+            
             # Emit error status
             socketio.emit('takserver_status', {
                 'isInstalled': True,
@@ -299,9 +304,6 @@ class TakServerStatus:
                 'dockerRunning': True,
                 'version': self.get_takserver_version(),
                 'error': str(e),
-                'isStarting': False,
-                'isStopping': False,
-                'isRestarting': False,
                 'isUninstalling': False
             }, namespace='/takserver-status')
             
@@ -319,16 +321,16 @@ class TakServerStatus:
 
             docker_compose_dir = self.get_docker_compose_dir()
             
-            # Emit restarting status
+            # Start operation status
+            self.operation_status.start_operation('restart', "Restarting TAK Server containers...")
+            
+            # Emit status without isRestarting flag
             socketio.emit('takserver_status', {
                 'isInstalled': True,
                 'isRunning': True,
                 'dockerRunning': True,
                 'version': self.get_takserver_version(),
                 'error': None,
-                'isStarting': False,
-                'isStopping': False,
-                'isRestarting': True,
                 'isUninstalling': False
             }, namespace='/takserver-status')
             
@@ -337,7 +339,7 @@ class TakServerStatus:
                 'takserver-status'
             )
             
-            # Restart the containers
+            # Stop the containers
             result = self.run_command.run_command(
                 ["docker-compose", "restart"],
                 working_dir=docker_compose_dir,
@@ -349,6 +351,9 @@ class TakServerStatus:
             if not self.wait_for_containers_state(True):
                 raise Exception("Timeout waiting for containers to restart")
 
+            # Complete operation status
+            self.operation_status.complete_operation('restart', "TAK Server containers restarted successfully")
+            
             # Emit success status
             socketio.emit('takserver_status', {
                 'isInstalled': True,
@@ -356,9 +361,6 @@ class TakServerStatus:
                 'dockerRunning': True,
                 'version': self.get_takserver_version(),
                 'error': None,
-                'isStarting': False,
-                'isStopping': False,
-                'isRestarting': False,
                 'isUninstalling': False
             }, namespace='/takserver-status')
 
@@ -369,6 +371,9 @@ class TakServerStatus:
             return True
 
         except Exception as e:
+            # Fail operation status
+            self.operation_status.fail_operation('restart', str(e))
+            
             # Emit error status
             socketio.emit('takserver_status', {
                 'isInstalled': True,
@@ -376,9 +381,6 @@ class TakServerStatus:
                 'dockerRunning': True,
                 'version': self.get_takserver_version(),
                 'error': str(e),
-                'isStarting': False,
-                'isStopping': False,
-                'isRestarting': False,
                 'isUninstalling': False
             }, namespace='/takserver-status')
             

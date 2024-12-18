@@ -5,6 +5,7 @@ import AdvancedFeatures from './AdvancedFeatures';
 import Configuration from './Configuration';
 import DockerPopup from '../shared/ui/popups/DockerPopup';
 import Button from '../shared/ui/Button';
+import LoadingButton from '../shared/ui/LoadingButton';
 import useSocket from '../shared/hooks/useSocket';
 import InstallationPopup from './InstallationPopup';
 import UninstallationPopup from './UninstallationPopup';
@@ -79,27 +80,36 @@ function TakServerStatus({ handleStartStop }) {
       isRestarting: false,
       error: null,
       dockerRunning: false,
-      version: null
+      version: null,
+      operationInProgress: false
     },
     eventHandlers: {
       onConnect: () => {
         console.log('Connected to TAK server status service');
         emitTakStatus('check_status');
       },
-      takserver_status: (status) => {
-        updateTakState({
+      takserver_status: (status, { state, updateState }) => {
+        console.info('TAK Server Status:', status);
+        
+        // Update all state properties from the status event
+        updateState({
+          ...state,
           isInstalled: status.isInstalled,
           isRunning: status.isRunning,
+          dockerRunning: status.dockerRunning,
+          version: status.version,
+          error: status.error,
           isStarting: status.isStarting || false,
           isStopping: status.isStopping || false,
           isRestarting: status.isRestarting || false,
-          error: status.error,
-          dockerRunning: status.dockerRunning,
-          version: status.version
+          // Set operationInProgress based on any ongoing operation
+          operationInProgress: status.isStarting || status.isStopping || status.isRestarting
         });
         
         if (status.error) {
           setOperationError(status.error);
+        } else {
+          setOperationError(null);
         }
       },
       onError: (error) => {
@@ -371,15 +381,32 @@ function TakServerStatus({ handleStartStop }) {
   const handleStartStopClick = async () => {
     try {
       setOperationError(null);
+      const isStarting = !takState.isRunning;
+      
+      // Set initial loading state
+      updateTakState({
+        ...takState,
+        isStarting: isStarting,
+        isStopping: !isStarting,
+        error: null
+      });
+      
       const endpoint = takState.isRunning ? '/api/takserver/takserver-stop' : '/api/takserver/takserver-start';
       
       await post(endpoint, null, {
         validateResponse: (data) => ({
-          isValid: true, // Any response is valid for start/stop
+          isValid: true
         })
       });
       
     } catch (error) {
+      // Reset loading state on error
+      updateTakState({
+        ...takState,
+        isStarting: false,
+        isStopping: false,
+        error: error.message || 'Operation failed'
+      });
       setOperationError(error.message || 'Operation failed');
     }
   };
@@ -388,13 +415,26 @@ function TakServerStatus({ handleStartStop }) {
     try {
       setOperationError(null);
       
+      // Set initial loading state
+      updateTakState({
+        ...takState,
+        isRestarting: true,
+        error: null
+      });
+      
       await post('/api/takserver/takserver-restart', null, {
         validateResponse: (data) => ({
-          isValid: true, // Any response is valid for restart
+          isValid: true
         })
       });
       
     } catch (error) {
+      // Reset loading state on error
+      updateTakState({
+        ...takState,
+        isRestarting: false,
+        error: error.message || 'Restart failed'
+      });
       setOperationError(error.message || 'Restart failed');
     }
   };
@@ -477,39 +517,39 @@ function TakServerStatus({ handleStartStop }) {
                 </Button>
                 {takState.isRunning && (
                   <>
-                    <Button
+                    <LoadingButton
                       onClick={handleRestartClick}
                       disabled={takState.isStarting || takState.isStopping || takState.isRestarting}
-                      loading={takState.isRestarting}
-                      loadingText="Restarting TAK Server..."
+                      isLoading={takState.isRestarting}
+                      operation="restart"
                       variant="primary"
                       className="hover:bg-yellow-500"
                     >
                       Restart
-                    </Button>
-                    <Button
+                    </LoadingButton>
+                    <LoadingButton
                       onClick={handleStartStopClick}
                       disabled={takState.isStarting || takState.isStopping || takState.isRestarting}
-                      loading={takState.isStopping}
-                      loadingText="Stopping TAK Server..."
+                      isLoading={takState.isStopping}
+                      operation="stop"
                       variant="primary"
                       className="hover:bg-red-500"
                     >
                       Stop
-                    </Button>
+                    </LoadingButton>
                   </>
                 )}
                 {!takState.isRunning && (
-                  <Button
+                  <LoadingButton
                     onClick={handleStartStopClick}
                     disabled={takState.isStarting || takState.isStopping || takState.isRestarting}
-                    loading={takState.isStarting}
-                    loadingText="Starting TAK Server..."
+                    isLoading={takState.isStarting}
+                    operation="start"
                     variant="primary"
                     className="hover:bg-green-500"
                   >
                     Start
-                  </Button>
+                  </LoadingButton>
                 )}
               </>
             ) : (

@@ -258,18 +258,18 @@ function AdvancedFeatures() {
           
           <div className="flex flex-col gap-4">
             {/* Purpose Section */}
-            <div className="bg-background border border-border p-4 rounded-lg mb-4">
+            <div className="bg-sidebar border border-border p-4 rounded-lg mb-4">
               <h4 className="text-sm font-semibold text-selectedColor mb-2">Purpose</h4>
-              <p className="text-sm text-gray-300 leading-relaxed">
+              <p className="text-sm text-primary leading-relaxed">
                 OTA (Over-The-Air) updates enable ATAK users to easily discover and install available plugins and ATAK versions directly from their devices. 
                 This feature streamlines the distribution of updates and new capabilities to your ATAK users without requiring manual installation. Download the plugins ZIP file from <a href="https://tak.gov/products/tak-server" target="_blank" rel="noopener noreferrer" className="foreground hover:text-textSecondary">TAK.gov</a> and upload it here.
               </p>
             </div>
 
             {/* OTA Configuration Summary */}
-            <div className="bg-background border border-border p-4 rounded-lg mb-4">
+            <div className="bg-sidebar border border-border p-4 rounded-lg mb-4">
               <h4 className="text-sm font-semibold text-selectedColor mb-2">Configuration Summary</h4>
-              <ul className="text-sm text-gray-300 list-disc list-inside space-y-1">
+              <ul className="text-sm text-primary list-disc list-inside space-y-1">
                 <li>This will configure OTA (Over-The-Air) updates for ATAK clients</li>
                 <li>The process will update the Dockerfile and docker-compose configuration</li>
                 <li>TAK Server containers will be rebuilt and restarted</li>
@@ -283,8 +283,8 @@ function AdvancedFeatures() {
             </div>
 
             {/* File Upload Section */}
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-semibold text-foreground">
+            <div className="flex flex-col gap-2 bg-sidebar border border-border p-4 rounded-lg">
+              <label className="text-sm font-semibold text-primary">
                 Plugins ZIP File <span className="text-red-500">*</span>
                 <p className="text-sm text-textSecondary">Example: ATAK-MIL_5.2.0_loadout.zip</p>
               </label>
@@ -326,18 +326,18 @@ function AdvancedFeatures() {
           
           <div className="flex flex-col gap-4">
             {/* Purpose Section */}
-            <div className="bg-background border border-border p-4 rounded-lg mb-4">
-              <h4 className="text-sm font-semibold text-selectedColor mb-2">Purpose</h4>
-              <p className="text-sm text-gray-300 leading-relaxed">
+            <div className="bg-sidebar border border-border p-4 rounded-lg mb-4">
+              <h4 className="text-sm font-semibold text-primary mb-2">Purpose</h4>
+              <p className="text-sm text-primary leading-relaxed">
                 Update the plugins available through OTA updates on your TAK Server. This allows you to add new plugins or update existing ones
                 that will be available to your ATAK users.
               </p>
             </div>
 
             {/* Update Summary */}
-            <div className="bg-background border border-border p-4 rounded-lg mb-4">
-              <h4 className="text-sm font-semibold text-selectedColor mb-2">Update Summary</h4>
-              <ul className="text-sm text-gray-300 list-disc list-inside space-y-1">
+            <div className="bg-sidebar border border-border p-4 rounded-lg mb-4">
+              <h4 className="text-sm font-semibold text-primary mb-2">Update Summary</h4>
+              <ul className="text-sm text-primary list-disc list-inside space-y-1">
                 <li>This will update the available plugins for OTA updates</li>
                 <li>Existing plugins folder will be removed and replaced with the new content</li>
                 <li>TAK Server will be restarted to apply the changes</li>
@@ -350,8 +350,8 @@ function AdvancedFeatures() {
             </div>
 
             {/* File Upload Section */}
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-semibold text-foreground">
+            <div className="flex flex-col gap-2 bg-sidebar border border-border p-4 rounded-lg">
+              <label className="text-sm font-semibold text-primary">
                 Plugins ZIP File <span className="text-red-500">*</span>
               </label>
               <p className="text-sm text-textSecondary">Example: ATAK-MIL_5.2.0_loadout.zip</p>
@@ -454,14 +454,14 @@ function AdvancedFeatures() {
           {completedOperation === 'config' ? (
             <>
               <p className="text-green-500 font-semibold">OTA Plugins Configuration Completed Successfully</p>
-              <p className="text-sm text-gray-300">
+              <p className="text-sm text-primary">
                 Your TAK Server is now configured to provide OTA updates to ATAK clients.
               </p>
             </>
           ) : (
             <>
               <p className="text-green-500 font-semibold">Plugin Update Completed Successfully</p>
-              <p className="text-sm text-gray-300">
+              <p className="text-sm text-primary">
                 Your TAK Server plugins have been updated and are now available in ATAK.
               </p>
             </>
