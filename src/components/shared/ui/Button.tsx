@@ -1,14 +1,38 @@
 import React, { forwardRef } from 'react';
-import PropTypes from 'prop-types';
+import type { ReactNode } from 'react';
 import { Slot } from '@radix-ui/react-slot';
 import { Loader2 } from 'lucide-react';
 import { HelpIconTooltip } from './shadcn/tooltip/HelpIconTooltip';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './shadcn/tooltip/tooltip';
 
-const Button = forwardRef(({ 
-  children, 
-  onClick, 
-  variant = 'primary', 
+interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  children: ReactNode;
+  onClick?: () => void;
+  variant?: 'primary' | 'secondary' | 'danger' | 'outline' | 'ghost' | 'link';
+  disabled?: boolean;
+  className?: string;
+  type?: 'button' | 'submit' | 'reset';
+  asChild?: boolean;
+  tooltip?: string;
+  showHelpIcon?: boolean;
+  triggerMode?: 'click' | 'hover';
+  loading?: boolean;
+  loadingText?: string;
+  tooltipStyle?: 'material' | 'shadcn';
+  tooltipDelay?: number;
+  tooltipPosition?: 'top' | 'right' | 'bottom' | 'left';
+  leadingIcon?: ReactNode;
+  trailingIcon?: ReactNode;
+  iconOnly?: boolean;
+  href?: string;
+  target?: string;
+  rel?: string;
+}
+
+const Button = forwardRef<HTMLElement, ButtonProps>(({
+  children,
+  onClick,
+  variant = 'primary',
   disabled = false,
   className = '',
   type = 'button',
@@ -24,14 +48,13 @@ const Button = forwardRef(({
   leadingIcon = null,
   trailingIcon = null,
   iconOnly = false,
-  href = '',
-  target = '',
-  rel = '',
-  ...props
+  href,
+  target,
+  rel,
+  ...rest
 }, ref) => {
-  const Comp = href && !asChild ? 'a' : asChild ? Slot : 'button';
-  
-  // Define linkProps object
+  const Component = href ? 'a' : asChild ? Slot : 'button';
+
   const linkProps = href ? {
     href,
     target,
@@ -41,7 +64,7 @@ const Button = forwardRef(({
   const baseStyles = 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0';
   const paddingStyles = iconOnly ? 'h-10 w-10' : 'h-10 px-4 py-2';
 
-  const variants = {
+  const variants: Record<string, string> = {
     primary: 'bg-primary text-primary-foreground hover:bg-primary/90',
     secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
     danger: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
@@ -50,16 +73,16 @@ const Button = forwardRef(({
     link: 'text-primary underline-offset-4 hover:underline'
   };
 
-  const defaultHoverStyles = {
+  const defaultHoverStyles: Record<string, string> = {
     primary: 'hover:bg-primary/90',
-    secondary: 'hover:bg-secondary/80', 
+    secondary: 'hover:bg-secondary/80',
     danger: 'hover:bg-destructive/90',
     outline: 'hover:bg-accent hover:text-accent-foreground',
     ghost: 'hover:bg-accent hover:text-accent-foreground',
     link: 'hover:underline'
   };
 
-  const renderContent = () => {
+  const renderContent = (): ReactNode => {
     if (loading) {
       return (
         <>
@@ -79,9 +102,9 @@ const Button = forwardRef(({
   };
 
   const buttonElement = (
-    <Comp
+    <Component
       ref={ref}
-      type={!href ? type : undefined}
+      type={Component === 'button' ? type : undefined}
       onClick={onClick}
       disabled={disabled || loading}
       className={`
@@ -92,11 +115,11 @@ const Button = forwardRef(({
         ${(disabled || loading) && !className.includes('opacity-') ? 'opacity-50 cursor-not-allowed' : ''}
         ${className}
       `}
-      {...linkProps}
-      {...props}
+      {...(href ? linkProps : {})}
+      {...rest}
     >
       {renderContent()}
-    </Comp>
+    </Component>
   );
 
   // If using shadcn tooltip
@@ -122,7 +145,7 @@ const Button = forwardRef(({
         tooltip={tooltip}
         triggerMode={triggerMode}
         showIcon={false}
-        delay={tooltipDelay}
+        tooltipDelay={tooltipDelay}
       >
         {buttonElement}
       </HelpIconTooltip>
@@ -143,30 +166,6 @@ const Button = forwardRef(({
     </div>
   );
 });
-
-Button.propTypes = {
-  children: PropTypes.node.isRequired,
-  onClick: PropTypes.func,
-  variant: PropTypes.oneOf(['primary', 'secondary', 'danger']),
-  disabled: PropTypes.bool,
-  className: PropTypes.string,
-  type: PropTypes.oneOf(['button', 'submit', 'reset']),
-  asChild: PropTypes.bool,
-  tooltip: PropTypes.string,
-  showHelpIcon: PropTypes.bool,
-  triggerMode: PropTypes.oneOf(['click', 'hover']),
-  loading: PropTypes.bool,
-  loadingText: PropTypes.string,
-  tooltipStyle: PropTypes.oneOf(['material', 'shadcn']),
-  tooltipPosition: PropTypes.oneOf(['top', 'right', 'bottom', 'left']),
-  leadingIcon: PropTypes.node,
-  trailingIcon: PropTypes.node,
-  iconOnly: PropTypes.bool,
-  tooltipDelay: PropTypes.number,
-  href: PropTypes.string,
-  target: PropTypes.string,
-  rel: PropTypes.string,
-};
 
 Button.displayName = 'Button';
 

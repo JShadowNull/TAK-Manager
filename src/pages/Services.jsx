@@ -1,171 +1,149 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlay, faStop, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import DockerPopup from '../components/shared/ui/popups/DockerPopup';
-import useSocket from '../components/shared/hooks/useSocket.js';
-import useFetch from '../components/shared/hooks/useFetch.js';
+import useSocket from '../components/shared/hooks/useSocket';
+import useFetch from '../components/shared/hooks/useFetch';
 import CustomScrollbar from '../components/shared/ui/CustomScrollbar';
 import { Switch } from '../components/shared/ui/shadcn/switch';
 
 function Services() {
-  const [dockerStatus, setDockerStatus] = useState({
-    isInstalled: true,
-    isRunning: false,
-    error: null
-  });
-  const [isStartingDocker, setIsStartingDocker] = useState(false);
-  const [isStoppingDocker, setIsStoppingDocker] = useState(false);
-  const [containers, setContainers] = useState([]);
-  const [pendingContainerActions, setPendingContainerActions] = useState({});
-  const { get, post, loading, error } = useFetch();
+  const { post } = useFetch();
 
-  // Define socket event handlers
-  const dockerManagerHandlers = {
-    docker_status: (data) => {
-      console.log('Received Docker status:', data);
-      setDockerStatus({
-        isInstalled: data.isInstalled ?? true,
-        isRunning: data.isRunning ?? false,
-        error: data.error || null
-      });
-      
-      // Reset loading states based on status
-      if (data.isRunning) {
-        setIsStartingDocker(false);
-      } else {
-        setIsStoppingDocker(false);
-      }
-
-      // If Docker is not running, clear containers
-      if (!data.isRunning) {
-        setContainers([]);
-      }
+  // Docker Manager Socket
+  const {
+    state: dockerState,
+    isConnected,
+    error: dockerError,
+    updateState,
+    emit
+  } = useSocket('/docker-manager', {
+    initialState: {
+      isInstalled: false,
+      isRunning: false,
+      dockerRunning: false,
+      error: null,
+      containers: [],
+      pendingActions: {},
+      isLoading: false,
+      status: null,
+      operationInProgress: false
     },
-    containers: (data) => {
-      console.log('Received containers update:', data.containers);
-      if (Array.isArray(data.containers)) {
-        setContainers(data.containers);
+    eventHandlers: {
+      // Regular status updates
+      docker_status: (data, { state, updateState }) => {
+        console.info('Docker Status:', {
+          isInstalled: data.isInstalled,
+          isRunning: data.isRunning,
+          error: data.error
+        });
         
-        // Clear pending actions for containers that reached target state
-        setPendingContainerActions(prev => {
-          const newPending = { ...prev };
+        // Only update if not in a loading state
+        if (!state.operationInProgress) {
+          updateState({
+            ...state,
+            isInstalled: data.isInstalled,
+            isRunning: data.isRunning,
+            error: data.error || null
+          });
+        }
+      },
+      
+      // Operation status updates (start/stop progress)
+      docker_operation: (data, { state, updateState }) => {
+        console.info('Docker Operation:', {
+          status: data.status,
+          isRunning: data.isRunning
+        });
+        
+        const isComplete = data.status === 'complete';
+        const newState = {
+          ...state,
+          isInstalled: state.isInstalled,
+          isRunning: data.isRunning !== undefined ? data.isRunning : state.isRunning,
+          error: data.error || null,
+          operationInProgress: !isComplete,
+          isLoading: !isComplete,
+          status: isComplete ? 'complete' : (
+            state.status === 'stopping' || data.status === 'stoping' ? 'stopping' : state.status
+          )
+        };
+        
+        updateState(newState);
+      },
+
+      containers: (data, { state, updateState }) => {
+        if (Array.isArray(data.containers)) {
+          const newPendingActions = { ...state.pendingActions };
+          
           data.containers.forEach(container => {
-            const pendingAction = newPending[container.name];
+            const pendingAction = newPendingActions[container.name];
             const status = container.status.toLowerCase();
             
             if (pendingAction === 'start' && isContainerRunning(status)) {
-              delete newPending[container.name];
+              delete newPendingActions[container.name];
             } else if (pendingAction === 'stop' && status.includes('exited')) {
-              delete newPending[container.name];
+              delete newPendingActions[container.name];
             }
           });
-          return newPending;
-        });
-      }
-    },
-    docker_operation: (data) => {
-      console.log('Docker operation result:', data);
-      if (data.status === 'error') {
-        setDockerStatus(prev => ({
-          ...prev,
-          error: data.message
-        }));
-        setIsStartingDocker(false);
-        setIsStoppingDocker(false);
-      }
-    },
-    container_operation: (data) => {
-      console.log('Container operation result:', data);
-      if (data.status === 'error' && data.container) {
-        setPendingContainerActions(prev => {
-          const newPending = { ...prev };
-          delete newPending[data.container];
-          return newPending;
-        });
-      }
-    },
-    onConnect: () => {
-      console.log('Connected to Docker manager socket');
-      // Request immediate status update on connection
-      dockerSocket.emit('check_status');
-    },
-    onError: (error) => {
-      console.error('Docker manager socket connection error:', error);
-      setDockerStatus(prev => ({
-        ...prev,
-        error: 'Connection error with Docker manager'
-      }));
-    }
-  };
 
-  // Initialize socket using the hook
-  const dockerSocket = useSocket('/docker-manager', {
-    eventHandlers: dockerManagerHandlers,
-    options: {
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000
+          updateState({
+            ...state,
+            containers: data.containers,
+            pendingActions: newPendingActions
+          });
+        }
+      }
     }
   });
 
-  // Initial Docker status check
-  useEffect(() => {
-    const checkInitialStatus = async () => {
-      try {
-        const data = await get('/docker-manager/docker/status');
-        const { isInstalled, isRunning, containers: containerList, error } = data;
-        setDockerStatus({
-          isInstalled,
-          isRunning,
-          error
-        });
-        if (containerList) {
-          setContainers(containerList);
-        }
-      } catch (error) {
-        console.error('Error checking Docker status:', error);
-        setDockerStatus(prev => ({
-          ...prev,
-          error: 'Error checking Docker status'
-        }));
-      }
-    };
-    checkInitialStatus();
-  }, [get]);
-
   const handleDockerToggle = async (isChecked) => {
-    if (isChecked) {
-      setIsStartingDocker(true);
-    } else {
-      setIsStoppingDocker(true);
-    }
+    console.info('Docker Toggle:', isChecked ? 'Starting' : 'Stopping');
+
     try {
+      const newState = {
+        ...dockerState,
+        error: null,
+        isLoading: true,
+        operationInProgress: true,
+        status: isChecked ? 'starting' : 'stopping'
+      };
+      
+      updateState(newState);
       await post(`/docker-manager/docker/${isChecked ? 'start' : 'stop'}`);
     } catch (error) {
-      console.error('Error toggling Docker:', error);
-      setDockerStatus(prev => ({
-        ...prev,
-        error: `Error ${isChecked ? 'starting' : 'stopping'} Docker`
-      }));
-      setIsStartingDocker(false);
-      setIsStoppingDocker(false);
+      console.error('Docker Toggle Error:', error);
+      const errorState = {
+        ...dockerState,
+        error: `Error ${isChecked ? 'starting' : 'stopping'} Docker`,
+        isLoading: false,
+        operationInProgress: false
+      };
+      updateState(errorState);
     }
   };
 
   const toggleContainer = async (containerName, action) => {
-    console.log(`Toggling container ${containerName} with action ${action}`);
-    setPendingContainerActions(prev => ({
-      ...prev,
-      [containerName]: action
-    }));
+    console.info('Container Toggle:', { container: containerName, action });
+    
+    // Update pending actions
+    updateState({
+      pendingActions: {
+        ...dockerState.pendingActions,
+        [containerName]: action
+      }
+    });
+
     try {
       await post(`/docker-manager/docker/containers/${containerName}/${action}`);
     } catch (error) {
-      console.error(`Error ${action}ing container:`, error);
-      setPendingContainerActions(prev => {
-        const newPending = { ...prev };
-        delete newPending[containerName];
-        return newPending;
+      console.error('Container Toggle Error:', error);
+      // Clear pending action on error
+      updateState({
+        pendingActions: {
+          ...dockerState.pendingActions,
+          [containerName]: undefined
+        }
       });
     }
   };
@@ -178,10 +156,11 @@ function Services() {
            lowerStatus.includes('(unhealthy)');
   };
 
-  const isContainerInTransition = (status, pendingAction) => {
-    if (!status || !pendingAction) return false;
+  const isContainerInTransition = (container) => {
+    const pendingAction = dockerState.pendingActions[container.name];
+    if (!pendingAction) return false;
     
-    const lowerStatus = status.toLowerCase();
+    const status = container.status.toLowerCase();
     
     if (pendingAction === 'start' && !isContainerRunning(status)) {
       return true;
@@ -194,6 +173,18 @@ function Services() {
     return false;
   };
 
+  // Show loading state while connecting
+  if (!isConnected) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold mb-2">Connecting to Docker service...</h2>
+          <p className="text-muted-foreground">Please wait while we establish connection</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex gap-6 flex-wrap">
       <div className="flex flex-wrap">
@@ -202,15 +193,17 @@ function Services() {
           <h2 className="text-base mb-4 text-center">Start/Stop Services</h2>
           <div className="flex items-center justify-between px-2 gap-3">
             <Switch
-              checked={dockerStatus.isRunning}
+              checked={dockerState.isRunning}
               onCheckedChange={handleDockerToggle}
-              disabled={isStartingDocker || isStoppingDocker}
+              disabled={!isConnected || dockerState.isLoading}
               className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-red-500"
             />
             <span className="text-sm foreground">
-              {isStartingDocker ? 'Starting Docker...' :
-               isStoppingDocker ? 'Stopping Docker...' :
-               dockerStatus.isRunning ? 'Docker is running' : 'Docker is stopped'}
+              {!isConnected ? 'Connecting...' :
+               dockerState.isLoading ? (
+                dockerState.status === 'stopping' || dockerState.status === 'stoping' ? 'Stopping Docker...' : 'Starting Docker...'
+               ) :
+               dockerState.isRunning ? 'Docker is running' : 'Docker is stopped'}
             </span>
           </div>
         </div>
@@ -222,16 +215,16 @@ function Services() {
         <div className="h-[calc(100%-3rem)]">
           <CustomScrollbar>
             <ul className="list-none space-y-2 divide-y divide-border text-sm p-2">
-              {!dockerStatus.isInstalled ? (
+              {!dockerState.isInstalled && !dockerState.isLoading ? (
                 <li className="border-1 border-border p-4 rounded">Docker is not installed</li>
-              ) : !dockerStatus.isRunning ? (
+              ) : !dockerState.isRunning ? (
                 <li className="border-1 border-border p-4 rounded">Start Docker to view containers</li>
-              ) : containers.length === 0 ? (
+              ) : dockerState.containers.length === 0 ? (
                 <li className="border-1 border-border p-4 rounded">No containers found</li>
               ) : (
-                containers.map(container => {
+                dockerState.containers.map(container => {
                   const running = isContainerRunning(container.status);
-                  const inTransition = isContainerInTransition(container.status, pendingContainerActions[container.name]);
+                  const inTransition = isContainerInTransition(container);
                   
                   return (
                     <li key={container.name} className="p-4 rounded flex justify-between items-center space-x-4">
@@ -246,7 +239,7 @@ function Services() {
                               ? 'text-red-500 hover:text-red-600'
                               : 'text-green-500 hover:text-green-600'
                         }`}
-                        disabled={inTransition}
+                        disabled={inTransition || !dockerState.isRunning}
                         onClick={() => {
                           const action = running ? 'stop' : 'start';
                           toggleContainer(container.name, action);
@@ -272,9 +265,9 @@ function Services() {
         </div>
       </div>
 
-      {/* Docker Popup - only shown when Docker is not installed */}
+      {/* Docker Popup - only show when Docker is not installed and not loading */}
       <DockerPopup 
-        isVisible={!dockerStatus.isInstalled}
+        isVisible={!dockerState.isInstalled && !dockerState.isLoading}
       />
     </div>
   );

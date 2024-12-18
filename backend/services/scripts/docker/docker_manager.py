@@ -11,25 +11,29 @@ class DockerManager:
 
     def start_docker(self):
         """Start Docker based on the detected OS"""
+        result = None
         if self.os_type == 'macos':
-            return self._start_docker_desktop_macos()
+            result = self._start_docker_desktop_macos()
         elif self.os_type == 'windows':
-            return self._start_docker_desktop_windows()
+            result = self._start_docker_desktop_windows()
         elif self.os_type == 'linux':
-            return self._start_docker_cli_linux()
+            result = self._start_docker_cli_linux()
         else:
-            return {"error": "Unsupported OS. Cannot start Docker."}
+            result = {"error": "Unsupported OS. Cannot start Docker."}
+        return result
 
     def stop_docker(self):
         """Stop Docker based on the detected OS"""
+        result = None
         if self.os_type == 'macos':
-            return self._stop_docker_desktop_macos()
+            result = self._stop_docker_desktop_macos()
         elif self.os_type == 'windows':
-            return self._stop_docker_desktop_windows()
+            result = self._stop_docker_desktop_windows()
         elif self.os_type == 'linux':
-            return self._stop_docker_cli_linux()
+            result = self._stop_docker_cli_linux()
         else:
-            return {"error": "Unsupported OS. Cannot stop Docker."}
+            result = {"error": "Unsupported OS. Cannot stop Docker."}
+        return result
 
     def list_containers(self):
         """List Docker containers (running and non-running) with their status."""

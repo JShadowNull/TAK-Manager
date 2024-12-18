@@ -1,8 +1,14 @@
+import { ReactNode, forwardRef } from 'react';
 import { Scrollbars } from 'react-custom-scrollbars-2';
 
-function CustomScrollbar({ children, className = '' }) {
+interface CustomScrollbarProps {
+  children: ReactNode;
+  className?: string;
+}
+
+const CustomScrollbar = forwardRef<HTMLDivElement, CustomScrollbarProps>(({ children, className = '' }, ref) => {
   return (
-    <div className={`h-full w-full ${className}`}>
+    <div className={`h-full w-full ${className}`} ref={ref}>
       <Scrollbars
         autoHide
         autoHideTimeout={1000}
@@ -38,6 +44,8 @@ function CustomScrollbar({ children, className = '' }) {
       </Scrollbars>
     </div>
   );
-}
+});
+
+CustomScrollbar.displayName = 'CustomScrollbar';
 
 export default CustomScrollbar; 

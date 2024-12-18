@@ -13,7 +13,7 @@ class DockerChecker:
         try:
             result = self.run_command.run_command(
                 ["docker", "--version"],
-                namespace='docker-status',
+                namespace='docker-manager',
                 capture_output=True,
                 emit_output=False
             )
@@ -21,7 +21,7 @@ class DockerChecker:
         except (subprocess.CalledProcessError, FileNotFoundError):
             self.run_command.emit_log_output(
                 "Docker is not installed", 
-                'docker-status'
+                'docker-manager'
             )
             return False
 
@@ -34,7 +34,7 @@ class DockerChecker:
                 # For macOS, we need to check if the command succeeds and verify the output
                 result = self.run_command.run_command(
                     ["docker", "info"],
-                    namespace='docker-status',
+                    namespace='docker-manager',
                     capture_output=True,
                     emit_output=False
                 )
@@ -47,7 +47,7 @@ class DockerChecker:
             elif os_type == 'linux':
                 result = self.run_command.run_command(
                     ["systemctl", "is-active", "--quiet", "docker"],
-                    namespace='docker-status',
+                    namespace='docker-manager',
                     capture_output=True,
                     emit_output=False
                 )
@@ -55,7 +55,7 @@ class DockerChecker:
             else:
                 self.run_command.emit_log_output(
                     "Unsupported operating system", 
-                    'docker-status'
+                    'docker-manager'
                 )
                 return False
 
@@ -64,18 +64,18 @@ class DockerChecker:
             if 'Cannot connect to the Docker daemon' in str(e.stderr):
                 self.run_command.emit_log_output(
                     "Docker daemon is not running", 
-                    'docker-status'
+                    'docker-manager'
                 )
             else:
                 self.run_command.emit_log_output(
                     f"Error checking Docker status: {str(e)}", 
-                    'docker-status'
+                    'docker-manager'
                 )
             return False
         except Exception as e:
             self.run_command.emit_log_output(
                 f"Error checking Docker status: {str(e)}", 
-                'docker-status'
+                'docker-manager'
             )
             return False
 

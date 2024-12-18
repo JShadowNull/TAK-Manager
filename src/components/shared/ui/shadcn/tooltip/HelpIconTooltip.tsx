@@ -29,6 +29,7 @@ interface HelpIconTooltipProps {
   side?: 'top' | 'right' | 'bottom' | 'left';
   showIcon?: boolean;
   children?: React.ReactNode;
+  tooltipDelay?: number;
 }
 
 export const HelpIconTooltip = ({
@@ -39,6 +40,7 @@ export const HelpIconTooltip = ({
   side = 'top',
   showIcon = true,
   children,
+  tooltipDelay = 200,
 }: HelpIconTooltipProps) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -62,7 +64,11 @@ export const HelpIconTooltip = ({
 
   return (
     <TooltipProvider>
-      <Tooltip open={triggerMode === 'click' ? isOpen : undefined} disableHover={triggerMode === 'click'}>
+      <Tooltip 
+        open={triggerMode === 'click' ? isOpen : undefined} 
+        disableHover={triggerMode === 'click'}
+        delayDuration={tooltipDelay}
+      >
         <TooltipTrigger asChild>
           {tooltipTrigger}
         </TooltipTrigger>

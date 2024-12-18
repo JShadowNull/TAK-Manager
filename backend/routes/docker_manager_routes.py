@@ -137,26 +137,50 @@ class DockerManagerNamespace(Namespace):
                     }, namespace='/docker-manager')
             else:
                 # Docker daemon operation
+                # Emit starting/stopping status
+                socketio.emit('docker_operation', {
+                    'isInstalled': True,
+                    'isRunning': operation_type == 'stop',  # Current state before operation
+                    'status': operation_type + 'ing'  # 'starting' or 'stopping'
+                }, namespace='/docker-manager')
+                
+                # Execute operation
                 if operation_type == 'start':
                     result = self._execute_operation(self.docker_manager.start_docker)
                 else:  # stop
                     result = self._execute_operation(self.docker_manager.stop_docker)
+
+                # Wait briefly for Docker state to stabilize
+                socketio.sleep(2)
+                current_status = self.docker_checker.get_status()
                 
-                if 'error' in result:
+                # Only emit completion if Docker state matches what we want
+                expected_running = operation_type == 'start'
+                if current_status.get('isRunning') == expected_running:
                     socketio.emit('docker_operation', {
-                        'status': 'error',
-                        'message': result['error']
+                        'isInstalled': True,
+                        'isRunning': expected_running,
+                        'status': 'complete',
+                        'error': result.get('error')
                     }, namespace='/docker-manager')
                 else:
+                    # Keep the loading state if we haven't reached desired state
                     socketio.emit('docker_operation', {
-                        'status': 'success',
-                        'message': result['status']
+                        'isInstalled': True,
+                        'isRunning': not expected_running,
+                        'status': operation_type + 'ing'
                     }, namespace='/docker-manager')
 
             return result
 
         except Exception as e:
             error_message = f"Error during Docker {operation_type}: {str(e)}"
+            socketio.emit('docker_status', {
+                'isInstalled': True,
+                'isRunning': operation_type == 'stop',
+                'status': 'complete',
+                'error': error_message
+            }, namespace='/docker-manager')
             if container_name:
                 socketio.emit('container_operation', {
                     'status': 'error',
