@@ -123,9 +123,9 @@ function Dashboard() {
   });
 
   return (
-    <div className="flex flex-col gap-8 pt-14">
+    <div className="">
       {/* Monitoring Section */}
-      <div className="flex flex-wrap gap-8">
+      <div className="flex flex-wrap gap-6">
         {/* CPU Usage Section */}
         <AnalyticsChart
           data={cpuData}

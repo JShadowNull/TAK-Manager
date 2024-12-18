@@ -215,8 +215,8 @@ function Services() {
   };
 
   return (
-    <div className="flex gap-8 pt-14">
-      <div className="flex flex-col gap-8 w-1/3">
+    <div className="flex flex-col gap-8">
+      <div className="flex flex-wrap gap-8">
         {/* Start/Stop Services */}
         <div className="bg-card p-6 rounded-lg shadow-lg foreground w-full border-1 border-accentBoarder">
           <h2 className="text-base mb-4 text-center">Start/Stop Services</h2>
