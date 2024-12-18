@@ -191,7 +191,7 @@ function ExistingCertificates({
   );
 
   return (
-    <div className="border border-accentBoarder bg-card p-4 rounded-lg">
+    <div className="border border-border bg-card p-4 rounded-lg">
       <div className="flex items-center mb-4 gap-4">
         <h3 className="text-base font-bold text-foreground">Existing Certificates</h3>
         <div className="flex-1 mx-4">
@@ -200,7 +200,7 @@ function ExistingCertificates({
             placeholder="Search certificates..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-background border-accentBoarder"
+            className="w-full bg-background border-border"
           />
         </div>
         <div className="flex gap-2 items-center">
@@ -250,14 +250,14 @@ function ExistingCertificates({
               filteredCertificates.map((cert) => (
                 <div 
                   key={cert.identifier} 
-                  className="flex items-center justify-between p-3 border border-accentBoarder rounded-lg bg-background hover:bg-buttonColor transition-all duration-200"
+                  className="flex items-center justify-between p-3 border border-border rounded-lg bg-background hover:bg-buttonColor transition-all duration-200"
                 >
                   <div className="flex items-center gap-4 flex-1">
                     <input
                       type="checkbox"
                       checked={selectedCerts.has(cert.identifier)}
                       onChange={() => handleSelectCert(cert.identifier)}
-                      className="w-4 h-4 rounded border-accentBoarder bg-background"
+                      className="w-4 h-4 rounded border-border bg-background"
                       disabled={deletingCerts.has(cert.identifier)}
                     />
                     <div className="flex items-center gap-2">

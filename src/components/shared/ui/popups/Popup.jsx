@@ -318,7 +318,7 @@ function Popup({
   };
 
   const terminalContent = showTerminal && (
-    <div className="mt-1 bg-background foreground rounded-lg h-64 border text-wrap border-accentBoarder">
+    <div className="mt-1 bg-background foreground rounded-lg h-64 border text-wrap border-border">
       <CustomScrollbar ref={scrollContainerRef}>
         <div className="p-4 break-words">
           {renderTerminalOutput()}
@@ -343,7 +343,7 @@ function Popup({
       />
       
       {/* Popup Content */}
-      <div className="bg-card border border-accentBoarder p-4 rounded-lg shadow-lg max-w-lg w-full relative z-10 mx-4">
+      <div className="bg-card border border-border p-4 rounded-lg shadow-lg max-w-lg w-full relative z-10 mx-4">
         {/* Popup Title */}
         <h3 className="text-lg font-bold mb-4 text-foreground">{title}</h3>
 

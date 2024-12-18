@@ -76,7 +76,7 @@ function Sidebar() {
   ];
 
   return (
-    <nav className="w-64 bg-card p-6 text-foreground border-r border-accentBoarder">
+    <nav className="w-64 bg-card p-6 text-foreground border-r border-border">
       <ul>
         {navItems.filter(item => item.alwaysShow || item.showWhen()).map(({ path, icon: Icon, text, iconColor }) => {
           const isActive = location.pathname === path;

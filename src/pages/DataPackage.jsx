@@ -320,7 +320,7 @@ function DataPackage() {
   return (
     <div className="flex flex-col gap-8 pt-14">
       {/* Zip Name Section */}
-      <div className="rounded-lg border border-accentBoarder">
+      <div className="rounded-lg border border-border">
         <ZipNameSection 
           zipName={zipFileName}
           onZipNameChange={setZipFileName}
@@ -328,7 +328,7 @@ function DataPackage() {
       </div>
 
       {/* CoT Streams Section */}
-      <div className="h-[400px] overflow-x-hidden relative border border-accentBoarder rounded-lg">
+      <div className="h-[400px] overflow-x-hidden relative border border-border rounded-lg">
         <div className="absolute inset-x-0 top-0 z-20 bg-backgroundPrimary">
           <div className="p-4 flex justify-between items-center">
             <div className="text-base text-medium">CoT Streams</div>
@@ -371,7 +371,7 @@ function DataPackage() {
       </div>
 
       {/* ATAK Preferences Section */}
-      <div className="h-[400px] overflow-x-hidden relative border border-accentBoarder rounded-lg">
+      <div className="h-[400px] overflow-x-hidden relative border border-border rounded-lg">
         <div className="absolute inset-x-0 top-0 z-20 bg-backgroundPrimary">
           <div className="p-4 flex justify-between items-center">
             <div className="text-base text-medium">ATAK Preferences</div>

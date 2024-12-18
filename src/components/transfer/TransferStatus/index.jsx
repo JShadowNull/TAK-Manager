@@ -34,7 +34,7 @@ export const TransferStatus = ({
   };
 
   return (
-    <div className="bg-card p-6 rounded-lg shadow-lg foreground border-1 border-accentBoarder">
+    <div className="bg-card p-6 rounded-lg shadow-lg foreground border-1 border-border">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-base">Transfer Status</h2>
         <StatusButtons

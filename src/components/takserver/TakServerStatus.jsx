@@ -450,7 +450,7 @@ function TakServerStatus({ handleStartStop }) {
 
   return (
     <>
-      <div className="w-full border border-accentBoarder bg-card p-6 rounded-lg">
+      <div className="w-full border border-border bg-card p-6 rounded-lg">
         <div className="flex flex-col h-full justify-between">
           <div>
             <h3 className="text-base font-bold mb-4">TAK Server Status</h3>
@@ -601,12 +601,12 @@ function TakServerStatus({ handleStartStop }) {
 
       {/* Installation Form Popup */}
       {!isInstalled && showInstallForm && (
-        <div className="w-full border border-accentBoarder bg-card p-6 rounded-lg">
+        <div className="w-full border border-border bg-card p-6 rounded-lg">
           <h3 className="text-base font-bold mb-4">Installation Configuration</h3>
           
           <div className="flex flex-col gap-4">
             {/* Purpose Section */}
-            <div className="bg-background border border-accentBoarder p-4 rounded-lg mb-4">
+            <div className="bg-background border border-border p-4 rounded-lg mb-4">
               <h4 className="text-sm font-semibold text-selectedColor mb-2">Purpose</h4>
               <p className="text-sm text-gray-300 leading-relaxed">
                 TAK Server is a powerful middleware solution that enables real-time situational awareness and information sharing. 
@@ -616,7 +616,7 @@ function TakServerStatus({ handleStartStop }) {
             </div>
 
             {/* Installation Summary */}
-            <div className="bg-background border border-accentBoarder p-4 rounded-lg mb-4">
+            <div className="bg-background border border-border p-4 rounded-lg mb-4">
               <h4 className="text-sm font-semibold text-selectedColor mb-2">Installation Summary</h4>
               <ul className="text-sm text-gray-300 list-disc list-inside space-y-1">
                 <li>This will install TAK Server and PostgreSQL database within Docker Desktop</li>

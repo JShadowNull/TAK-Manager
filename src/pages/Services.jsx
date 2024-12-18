@@ -7,7 +7,7 @@ import { faPlay, faStop, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import DockerPopup from '../components/shared/ui/popups/DockerPopup';
 import useSocket from '../components/shared/hooks/useSocket.js';
 import useFetch from '../components/shared/hooks/useFetch.js';
-
+import CustomScrollbar from '../components/shared/ui/CustomScrollbar';
 // Create a styled Switch component using Tailwind-like styles
 const StyledSwitch = styled(Switch)({
   '& .MuiSwitch-switchBase': {
@@ -215,10 +215,10 @@ function Services() {
   };
 
   return (
-    <div className="flex flex-col gap-8">
-      <div className="flex flex-wrap gap-8">
+    <div className="flex gap-6 flex-wrap">
+      <div className="flex flex-wrap">
         {/* Start/Stop Services */}
-        <div className="bg-card p-6 rounded-lg shadow-lg foreground w-full border-1 border-accentBoarder">
+        <div className="bg-card p-6 rounded-lg shadow-lg foreground w-full border border-border max-w-fit max-h-[8rem]">
           <h2 className="text-base mb-4 text-center">Start/Stop Services</h2>
           <div className="flex items-center justify-between px-2">
             <FormControlLabel
@@ -245,55 +245,59 @@ function Services() {
       </div>
 
       {/* Docker Containers */}
-      <div className="w-2/3 bg-card p-6 rounded-lg shadow-lg foreground border-1 border-accentBoarder">
+      <div className="min-w-[31.5rem] w-1/2 bg-card p-6 rounded-lg shadow-lg foreground border border-border min-h-[20rem]">
         <h2 className="text-base mb-4 text-center">Docker Containers</h2>
-        <ul className="list-none space-y-2 text-sm">
-          {!dockerStatus.isInstalled ? (
-            <li className="border-1 border-accentBoarder p-4 rounded">Docker is not installed</li>
-          ) : !dockerStatus.isRunning ? (
-            <li className="border-1 border-accentBoarder p-4 rounded">Start Docker to view containers</li>
-          ) : containers.length === 0 ? (
-            <li className="border-1 border-accentBoarder p-4 rounded">No containers found</li>
-          ) : (
-            containers.map(container => {
-              const running = isContainerRunning(container.status);
-              const inTransition = isContainerInTransition(container.status, pendingContainerActions[container.name]);
-              
-              return (
-                <li key={container.name} className="p-4 rounded flex justify-between items-center space-x-4 border-1 border-accentBoarder">
-                  <span className="flex-grow">
-                    Container: {container.name} (Status: {container.status})
-                  </span>
-                  <button
-                    className={`focus:outline-none text-lg ${
-                      inTransition
-                        ? 'text-gray-500'
-                        : running
-                          ? 'text-red-500 hover:text-red-600'
-                          : 'text-green-500 hover:text-green-600'
-                    }`}
-                    disabled={inTransition}
-                    onClick={() => {
-                      const action = running ? 'stop' : 'start';
-                      toggleContainer(container.name, action);
-                    }}
-                  >
-                    {inTransition ? (
-                      <FontAwesomeIcon 
-                        icon={faSpinner} 
-                        className="animate-spin"
-                      />
-                    ) : running ? (
-                      <FontAwesomeIcon icon={faStop} />
-                    ) : (
-                      <FontAwesomeIcon icon={faPlay} />
-                    )}
-                  </button>
-                </li>
-              );
-            })
-          )}
-        </ul>
+        <div className="h-[calc(100%-3rem)]">
+          <CustomScrollbar>
+            <ul className="list-none space-y-2 divide-y divide-border text-sm p-2">
+              {!dockerStatus.isInstalled ? (
+                <li className="border-1 border-border p-4 rounded">Docker is not installed</li>
+              ) : !dockerStatus.isRunning ? (
+                <li className="border-1 border-border p-4 rounded">Start Docker to view containers</li>
+              ) : containers.length === 0 ? (
+                <li className="border-1 border-border p-4 rounded">No containers found</li>
+              ) : (
+                containers.map(container => {
+                  const running = isContainerRunning(container.status);
+                  const inTransition = isContainerInTransition(container.status, pendingContainerActions[container.name]);
+                  
+                  return (
+                    <li key={container.name} className="p-4 rounded flex justify-between items-center space-x-4">
+                      <span className="flex-grow">
+                        Container: {container.name} (Status: {container.status})
+                      </span>
+                      <button
+                        className={`focus:outline-none text-lg ${
+                          inTransition
+                            ? 'text-gray-500'
+                            : running
+                              ? 'text-red-500 hover:text-red-600'
+                              : 'text-green-500 hover:text-green-600'
+                        }`}
+                        disabled={inTransition}
+                        onClick={() => {
+                          const action = running ? 'stop' : 'start';
+                          toggleContainer(container.name, action);
+                        }}
+                      >
+                        {inTransition ? (
+                          <FontAwesomeIcon 
+                            icon={faSpinner} 
+                            className="animate-spin"
+                          />
+                        ) : running ? (
+                          <FontAwesomeIcon icon={faStop} />
+                        ) : (
+                          <FontAwesomeIcon icon={faPlay} />
+                        )}
+                      </button>
+                    </li>
+                  );
+                })
+              )}
+            </ul>
+          </CustomScrollbar>
+        </div>
       </div>
 
       {/* Docker Popup - only shown when Docker is not installed */}

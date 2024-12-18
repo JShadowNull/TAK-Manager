@@ -58,7 +58,7 @@ const AtakPreferencesSection = memo(({
         onClick={handleUnselectAll}
       />
 
-      <div className="divide-y divide-accentBoarder">
+      <div className="divide-y divide-border">
         {ATAK_PREFERENCES.map((item) => {
           const pref = preferences[item.label] || {};
           

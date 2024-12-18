@@ -5,7 +5,7 @@ function Configuration() {
   const navigate = useNavigate();
 
   return (
-    <div className="w-full border border-accentBoarder bg-card p-4 rounded-lg">
+    <div className="w-full border border-border bg-card p-4 rounded-lg">
       <div className="flex flex-col gap-4">
         <h3 className="text-base font-bold">Configuration</h3>
         <div className="flex gap-4">

@@ -127,7 +127,7 @@ const CotStreamsSection = memo(({
         className="hidden cot-streams-unselect-all"
         onClick={handleUnselectAll}
       />
-      <div className="divide-y divide-accentBoarder">
+      <div className="divide-y divide-border">
         {items.map((item) => {
           const isCertLocationField = item.label.toLowerCase().includes('location');
           const pref = preferences[item.label] || {};

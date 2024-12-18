@@ -19,7 +19,7 @@ export const FileUpload = ({
   };
 
   return (
-    <div className="bg-card p-6 rounded-lg shadow-lg foreground border-1 border-accentBoarder">
+    <div className="bg-card p-6 rounded-lg shadow-lg foreground border-1 border-border">
       <h2 className="text-base mb-4">File Upload</h2>
       <div className="flex flex-col gap-4">
         <div 

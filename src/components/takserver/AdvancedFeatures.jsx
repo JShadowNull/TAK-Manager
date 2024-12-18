@@ -216,11 +216,11 @@ function AdvancedFeatures() {
 
   return (
     <>
-      <div className="w-full border border-accentBoarder bg-card p-4 rounded-lg">
+      <div className="w-full border border-border bg-card p-4 rounded-lg">
         <div className="flex flex-col gap-4">
           <h3 className="text-base font-bold">Advanced Features</h3>
 
-          <div className="bg-background border border-accentBoarder p-4 rounded-lg mb-4">
+          <div className="bg-background border border-border p-4 rounded-lg mb-4">
             <p className="text-sm foreground">
               Once configured, use https://your-ip-address:8443/ota/plugins in ATAK for update url to check for plugins and install them
             </p>
@@ -253,12 +253,12 @@ function AdvancedFeatures() {
 
       {/* OTA Configuration Form */}
       {showOtaForm && (
-        <div className="w-full border border-accentBoarder bg-card p-6 rounded-lg">
+        <div className="w-full border border-border bg-card p-6 rounded-lg">
           <h3 className="text-base font-bold mb-4">OTA Updates Configuration</h3>
           
           <div className="flex flex-col gap-4">
             {/* Purpose Section */}
-            <div className="bg-background border border-accentBoarder p-4 rounded-lg mb-4">
+            <div className="bg-background border border-border p-4 rounded-lg mb-4">
               <h4 className="text-sm font-semibold text-selectedColor mb-2">Purpose</h4>
               <p className="text-sm text-gray-300 leading-relaxed">
                 OTA (Over-The-Air) updates enable ATAK users to easily discover and install available plugins and ATAK versions directly from their devices. 
@@ -267,7 +267,7 @@ function AdvancedFeatures() {
             </div>
 
             {/* OTA Configuration Summary */}
-            <div className="bg-background border border-accentBoarder p-4 rounded-lg mb-4">
+            <div className="bg-background border border-border p-4 rounded-lg mb-4">
               <h4 className="text-sm font-semibold text-selectedColor mb-2">Configuration Summary</h4>
               <ul className="text-sm text-gray-300 list-disc list-inside space-y-1">
                 <li>This will configure OTA (Over-The-Air) updates for ATAK clients</li>
@@ -321,12 +321,12 @@ function AdvancedFeatures() {
 
       {/* Update Plugins Form */}
       {showUpdatePluginsForm && (
-        <div className="w-full border border-accentBoarder bg-card p-6 rounded-lg">
+        <div className="w-full border border-border bg-card p-6 rounded-lg">
           <h3 className="text-base font-bold mb-4">Update TAK Server Plugins</h3>
           
           <div className="flex flex-col gap-4">
             {/* Purpose Section */}
-            <div className="bg-background border border-accentBoarder p-4 rounded-lg mb-4">
+            <div className="bg-background border border-border p-4 rounded-lg mb-4">
               <h4 className="text-sm font-semibold text-selectedColor mb-2">Purpose</h4>
               <p className="text-sm text-gray-300 leading-relaxed">
                 Update the plugins available through OTA updates on your TAK Server. This allows you to add new plugins or update existing ones
@@ -335,7 +335,7 @@ function AdvancedFeatures() {
             </div>
 
             {/* Update Summary */}
-            <div className="bg-background border border-accentBoarder p-4 rounded-lg mb-4">
+            <div className="bg-background border border-border p-4 rounded-lg mb-4">
               <h4 className="text-sm font-semibold text-selectedColor mb-2">Update Summary</h4>
               <ul className="text-sm text-gray-300 list-disc list-inside space-y-1">
                 <li>This will update the available plugins for OTA updates</li>

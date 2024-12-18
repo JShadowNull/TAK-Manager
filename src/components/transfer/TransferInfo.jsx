@@ -68,7 +68,7 @@ export const TransferInfo = ({ steps = defaultSteps }) => {
   };
 
   return (
-    <div className="bg-card p-4 rounded-lg shadow-lg foreground border border-accentBoarder">
+    <div className="bg-card p-4 rounded-lg shadow-lg foreground border border-border">
       <h2 className="text-base font-bold">Setup Android Device for Rapid Transfer</h2>
       <div className="h-[400px] bg-backgroundPrimary rounded-lg">
         <CustomScrollbar>
