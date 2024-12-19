@@ -5,19 +5,13 @@ import DockerPopup from '../components/shared/ui/popups/DockerPopup';
 import useSocket from '../components/shared/hooks/useSocket';
 import useFetch from '../components/shared/hooks/useFetch';
 import CustomScrollbar from '../components/shared/ui/CustomScrollbar';
-import { Switch } from '../components/shared/ui/shadcn/switch';
 import { LoadingSwitch } from '../components/shared/ui/LoadingSwitch';
 import { useOperationStatus } from '../components/shared/hooks/useOperationStatus';
+import { cn } from '../lib/utils';
 
 function Services() {
   const { post } = useFetch();
   const { isOperationInProgress, operationState, subscribeToOperationStatus } = useOperationStatus('/docker-manager');
-
-  // Subscribe to operation status events when component mounts
-  React.useEffect(() => {
-    const unsubscribe = subscribeToOperationStatus();
-    return () => unsubscribe();
-  }, [subscribeToOperationStatus]);
 
   // Docker Manager Socket
   const {
@@ -44,18 +38,23 @@ function Services() {
         console.info('Docker Status:', {
           isInstalled: data.isInstalled,
           isRunning: data.isRunning,
-          error: data.error
+          error: data.error,
+          currentState: state
         });
         
-        // Only update if not in a loading state
-        if (!isOperationInProgress(state.status === 'stopping' ? 'stop' : 'start')) {
+        // Only update status-related fields, preserve containers and other state
+        if (!isOperationInProgress(state.status === 'stopping' ? 'stop' : 'start') &&
+            (state.isInstalled !== data.isInstalled || 
+             state.isRunning !== data.isRunning || 
+             state.error !== data.error)) {
+          
           // If Docker is running but we have no containers, request container list
           if (data.isRunning && (!state.containers || state.containers.length === 0)) {
+            console.info('Docker is running but no containers found, requesting container list');
             emit('check_status');
           }
           
           updateState({
-            ...state,
             isInstalled: data.isInstalled,
             isRunning: data.isRunning,
             error: data.error || null
@@ -71,25 +70,26 @@ function Services() {
         });
         
         const isComplete = data.status === 'complete';
-        const newState = {
-          ...state,
-          isInstalled: state.isInstalled,
+        
+        // Only update operation-related fields
+        updateState({
           isRunning: data.isRunning !== undefined ? data.isRunning : state.isRunning,
           error: data.error || null,
           status: isComplete ? null : (
             state.status === 'stopping' || data.status === 'stopping' ? 'stopping' : 'starting'
           )
-        };
+        });
         
         // If operation is complete and Docker is running, request container list
-        if (isComplete && newState.isRunning) {
+        if (isComplete && data.isRunning) {
           emit('check_status');
         }
-        
-        updateState(newState);
       },
 
+      // Container updates
       containers: (data, { state, updateState }) => {
+        console.info('Received containers update:', data);
+        
         if (Array.isArray(data.containers)) {
           const newPendingActions = { ...state.pendingActions };
           
@@ -104,8 +104,14 @@ function Services() {
             }
           });
 
+          // Update state with new containers and pending actions
           updateState({
-            ...state,
+            containers: data.containers,
+            pendingActions: newPendingActions,
+            error: null
+          });
+          
+          console.info('Updated containers state:', {
             containers: data.containers,
             pendingActions: newPendingActions
           });
@@ -113,6 +119,21 @@ function Services() {
       }
     }
   });
+
+  // Subscribe to operation status events when component mounts
+  React.useEffect(() => {
+    const unsubscribe = subscribeToOperationStatus();
+    return () => unsubscribe();
+  }, [subscribeToOperationStatus]);
+
+  // Debug logging effect - moved to top level
+  React.useEffect(() => {
+    console.info('Docker state updated:', {
+      isConnected,
+      dockerState,
+      error: dockerError
+    });
+  }, [isConnected, dockerState, dockerError]);
 
   const handleDockerToggle = async (isChecked) => {
     console.debug('Docker Toggle called:', {
@@ -122,34 +143,26 @@ function Services() {
     });
 
     try {
-      const newState = {
-        ...dockerState,
+      // Only update status-related fields
+      updateState({
         error: null,
         status: isChecked ? 'starting' : 'stopping'
-      };
-      
-      console.debug('Updating docker state:', {
-        prevState: dockerState,
-        newState
       });
       
-      updateState(newState);
       await post(`/docker-manager/docker/${isChecked ? 'start' : 'stop'}`);
     } catch (error) {
       console.error('Docker Toggle Error:', error);
-      const errorState = {
-        ...dockerState,
+      updateState({
         error: `Error ${isChecked ? 'starting' : 'stopping'} Docker`,
         status: null
-      };
-      updateState(errorState);
+      });
     }
   };
 
   const toggleContainer = async (containerName, action) => {
     console.info('Container Toggle:', { container: containerName, action });
     
-    // Update pending actions
+    // Only update pending actions
     updateState({
       pendingActions: {
         ...dockerState.pendingActions,
@@ -161,7 +174,7 @@ function Services() {
       await post(`/docker-manager/docker/containers/${containerName}/${action}`);
     } catch (error) {
       console.error('Container Toggle Error:', error);
-      // Clear pending action on error
+      // Clear only the pending action on error
       updateState({
         pendingActions: {
           ...dockerState.pendingActions,
@@ -196,8 +209,9 @@ function Services() {
     return false;
   };
 
-  // Show loading state while connecting
+  // Render loading state if not connected
   if (!isConnected) {
+    console.info('Waiting for socket connection...');
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
@@ -216,14 +230,26 @@ function Services() {
           checked={dockerState.isRunning}
           onCheckedChange={handleDockerToggle}
           operation={dockerState.status === 'stopping' ? 'stop' : 'start'}
-          isLoading={isOperationInProgress(dockerState.status === 'stopping' ? 'stop' : 'start')}
-          progress={operationState.progress}
-          showProgress={true}
+          isLoading={
+            operationState?.status === 'in_progress' || 
+            dockerState.status === 'starting' || 
+            dockerState.status === 'stopping'
+          }
+          status={operationState?.status}
+          message={
+            dockerState.status === 'starting' || (operationState?.status === 'in_progress' && !dockerState.isRunning) 
+              ? 'Starting Docker...' 
+              : dockerState.status === 'stopping' || (operationState?.status === 'in_progress' && dockerState.isRunning)
+              ? 'Stopping Docker...'
+              : undefined
+          }
+          showProgress={false}
           showLoadingState={true}
           className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-red-500"
-          message={operationState.message}
         />
-        {!isOperationInProgress(dockerState.status === 'stopping' ? 'stop' : 'start') && (
+        {!(operationState?.status === 'in_progress' || 
+           dockerState.status === 'starting' || 
+           dockerState.status === 'stopping') && (
           <span className="text-sm foreground">
             {dockerState.isRunning ? 'Docker is running' : 'Docker is stopped'}
           </span>

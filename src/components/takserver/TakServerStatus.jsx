@@ -40,21 +40,25 @@ function TakServerStatus() {
     initialState: {
       isInstalled: false,
       isRunning: false,
-      error: null
+      error: null,
+      containers: []
     },
     eventHandlers: {
-      docker_status: (status) => {
+      docker_status: (status, { state }) => {
         updateDockerState({
+          ...state,
           isInstalled: status.isInstalled,
           isRunning: status.isRunning,
-          error: status.error
+          error: status.error,
+          containers: state.containers || []
         });
       },
       onError: (error) => {
         console.error('Docker manager socket connection error:', error);
         updateDockerState(prev => ({
           ...prev,
-          error: 'Failed to connect to Docker status service'
+          error: 'Failed to connect to Docker status service',
+          containers: prev.containers || []
         }));
       }
     }

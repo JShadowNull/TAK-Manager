@@ -1,13 +1,27 @@
 import React, { useEffect } from 'react';
 import { Switch } from './shadcn/switch';
-import type { OperationType } from '../hooks/useOperationStatus';
 import { cn } from "@/lib/utils";
+
+// Match backend operation types
+type OperationType = 
+  | 'start'
+  | 'stop'
+  | 'restart'
+  | 'install'
+  | 'uninstall'
+  | 'update'
+  | 'configure'
+  | 'validate';
+
+type StatusType = 'in_progress' | 'complete' | 'failed';
 
 interface LoadingSwitchProps extends Omit<React.ComponentPropsWithoutRef<typeof Switch>, 'disabled'> {
   operation: OperationType;
   isLoading: boolean;
+  status?: StatusType;
   message?: string;
   progress?: number;
+  error?: string;
   showProgress?: boolean;
   showLoadingState?: boolean;
 }
@@ -15,8 +29,10 @@ interface LoadingSwitchProps extends Omit<React.ComponentPropsWithoutRef<typeof 
 export const LoadingSwitch: React.FC<LoadingSwitchProps> = ({
   operation,
   isLoading,
+  status = 'complete',
   message,
   progress,
+  error,
   showProgress = false,
   showLoadingState = true,
   className,
@@ -27,50 +43,49 @@ export const LoadingSwitch: React.FC<LoadingSwitchProps> = ({
     console.debug('LoadingSwitch props updated:', {
       operation,
       isLoading,
+      status,
       message,
       progress,
+      error,
       showProgress,
       showLoadingState,
       checked: switchProps.checked
     });
-  }, [operation, isLoading, message, progress, showProgress, showLoadingState, switchProps.checked]);
+  }, [operation, isLoading, status, message, progress, error, showProgress, showLoadingState, switchProps.checked]);
 
-  // Default loading messages
-  const defaultMessages: Record<OperationType, string> = {
-    start: 'Starting...',
-    stop: 'Stopping...',
-    restart: 'Restarting...',
-    install: 'Installing...',
-    uninstall: 'Uninstalling...',
-    update: 'Updating...',
-    configure: 'Configuring...',
-    validate: 'Validating...',
-  };
-
-  const loadingMessage = message || defaultMessages[operation] || 'Loading...';
-  const progressText = showProgress && progress ? ` (${Math.round(progress)}%)` : '';
-  const displayMessage = `${loadingMessage}${progressText}`;
+  const loadingMessage = message || 'Loading...';
+  const progressText = showProgress && typeof progress === 'number' ? ` (${Math.round(progress)}%)` : '';
+  const displayMessage = error || `${loadingMessage}${progressText}`;
+  const isInProgress = status === 'in_progress';
+  const shouldShowLoading = (isLoading || isInProgress) && showLoadingState;
+  const hasError = !!error || status === 'failed';
 
   // Debug logging for rendered state
   console.debug('LoadingSwitch render state:', {
     displayMessage,
-    isDisabled: isLoading,
-    hasLoadingAnimation: isLoading && showLoadingState,
-    showingLoadingMessage: isLoading && showLoadingState
+    isDisabled: shouldShowLoading,
+    hasLoadingAnimation: shouldShowLoading,
+    showingLoadingMessage: shouldShowLoading,
+    hasError,
+    status,
+    isLoading
   });
 
   return (
     <div className="flex items-center gap-2">
       <Switch
         {...switchProps}
-        disabled={isLoading}
+        disabled={shouldShowLoading}
         className={cn(
-          isLoading && showLoadingState && "animate-pulse",
+          shouldShowLoading && "animate-pulse opacity-50",
+          hasError && "bg-destructive hover:bg-destructive",
           className
         )}
       />
-      {isLoading && showLoadingState && (
-        <span className="text-sm text-muted-foreground">{displayMessage}</span>
+      {shouldShowLoading && (
+        <span className="text-sm text-muted-foreground">
+          {displayMessage}
+        </span>
       )}
     </div>
   );

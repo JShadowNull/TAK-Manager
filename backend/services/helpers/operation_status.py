@@ -1,4 +1,4 @@
-from backend.routes.socketio import socketio
+from backend.routes.socketio import socketio, safe_emit
 from typing import Optional, Dict, Any, Literal
 
 OperationTypes = Literal[
@@ -44,22 +44,37 @@ class OperationStatus:
             error (str, optional): Error message if status is 'failed'
             details (dict, optional): Additional operation-specific details
         """
-        status_data = {
-            'operation': operation,
-            'status': status,
-            'message': message
-        }
+        try:
+            status_data = {
+                'operation': operation,
+                'status': status,
+                'message': message
+            }
 
-        if progress is not None:
-            status_data['progress'] = float(progress)
-        
-        if error is not None:
-            status_data['error'] = error
+            if progress is not None:
+                status_data['progress'] = float(progress)
             
-        if details is not None:
-            status_data['details'] = details
+            if error is not None:
+                status_data['error'] = error
+                
+            if details is not None:
+                status_data['details'] = details
 
-        socketio.emit('operation_status', status_data, namespace=self.namespace)
+            safe_emit('operation_status', status_data, namespace=self.namespace)
+        except Exception as e:
+            print(f"Error emitting operation status: {e}")
+            # Try to emit error status if possible
+            try:
+                error_data = {
+                    'operation': operation,
+                    'status': 'failed',
+                    'message': 'Failed to emit status update',
+                    'error': str(e)
+                }
+                safe_emit('operation_status', error_data, namespace=self.namespace)
+            except:
+                # If even the error emission fails, just log it
+                print(f"Failed to emit error status: {e}")
 
     def start_operation(
         self,

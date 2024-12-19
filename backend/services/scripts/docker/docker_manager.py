@@ -13,7 +13,7 @@ class DockerManager:
 
     def start_docker(self):
         """Start Docker based on the detected OS"""
-        self.status_helper.start_operation('start', "Initializing Docker startup...")
+        self.status_helper.start_operation('start', "Starting Docker...")
         result = None
         try:
             if self.os_type == 'macos':
@@ -39,7 +39,7 @@ class DockerManager:
 
     def stop_docker(self):
         """Stop Docker based on the detected OS"""
-        self.status_helper.start_operation('stop', "Initializing Docker shutdown...")
+        self.status_helper.start_operation('stop', "Stopping Docker...")
         result = None
         try:
             if self.os_type == 'macos':

@@ -108,6 +108,7 @@ const socketStore: SocketStore = {
       // Set up basic event handlers for each socket
       socket.on('connect', () => {
         console.log(`Socket ${namespace} connected`);
+        // Request initial state from backend
         socket.emit('check_status');
         this.notifySubscribers(namespace, 'connect');
       });
@@ -124,7 +125,11 @@ const socketStore: SocketStore = {
 
       this.sockets[namespace] = socket;
       this.subscribers[namespace] = new Set();
-      this.states[namespace] = {};
+      
+      // Initialize persistent state storage for each namespace
+      if (!this.states[namespace]) {
+        this.states[namespace] = {};
+      }
     });
 
     // Set up global cleanup
@@ -171,13 +176,20 @@ const socketStore: SocketStore = {
     }
     this.subscribers[namespace].add(subscriber);
     
-    // Immediately update subscriber with current state
-    if (this.states[namespace]) {
+    // Get the current socket
+    const socket = this.sockets[namespace];
+    
+    // If we have existing state, update the subscriber immediately
+    if (Object.keys(this.states[namespace] || {}).length > 0) {
       subscriber.updateState(this.states[namespace]);
     }
     
+    // If socket is connected but we don't have state, request it
+    if (socket?.connected && Object.keys(this.states[namespace] || {}).length === 0) {
+      socket.emit('check_status');
+    }
+    
     // Update connection status
-    const socket = this.sockets[namespace];
     if (socket?.connected) {
       subscriber.setIsConnected(true);
     }
@@ -190,15 +202,23 @@ const socketStore: SocketStore = {
   },
 
   updateSharedState(namespace: SocketNamespace, updates: any): void {
+    // Ensure we have a state object for this namespace
+    if (!this.states[namespace]) {
+      this.states[namespace] = {};
+    }
+
+    // Merge updates with existing state, preserving all existing data
+    // unless explicitly overwritten by the updates
     this.states[namespace] = {
       ...this.states[namespace],
       ...updates
     };
-    
+
+    // Notify all subscribers with the complete state
     if (this.subscribers[namespace]) {
       this.subscribers[namespace].forEach(subscriber => {
         if (subscriber.mountedRef.current) {
-          subscriber.updateState(updates);
+          subscriber.updateState(this.states[namespace]);
         }
       });
     }
@@ -300,6 +320,12 @@ function useSocket(
     
     try {
       socket = socketStore.getSocket(namespace);
+      
+      // Initialize the shared state with the component's initial state
+      if (Object.keys(initialState).length > 0) {
+        socketStore.updateSharedState(namespace, initialState);
+      }
+      
     } catch (err) {
       console.error(`Failed to get socket for ${namespace}:`, err);
       setError(err as Error);
@@ -311,7 +337,11 @@ function useSocket(
       handlers: handlersRef.current,
       setIsConnected,
       setError,
-      updateState,
+      updateState: (newState: any) => {
+        if (mountedRef.current) {
+          setState(newState);
+        }
+      },
       appendToTerminal,
       mountedRef
     };

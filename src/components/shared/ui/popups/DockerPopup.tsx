@@ -39,7 +39,8 @@ const DockerPopup: FC<DockerPopupProps> = ({ isVisible }) => {
             isRunning: data.isRunning,
             dockerRunning: data.dockerRunning || false,
             isLoading: false,
-            error: null
+            error: null,
+            containers: state.containers || []
           });
         }
       },
@@ -54,7 +55,8 @@ const DockerPopup: FC<DockerPopupProps> = ({ isVisible }) => {
           operationInProgress: !isComplete,
           isLoading: !isComplete,
           status: data.status,
-          error: data.error || null
+          error: data.error || null,
+          containers: state.containers || []
         };
         
         updateState(newState);

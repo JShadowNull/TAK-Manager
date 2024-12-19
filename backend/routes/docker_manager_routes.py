@@ -17,32 +17,25 @@ class DockerManagerNamespace(Namespace):
         super().__init__(namespace)
         self.docker_manager = DockerManager()
         self.docker_checker = DockerChecker()
-        self.monitor_thread = None
         self.operation_in_progress = False
-        self.operation_threads = []  # Track operation threads
-        self.should_monitor = False  # Flag to control monitoring loop
-        self.last_status = None
-        self.last_containers = None
-
-    def cleanup_operation_threads(self):
-        """Clean up completed operation threads"""
-        self.operation_threads = [t for t in self.operation_threads if not t.dead]
 
     def on_connect(self):
         print('Client connected to /docker-manager namespace')
-        self.should_monitor = True
-        if not self.monitor_thread:
-            self.monitor_thread = socketio.start_background_task(self.monitor_docker_status)
-            thread_manager.add_thread(self.monitor_thread)
-        # Send immediate status update when client connects
-        self.emit_status_update()
+        try:
+            # Get initial status
+            status = self.docker_checker.get_status()
+            self.emit_status_update(status)
+        except Exception as e:
+            print(f"Error during connection setup: {str(e)}")
+            self.emit_status_update({
+                'isInstalled': False,
+                'isRunning': False,
+                'error': f"Error during connection setup: {str(e)}"
+            })
 
     def on_disconnect(self):
         print('Client disconnected from /docker-manager namespace')
-        self.should_monitor = False  # Signal monitoring thread to stop
-        self.cleanup_operation_threads()
-        self.last_status = None
-        self.last_containers = None
+        self.operation_in_progress = False
 
     def emit_status_update(self, status=None):
         """Emit Docker status updates"""
@@ -59,139 +52,89 @@ class DockerManagerNamespace(Namespace):
             }
             socketio.emit('docker_status', error_status, namespace='/docker-manager')
 
-    def monitor_docker_status(self):
-        """Monitor Docker status and containers"""
-        while self.should_monitor:
-            try:
-                # Skip status check if operation is in progress
-                if not self.operation_in_progress:
-                    # Get Docker status
-                    docker_status = self.docker_checker.get_status()
-                    current_status = {
-                        'isInstalled': docker_status.get('isInstalled', False),
-                        'isRunning': docker_status.get('isRunning', False),
-                        'error': docker_status.get('error')
-                    }
-                    
-                    # Emit status update if changed
-                    if current_status != self.last_status:
-                        self.emit_status_update(current_status)
-                        self.last_status = current_status
-
-                    # Get and emit container list if Docker is running
-                    if current_status['isRunning']:
-                        try:
-                            current_containers = self.docker_manager.list_containers()
-                            if current_containers != self.last_containers:
-                                socketio.emit('containers', {'containers': current_containers}, namespace='/docker-manager')
-                                self.last_containers = current_containers
-                        except Exception as e:
-                            print(f"Error listing containers: {str(e)}")
-                            self.last_containers = None
-
-            except Exception as e:
-                error_status = {
-                    'isInstalled': False,
-                    'isRunning': False,
-                    'error': f"Error checking Docker status: {str(e)}"
-                }
-                self.emit_status_update(error_status)
-
-            socketio.sleep(2)  # Check every 2 seconds
-        
-        print('Docker status monitoring stopped')
-        self.monitor_thread = None  # Clear the thread reference
-
-    def _execute_operation(self, operation_func, *args):
-        """Execute a Docker operation in a thread-safe manner"""
+    def _execute_operation(self, operation_func, *args, emit_events=True):
+        """Execute a Docker operation in a thread-safe manner with proper event emission"""
         self.operation_in_progress = True
         try:
             result = operation_func(*args)
+            if emit_events:
+                self.emit_status_update()
             return result
+        except Exception as e:
+            error_message = str(e)
+            if emit_events:
+                error_status = {
+                    'isInstalled': True,
+                    'isRunning': False,
+                    'error': error_message
+                }
+                self.emit_status_update(error_status)
+            return {'error': error_message}
         finally:
             self.operation_in_progress = False
-            # Force a status update after operation
-            self.emit_status_update()
 
     def handle_docker_operation(self, operation_type, container_name=None):
         """Handle Docker operations (start/stop) for Docker daemon or containers"""
         try:
             if container_name:
                 # Container operation
-                if operation_type == 'start':
-                    result = self._execute_operation(self.docker_manager.start_container, container_name)
-                else:  # stop
-                    result = self._execute_operation(self.docker_manager.stop_container, container_name)
+                operation_func = (self.docker_manager.start_container if operation_type == 'start' 
+                                else self.docker_manager.stop_container)
+                result = self._execute_operation(operation_func, container_name, emit_events=False)
                 
-                if 'error' in result:
-                    socketio.emit('container_operation', {
-                        'status': 'error',
-                        'message': result['error'],
-                        'container': container_name
-                    }, namespace='/docker-manager')
-                else:
-                    socketio.emit('container_operation', {
-                        'status': 'success',
-                        'message': result['status'],
-                        'container': container_name
-                    }, namespace='/docker-manager')
+                event_data = {
+                    'status': 'error' if 'error' in result else 'success',
+                    'message': result.get('error', result.get('status')),
+                    'container': container_name
+                }
+                socketio.emit('container_operation', event_data, namespace='/docker-manager')
             else:
                 # Docker daemon operation
                 # Emit starting/stopping status
                 socketio.emit('docker_operation', {
                     'isInstalled': True,
-                    'isRunning': operation_type == 'stop',  # Current state before operation
-                    'status': operation_type + 'ing'  # 'starting' or 'stopping'
+                    'isRunning': operation_type == 'stop',
+                    'status': operation_type + 'ing'
                 }, namespace='/docker-manager')
                 
-                # Execute operation
-                if operation_type == 'start':
-                    result = self._execute_operation(self.docker_manager.start_docker)
-                else:  # stop
-                    result = self._execute_operation(self.docker_manager.stop_docker)
+                operation_func = (self.docker_manager.start_docker if operation_type == 'start' 
+                                else self.docker_manager.stop_docker)
+                result = self._execute_operation(operation_func, emit_events=False)
 
                 # Wait briefly for Docker state to stabilize
                 socketio.sleep(2)
                 current_status = self.docker_checker.get_status()
                 
-                # Only emit completion if Docker state matches what we want
                 expected_running = operation_type == 'start'
-                if current_status.get('isRunning') == expected_running:
-                    socketio.emit('docker_operation', {
-                        'isInstalled': True,
-                        'isRunning': expected_running,
-                        'status': 'complete',
-                        'error': result.get('error')
-                    }, namespace='/docker-manager')
-                else:
-                    # Keep the loading state if we haven't reached desired state
-                    socketio.emit('docker_operation', {
-                        'isInstalled': True,
-                        'isRunning': not expected_running,
-                        'status': operation_type + 'ing'
-                    }, namespace='/docker-manager')
+                event_data = {
+                    'isInstalled': True,
+                    'isRunning': current_status.get('isRunning', not expected_running),
+                    'status': 'complete' if current_status.get('isRunning') == expected_running else operation_type + 'ing',
+                    'error': result.get('error')
+                }
+                socketio.emit('docker_operation', event_data, namespace='/docker-manager')
 
             return result
 
         except Exception as e:
             error_message = f"Error during Docker {operation_type}: {str(e)}"
-            socketio.emit('docker_status', {
+            error_status = {
                 'isInstalled': True,
                 'isRunning': operation_type == 'stop',
                 'status': 'complete',
                 'error': error_message
-            }, namespace='/docker-manager')
+            }
+            
+            socketio.emit('docker_status', error_status, namespace='/docker-manager')
+            event_name = 'container_operation' if container_name else 'docker_operation'
+            event_data = {
+                'status': 'error',
+                'message': error_message
+            }
             if container_name:
-                socketio.emit('container_operation', {
-                    'status': 'error',
-                    'message': error_message,
-                    'container': container_name
-                }, namespace='/docker-manager')
-            else:
-                socketio.emit('docker_operation', {
-                    'status': 'error',
-                    'message': error_message
-                }, namespace='/docker-manager')
+                event_data['container'] = container_name
+                
+            socketio.emit(event_name, event_data, namespace='/docker-manager')
             return {'error': error_message}
 
     def on_check_status(self, data=None):
@@ -200,6 +143,12 @@ class DockerManagerNamespace(Namespace):
             if not self.operation_in_progress:
                 status = self.docker_checker.get_status()
                 self.emit_status_update(status)
+                
+                # If Docker is running, get and emit container list
+                if status.get('isRunning'):
+                    containers = self.docker_manager.list_containers()
+                    socketio.emit('containers', {'containers': containers}, namespace='/docker-manager')
+                    
         except Exception as e:
             error_status = {
                 'isInstalled': False,
@@ -223,6 +172,7 @@ def get_docker_namespace():
 def check_docker_status():
     """Get current Docker status and list of containers"""
     try:
+        namespace = get_docker_namespace()
         docker_status = docker_checker.get_status()
         containers = docker_manager.list_containers() if docker_status['isRunning'] else []
         
@@ -233,68 +183,40 @@ def check_docker_status():
             'error': docker_status.get('error')
         }
         
-        # Emit status update through namespace
-        namespace = get_docker_namespace()
         namespace.emit_status_update(response_data)
-        
         return jsonify(response_data)
     except Exception as e:
-        error_message = str(e)
         error_response = {
             'isInstalled': False,
             'isRunning': False,
-            'error': error_message
+            'error': str(e)
         }
         return jsonify(error_response), 500
 
-def execute_docker_operation(operation_func):
-    """Execute a Docker operation in a background thread"""
+def execute_operation(operation_type, container_name=None):
+    """Execute a Docker operation through the namespace"""
     namespace = get_docker_namespace()
-    
-    def operation_thread():
-        try:
-            result = operation_func()
-            if result.get('error'):
-                return {'success': False, 'message': result['error']}
-            return {'success': True, 'message': result.get('status', 'Operation completed successfully')}
-        finally:
-            namespace.cleanup_operation_threads()
-    
-    # Spawn the operation in a background thread
-    thread = thread_manager.spawn(operation_thread)
-    namespace.operation_threads.append(thread)
-    return {'message': 'Operation initiated successfully'}
+    result = namespace.handle_docker_operation(operation_type, container_name)
+    return jsonify({'message': result.get('status', 'Operation initiated successfully')})
 
 @docker_manager_bp.route('/docker/start', methods=['POST'])
 def start_docker():
     """Start Docker daemon"""
-    namespace = get_docker_namespace()
-    return jsonify(execute_docker_operation(
-        lambda: namespace.handle_docker_operation('start')
-    ))
+    return execute_operation('start')
 
 @docker_manager_bp.route('/docker/stop', methods=['POST'])
 def stop_docker():
     """Stop Docker daemon"""
-    namespace = get_docker_namespace()
-    return jsonify(execute_docker_operation(
-        lambda: namespace.handle_docker_operation('stop')
-    ))
+    return execute_operation('stop')
 
 @docker_manager_bp.route('/docker/containers/<container_name>/start', methods=['POST'])
 def start_container(container_name):
     """Start a specific container"""
-    namespace = get_docker_namespace()
-    return jsonify(execute_docker_operation(
-        lambda: namespace.handle_docker_operation('start', container_name)
-    ))
+    return execute_operation('start', container_name)
 
 @docker_manager_bp.route('/docker/containers/<container_name>/stop', methods=['POST'])
 def stop_container(container_name):
     """Stop a specific container"""
-    namespace = get_docker_namespace()
-    return jsonify(execute_docker_operation(
-        lambda: namespace.handle_docker_operation('stop', container_name)
-    ))
+    return execute_operation('stop', container_name)
 
 
