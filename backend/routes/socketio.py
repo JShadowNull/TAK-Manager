@@ -1,10 +1,6 @@
 # backend/services/socketio_handler.py
 
 from flask_socketio import SocketIO, Namespace
-from backend.services.scripts.system.thread_manager import thread_manager
-from backend.services.scripts.docker.docker_manager import DockerManager
-import eventlet
-import os
 
 # Initialize SocketIO with eventlet
 socketio = SocketIO(
