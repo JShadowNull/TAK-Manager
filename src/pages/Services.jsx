@@ -2,7 +2,7 @@ import React from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlay, faStop, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import DockerPopup from '../components/shared/ui/popups/DockerPopup';
-import useSocket from '../components/shared/hooks/useSocket';
+import useSocket, { BACKEND_EVENTS } from '../components/shared/hooks/useSocket';
 import useFetch from '../components/shared/hooks/useFetch';
 import CustomScrollbar from '../components/shared/ui/CustomScrollbar';
 import { LoadingSwitch } from '../components/shared/ui/LoadingSwitch';
@@ -11,7 +11,7 @@ import { cn } from '../lib/utils';
 
 function Services() {
   const { post } = useFetch();
-  const { isOperationInProgress, operationState, subscribeToOperationStatus } = useOperationStatus('/docker-manager');
+  const { isOperationInProgress, operationState, subscribeToOperationStatus } = useOperationStatus(BACKEND_EVENTS.DOCKER_MANAGER.namespace);
 
   // Docker Manager Socket
   const {
@@ -20,7 +20,7 @@ function Services() {
     error: dockerError,
     updateState,
     emit
-  } = useSocket('/docker-manager', {
+  } = useSocket(BACKEND_EVENTS.DOCKER_MANAGER.namespace, {
     initialState: {
       isInstalled: false,
       isRunning: false,
@@ -33,8 +33,23 @@ function Services() {
       operationInProgress: false
     },
     eventHandlers: {
+      // Initial state handling
+      'initial_state': (data, { updateState }) => {
+        console.info('Received initial state:', data);
+        updateState({
+          isInstalled: data.isInstalled,
+          isRunning: data.isRunning,
+          containers: data.containers || [],
+          error: data.error || null
+        });
+      },
+      
+      onConnect: () => {
+        console.log('Docker Manager socket connected');
+      },
+      
       // Regular status updates
-      docker_status: (data, { state, updateState }) => {
+      [BACKEND_EVENTS.DOCKER_MANAGER.events.STATUS_UPDATE]: (data, { state, updateState }) => {
         console.info('Docker Status:', {
           isInstalled: data.isInstalled,
           isRunning: data.isRunning,
@@ -63,7 +78,7 @@ function Services() {
       },
       
       // Operation status updates (start/stop progress)
-      docker_operation: (data, { state, updateState }) => {
+      [BACKEND_EVENTS.DOCKER_MANAGER.events.DOCKER_OPERATION]: (data, { state, updateState }) => {
         console.info('Docker Operation:', {
           status: data.status,
           isRunning: data.isRunning
@@ -87,7 +102,7 @@ function Services() {
       },
 
       // Container updates
-      containers: (data, { state, updateState }) => {
+      [BACKEND_EVENTS.DOCKER_MANAGER.events.CONTAINERS_LIST]: (data, { state, updateState }) => {
         console.info('Received containers update:', data);
         
         if (Array.isArray(data.containers)) {
@@ -114,6 +129,18 @@ function Services() {
           console.info('Updated containers state:', {
             containers: data.containers,
             pendingActions: newPendingActions
+          });
+        }
+      },
+
+      [BACKEND_EVENTS.DOCKER_MANAGER.events.CONTAINER_OPERATION]: (data, { state, updateState }) => {
+        console.info('Container operation update:', data);
+        if (data.container && data.status) {
+          updateState({
+            pendingActions: {
+              ...state.pendingActions,
+              [data.container]: data.status === 'complete' ? undefined : data.status
+            }
           });
         }
       }

@@ -13,7 +13,40 @@ const SOCKET_NAMESPACES = [
   '/cert-manager'
 ] as const;
 
+// Define all backend socket events
+export const BACKEND_EVENTS = {
+  DOCKER_MANAGER: {
+    namespace: '/docker-manager',
+    events: {
+      STATUS_UPDATE: 'docker_status',
+      CONTAINER_OPERATION: 'container_operation',
+      DOCKER_OPERATION: 'docker_operation',
+      CONTAINERS_LIST: 'containers'
+    }
+  },
+  TAKSERVER_STATUS: {
+    namespace: '/takserver-status',
+    events: {
+      STATUS_UPDATE: 'takserver_status'
+    }
+  },
+  TAKSERVER_UNINSTALL: {
+    namespace: '/takserver-uninstall',
+    events: {
+      STATUS_UPDATE: 'uninstall_status',
+      COMPLETE: 'uninstall_complete'
+    }
+  },
+  TAKSERVER_INSTALLER: {
+    namespace: '/takserver-installer',
+    events: {
+      DOCKER_STATUS: 'docker_installed_status'
+    }
+  }
+} as const;
+
 export type SocketNamespace = typeof SOCKET_NAMESPACES[number];
+export type BackendEvents = typeof BACKEND_EVENTS;
 
 // Type definitions
 type Subscriber = {
@@ -49,7 +82,7 @@ type EventHandler = (
     updateState: (updates: any) => void;
     appendToTerminal: (message: string) => void;
     clearTerminal: () => void;
-    socket: Socket;
+    socket: Socket | undefined;
   }
 ) => void;
 
@@ -67,7 +100,7 @@ type UseSocketOptions = {
 };
 
 type UseSocketReturn = {
-  socket: Socket;
+  socket: Socket | undefined;
   isConnected: boolean;
   error: Error | null;
   emit: (event: string, data?: any) => boolean;
@@ -80,7 +113,7 @@ type UseSocketReturn = {
   setTerminalOutput: React.Dispatch<React.SetStateAction<string[]>>;
 };
 
-// Enhanced socket store with initialization
+// Socket store implementation
 const socketStore: SocketStore = {
   sockets: {},
   subscribers: {},
@@ -108,9 +141,9 @@ const socketStore: SocketStore = {
       // Set up basic event handlers for each socket
       socket.on('connect', () => {
         console.log(`Socket ${namespace} connected`);
-        // Request initial state from backend
-        socket.emit('check_status');
-        this.notifySubscribers(namespace, 'connect');
+        // Request initial state on connect/reconnect
+        socket.emit('request_initial_state');
+        this.notifySubscribers(namespace, 'connect', socket);
       });
 
       socket.on('connect_error', (error) => {
@@ -121,6 +154,13 @@ const socketStore: SocketStore = {
       socket.on('disconnect', () => {
         console.log(`Socket ${namespace} disconnected`);
         this.notifySubscribers(namespace, 'disconnect');
+      });
+
+      // Handle initial state response
+      socket.on('initial_state', (state: any) => {
+        if (state && typeof state === 'object') {
+          this.updateSharedState(namespace, state);
+        }
       });
 
       this.sockets[namespace] = socket;
@@ -160,9 +200,15 @@ const socketStore: SocketStore = {
             case 'connect':
               subscriber.setIsConnected(true);
               subscriber.setError(null);
+              if (subscriber.handlers.onConnect) {
+                subscriber.handlers.onConnect(this.sockets[namespace]);
+              }
               break;
             case 'disconnect':
               subscriber.setIsConnected(false);
+              if (subscriber.handlers.onDisconnect) {
+                subscriber.handlers.onDisconnect();
+              }
               break;
           }
         }
@@ -176,47 +222,78 @@ const socketStore: SocketStore = {
     }
     this.subscribers[namespace].add(subscriber);
     
-    // Get the current socket
     const socket = this.sockets[namespace];
     
-    // If we have existing state, update the subscriber immediately
-    if (Object.keys(this.states[namespace] || {}).length > 0) {
-      subscriber.updateState(this.states[namespace]);
+    // Set up event handlers for this subscriber
+    if (socket) {
+      // Set up custom event handlers from the subscriber
+      Object.entries(subscriber.handlers).forEach(([event, handler]) => {
+        if (['onConnect', 'onError', 'onDisconnect', 'handleTerminalOutput'].includes(event)) {
+          return;
+        }
+        if (typeof handler === 'function') {
+          socket.on(event, (data: any) => {
+            if (subscriber.mountedRef.current) {
+              // Update the shared state first
+              if (data && typeof data === 'object') {
+                this.updateSharedState(namespace, data);
+              }
+              
+              // Then call the handler with the complete state
+              handler(data, {
+                state: this.states[namespace],
+                updateState: (updates: any) => {
+                  const newState = {
+                    ...this.states[namespace],
+                    ...updates
+                  };
+                  this.updateSharedState(namespace, newState);
+                },
+                appendToTerminal: subscriber.appendToTerminal,
+                clearTerminal: () => {},
+                socket
+              });
+            }
+          });
+        }
+      });
     }
     
-    // If socket is connected but we don't have state, request it
-    if (socket?.connected && Object.keys(this.states[namespace] || {}).length === 0) {
-      socket.emit('check_status');
-    }
-    
-    // Update connection status
+    // If socket is connected, notify subscriber and request initial state
     if (socket?.connected) {
       subscriber.setIsConnected(true);
+      if (subscriber.handlers.onConnect) {
+        subscriber.handlers.onConnect(socket);
+      }
+      
+      // Request initial state from the backend
+      socket.emit('request_initial_state');
     }
-  },
-
-  unsubscribe(namespace: SocketNamespace, subscriber: Subscriber): void {
-    if (this.subscribers[namespace]) {
-      this.subscribers[namespace].delete(subscriber);
+    
+    // Always provide the current state to new subscribers, even if it's partial
+    if (this.states[namespace] && Object.keys(this.states[namespace]).length > 0) {
+      subscriber.updateState(this.states[namespace]);
     }
   },
 
   updateSharedState(namespace: SocketNamespace, updates: any): void {
-    // Ensure we have a state object for this namespace
     if (!this.states[namespace]) {
       this.states[namespace] = {};
     }
 
-    // Merge updates with existing state, preserving all existing data
-    // unless explicitly overwritten by the updates
-    this.states[namespace] = {
-      ...this.states[namespace],
-      ...updates
-    };
+    // Only update if there are actual changes
+    const hasChanges = Object.entries(updates).some(
+      ([key, value]) => JSON.stringify(this.states[namespace][key]) !== JSON.stringify(value)
+    );
 
-    // Notify all subscribers with the complete state
-    if (this.subscribers[namespace]) {
-      this.subscribers[namespace].forEach(subscriber => {
+    if (hasChanges) {
+      this.states[namespace] = {
+        ...this.states[namespace],
+        ...updates
+      };
+
+      // Notify subscribers with complete state
+      this.subscribers[namespace]?.forEach(subscriber => {
         if (subscriber.mountedRef.current) {
           subscriber.updateState(this.states[namespace]);
         }
@@ -255,6 +332,22 @@ const socketStore: SocketStore = {
         socket.off('connect', connectHandler);
       };
       socket.on('connect', connectHandler);
+    }
+  },
+
+  unsubscribe(namespace: SocketNamespace, subscriber: Subscriber): void {
+    if (this.subscribers[namespace]) {
+      this.subscribers[namespace].delete(subscriber);
+      
+      // Clean up socket event listeners for this subscriber
+      const socket = this.sockets[namespace];
+      if (socket) {
+        Object.entries(subscriber.handlers).forEach(([event, handler]) => {
+          if (typeof handler === 'function' && !['onConnect', 'onError', 'onDisconnect', 'handleTerminalOutput'].includes(event)) {
+            socket.off(event);
+          }
+        });
+      }
     }
   }
 };
@@ -296,16 +389,6 @@ function useSocket(
     }
   }, []);
 
-  // Update state partially
-  const updateState = useCallback((updates: any) => {
-    if (mountedRef.current) {
-      setState((prev: Record<string, any>) => ({
-        ...prev,
-        ...updates
-      }));
-    }
-  }, []);
-
   // Append to terminal output
   const appendToTerminal = useCallback((message: string) => {
     if (message && mountedRef.current) {
@@ -316,22 +399,7 @@ function useSocket(
   // Set up socket subscription
   useEffect(() => {
     mountedRef.current = true;
-    let socket: Socket | undefined;
     
-    try {
-      socket = socketStore.getSocket(namespace);
-      
-      // Initialize the shared state with the component's initial state
-      if (Object.keys(initialState).length > 0) {
-        socketStore.updateSharedState(namespace, initialState);
-      }
-      
-    } catch (err) {
-      console.error(`Failed to get socket for ${namespace}:`, err);
-      setError(err as Error);
-      return;
-    }
-
     const subscriber: Subscriber = {
       id: subscriberId.current,
       handlers: handlersRef.current,
@@ -346,40 +414,11 @@ function useSocket(
       mountedRef
     };
 
-    socketStore.subscribe(namespace, subscriber);
-
-    // Set up custom event handlers
-    Object.entries(handlersRef.current).forEach(([event, handler]) => {
-      if (['onConnect', 'onError', 'onDisconnect', 'handleTerminalOutput'].includes(event)) {
-        return;
-      }
-      if (typeof handler === 'function' && socket) {
-        socketStore.safelyAddListener(socket, event, (data: any) => {
-          if (mountedRef.current) {
-            handler(data, {
-              state: socketStore.states[namespace],
-              updateState: (updates: any) => socketStore.updateSharedState(namespace, updates),
-              appendToTerminal,
-              clearTerminal,
-              socket
-            });
-          }
-        });
-      }
-    });
-
-    // Handle terminal output
-    if (handlersRef.current.handleTerminalOutput && socket) {
-      socketStore.safelyAddListener(socket, 'terminal_output', (data: any) => {
-        if (mountedRef.current) {
-          const outputText = typeof data === 'string' 
-            ? data 
-            : (data?.data || data?.message || JSON.stringify(data));
-          if (outputText) {
-            appendToTerminal(outputText);
-          }
-        }
-      });
+    try {
+      socketStore.subscribe(namespace, subscriber);
+    } catch (err) {
+      console.error(`Failed to subscribe to ${namespace}:`, err);
+      setError(err as Error);
     }
 
     return () => {

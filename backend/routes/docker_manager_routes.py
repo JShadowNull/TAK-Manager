@@ -18,31 +18,75 @@ class DockerManagerNamespace(Namespace):
         self.docker_manager = DockerManager()
         self.docker_checker = DockerChecker()
         self.operation_in_progress = False
+        self.last_status = None
+        self.last_containers = None
 
     def on_connect(self):
         print('Client connected to /docker-manager namespace')
         try:
             # Get initial status
             status = self.docker_checker.get_status()
-            self.emit_status_update(status)
+            self.emit_status_update(status, force=True)  # Force emit on connect
         except Exception as e:
             print(f"Error during connection setup: {str(e)}")
             self.emit_status_update({
                 'isInstalled': False,
                 'isRunning': False,
                 'error': f"Error during connection setup: {str(e)}"
-            })
+            }, force=True)
 
     def on_disconnect(self):
         print('Client disconnected from /docker-manager namespace')
         self.operation_in_progress = False
+        self.last_status = None
+        self.last_containers = None
 
-    def emit_status_update(self, status=None):
-        """Emit Docker status updates"""
+    def on_request_initial_state(self):
+        """Handle initial state request from client"""
+        try:
+            status = self.docker_checker.get_status()
+            containers = []
+            if status.get('isRunning'):
+                containers = self.docker_manager.list_containers()
+            
+            initial_state = {
+                'isInstalled': status['isInstalled'],
+                'isRunning': status['isRunning'],
+                'containers': containers,
+                'error': status.get('error')
+            }
+            
+            socketio.emit('initial_state', initial_state, namespace='/docker-manager')
+        except Exception as e:
+            error_state = {
+                'isInstalled': False,
+                'isRunning': False,
+                'error': f"Error getting initial state: {str(e)}"
+            }
+            socketio.emit('initial_state', error_state, namespace='/docker-manager')
+
+    def emit_status_update(self, status=None, force=False):
+        """Emit Docker status updates only if there are changes"""
         try:
             if status is None:
                 status = self.docker_checker.get_status()
-            socketio.emit('docker_status', status, namespace='/docker-manager')
+
+            # Check if status has changed
+            status_changed = force or self.last_status != status
+
+            if status_changed:
+                socketio.emit('docker_status', status, namespace='/docker-manager')
+                self.last_status = status.copy() if status else None
+
+            # If Docker is running, check containers
+            if status.get('isRunning'):
+                containers = self.docker_manager.list_containers()
+                containers_changed = force or self.last_containers != containers
+
+                if containers_changed:
+                    socketio.emit('containers', {'containers': containers}, namespace='/docker-manager')
+                    self.last_containers = containers.copy() if containers else None
+
         except Exception as e:
             print(f"Error emitting status update: {str(e)}")
             error_status = {
@@ -51,6 +95,8 @@ class DockerManagerNamespace(Namespace):
                 'error': f"Error checking Docker status: {str(e)}"
             }
             socketio.emit('docker_status', error_status, namespace='/docker-manager')
+            self.last_status = None
+            self.last_containers = None
 
     def _execute_operation(self, operation_func, *args, emit_events=True):
         """Execute a Docker operation in a thread-safe manner with proper event emission"""
@@ -143,19 +189,13 @@ class DockerManagerNamespace(Namespace):
             if not self.operation_in_progress:
                 status = self.docker_checker.get_status()
                 self.emit_status_update(status)
-                
-                # If Docker is running, get and emit container list
-                if status.get('isRunning'):
-                    containers = self.docker_manager.list_containers()
-                    socketio.emit('containers', {'containers': containers}, namespace='/docker-manager')
-                    
         except Exception as e:
             error_status = {
                 'isInstalled': False,
                 'isRunning': False,
                 'error': f"Error checking Docker status: {str(e)}"
             }
-            self.emit_status_update(error_status)
+            self.emit_status_update(error_status, force=True)
 
 # Register the docker manager namespace
 socketio.on_namespace(DockerManagerNamespace('/docker-manager'))

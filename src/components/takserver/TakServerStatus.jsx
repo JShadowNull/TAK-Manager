@@ -6,7 +6,7 @@ import Configuration from './Configuration';
 import DockerPopup from '../shared/ui/popups/DockerPopup';
 import Button from '../shared/ui/Button';
 import LoadingButton from '../shared/ui/LoadingButton';
-import useSocket from '../shared/hooks/useSocket';
+import useSocket, { BACKEND_EVENTS } from '../shared/hooks/useSocket';
 import InstallationPopup from './InstallationPopup';
 import UninstallationPopup from './UninstallationPopup';
 import useFetch from '../shared/hooks/useFetch';
@@ -31,39 +31,6 @@ function TakServerStatus() {
   const [showNextButton, setShowNextButton] = useState(false);
   const { post, error: fetchError, clearError } = useFetch();
 
-  // Docker Manager Socket
-  const {
-    state: dockerState,
-    updateState: updateDockerState,
-    isConnected: isDockerConnected,
-  } = useSocket('/docker-manager', {
-    initialState: {
-      isInstalled: false,
-      isRunning: false,
-      error: null,
-      containers: []
-    },
-    eventHandlers: {
-      docker_status: (status, { state }) => {
-        updateDockerState({
-          ...state,
-          isInstalled: status.isInstalled,
-          isRunning: status.isRunning,
-          error: status.error,
-          containers: state.containers || []
-        });
-      },
-      onError: (error) => {
-        console.error('Docker manager socket connection error:', error);
-        updateDockerState(prev => ({
-          ...prev,
-          error: 'Failed to connect to Docker status service',
-          containers: prev.containers || []
-        }));
-      }
-    }
-  });
-
   // TAK Server Status Socket
   const {
     state: takState,
@@ -71,7 +38,7 @@ function TakServerStatus() {
     error: takError,
     isConnected: isTakConnected,
     emit: emitTakStatus
-  } = useSocket('/takserver-status', {
+  } = useSocket(BACKEND_EVENTS.TAKSERVER_STATUS.namespace, {
     initialState: {
       isInstalled: false,
       isRunning: false,
@@ -81,39 +48,78 @@ function TakServerStatus() {
       error: null,
       dockerRunning: false,
       version: null,
+      status: null,
       operationInProgress: false
     },
     eventHandlers: {
-      onConnect: () => {
-        console.log('Connected to TAK server status service');
-        emitTakStatus('check_status');
-      },
-      takserver_status: (status, { state, updateState }) => {
-        console.info('TAK Server Status:', status);
+      'initial_state': (data, { updateState }) => {
+        console.info('Received TAK Server initial state:', data);
+        const isOperationInProgress = data.isStarting || data.isStopping || data.isRestarting;
+        const status = isOperationInProgress 
+          ? (data.isStopping ? 'stopping' : data.isRestarting ? 'restarting' : 'starting')
+          : null;
         
-        // Update all state properties from the status event
         updateState({
-          ...state,
-          isInstalled: status.isInstalled,
-          isRunning: status.isRunning,
-          dockerRunning: status.dockerRunning,
-          version: status.version,
-          error: status.error,
-          isStarting: status.isStarting || false,
-          isStopping: status.isStopping || false,
-          isRestarting: status.isRestarting || false,
-          // Set operationInProgress based on any ongoing operation
-          operationInProgress: status.isStarting || status.isStopping || status.isRestarting
+          isInstalled: data.isInstalled,
+          isRunning: data.isRunning,
+          dockerRunning: data.dockerRunning,
+          version: data.version,
+          error: data.error || null,
+          status,
+          operationInProgress: isOperationInProgress,
+          isStarting: data.isStarting || false,
+          isStopping: data.isStopping || false,
+          isRestarting: data.isRestarting || false
         });
         
-        if (status.error) {
-          setOperationError(status.error);
-        } else {
-          setOperationError(null);
+        if (data.error) {
+          setOperationError(data.error);
         }
       },
-      onError: (error) => {
-        setOperationError(error.message || 'Failed to connect to TAK server status service');
+
+      onConnect: () => {
+        console.log('Connected to TAK server status service');
+      },
+      connect: () => {
+        console.log('TAK server status socket connected/reconnected');
+      },
+      [BACKEND_EVENTS.TAKSERVER_STATUS.events.STATUS_UPDATE]: (data, { state, updateState }) => {
+        console.info('TAK Server Status:', {
+          isInstalled: data.isInstalled,
+          isRunning: data.isRunning,
+          status: data.status,
+          currentState: state
+        });
+        
+        // Only update if there are actual changes
+        const isOperationInProgress = data.isStarting || data.isStopping || data.isRestarting;
+        const status = isOperationInProgress 
+          ? (data.isStopping ? 'stopping' : data.isRestarting ? 'restarting' : 'starting')
+          : null;
+        
+        if (state.isInstalled !== data.isInstalled ||
+            state.isRunning !== data.isRunning ||
+            state.dockerRunning !== data.dockerRunning ||
+            state.version !== data.version ||
+            state.error !== data.error ||
+            state.status !== status) {
+          
+          updateState({
+            isInstalled: data.isInstalled,
+            isRunning: data.isRunning,
+            dockerRunning: data.dockerRunning,
+            version: data.version,
+            error: data.error || null,
+            status,
+            operationInProgress: isOperationInProgress
+          });
+          
+          if (data.error) {
+            setOperationError(data.error);
+          } else {
+            setOperationError(null);
+          }
+        }
       }
     }
   });
@@ -127,79 +133,48 @@ function TakServerStatus() {
     appendToTerminal: appendInstallOutput,
     clearTerminal: clearInstallOutput,
     isConnected: isInstallConnected,
-  } = useSocket('/takserver-installer', {
+    error: installError
+  } = useSocket(BACKEND_EVENTS.TAKSERVER_INSTALLER.namespace, {
     initialState: {
       isInstalling: false,
       installationComplete: false,
       installationSuccess: false,
       installationError: null,
       isRollingBack: false,
-      isStoppingInstallation: false
+      isStoppingInstallation: false,
+      status: null,
+      operationInProgress: false,
+      dockerInstalled: false
     },
     eventHandlers: {
+      'initial_state': (data, { updateState }) => {
+        console.log('Received installer initial state:', data);
+        updateState({
+          isInstalling: data.isInstalling,
+          installationComplete: data.installationComplete || false,
+          installationSuccess: data.installationSuccess || false,
+          installationError: data.error || null,
+          isRollingBack: data.isRollingBack || false,
+          isStoppingInstallation: data.isStoppingInstallation || false,
+          status: data.status,
+          operationInProgress: data.operationInProgress,
+          dockerInstalled: data.dockerInstalled || false
+        });
+      },
+
       onConnect: () => {
         console.log('Connected to installer service');
       },
-      installation_started: () => {
-        updateInstallState({
-          isInstalling: true,
-          installationError: null,
-          installationSuccess: false,
-          isStoppingInstallation: false
+      [BACKEND_EVENTS.TAKSERVER_INSTALLER.events.DOCKER_STATUS]: (data, { state, updateState }) => {
+        updateState({
+          isInstalling: data.isInstalling,
+          installationComplete: data.installationComplete || false,
+          installationSuccess: data.installationSuccess || false,
+          installationError: data.error || null,
+          status: data.status,
+          operationInProgress: data.isInstalling
         });
-        setShowNextButton(false);
-        appendInstallOutput('✓ Installation started');
-      },
-      installation_complete: (data) => {
-        updateInstallState({
-          isInstalling: false,
-          installationComplete: true,
-          installationSuccess: true,
-          isStoppingInstallation: false
-        });
-        setShowNextButton(data.status === 'success');
-        appendInstallOutput('✓ Installation completed successfully');
-      },
-      installation_failed: (data) => {
-        updateInstallState({
-          isInstalling: false,
-          installationComplete: true,
-          installationSuccess: false,
-          installationError: data.error,
-          isStoppingInstallation: false
-        });
-        setShowNextButton(false);
-        appendInstallOutput(`Error: ${data.error}`);
-      },
-      rollback_started: () => {
-        updateInstallState({
-          isRollingBack: true
-        });
-        setShowNextButton(false);
-        appendInstallOutput('Starting rollback...');
-      },
-      rollback_complete: () => {
-        updateInstallState({
-          isRollingBack: false,
-          isStoppingInstallation: false,
-          isInstalling: false,
-          installationSuccess: false,
-          installationError: 'Installation cancelled by user'
-        });
-        setShowNextButton(true);
-        appendInstallOutput('Rollback completed successfully');
-      },
-      rollback_failed: (data) => {
-        updateInstallState({
-          isRollingBack: false,
-          isStoppingInstallation: false,
-          installationSuccess: false,
-          installationError: data.error || 'Rollback failed'
-        });
-        setShowNextButton(true);
-        appendInstallOutput(`Rollback failed: ${data.error || 'Unknown error'}`);
-      },
-      handleTerminalOutput: true
+      }
     }
   });
 
@@ -212,40 +187,72 @@ function TakServerStatus() {
     appendToTerminal: appendUninstallOutput,
     clearTerminal: clearUninstallTerminal,
     isConnected: isUninstallConnected,
-  } = useSocket('/takserver-uninstall', {
+    error: uninstallError
+  } = useSocket(BACKEND_EVENTS.TAKSERVER_UNINSTALL.namespace, {
     initialState: {
       isUninstalling: false,
       uninstallComplete: false,
       uninstallSuccess: false,
-      uninstallError: null
+      uninstallError: null,
+      status: null,
+      operationInProgress: false
     },
     eventHandlers: {
+      'initial_state': (data, { updateState }) => {
+        console.log('Received uninstaller initial state:', data);
+        updateState({
+          isUninstalling: data.isUninstalling,
+          uninstallComplete: data.uninstallComplete || false,
+          uninstallSuccess: data.uninstallSuccess || false,
+          uninstallError: data.error || null,
+          status: data.status,
+          operationInProgress: data.operationInProgress
+        });
+      },
+
       onConnect: () => {
         console.log('Connected to uninstall service');
         appendUninstallOutput('✓ Connected to uninstall service');
       },
-      uninstall_status: (status) => {
-        updateUninstallState({ isUninstalling: status.isUninstalling });
-      },
-      uninstall_complete: (result) => {
-        updateUninstallState({
-          isUninstalling: false,
-          uninstallComplete: true,
-          uninstallSuccess: result.success,
-          uninstallError: result.success ? null : result.message
+      [BACKEND_EVENTS.TAKSERVER_UNINSTALL.events.STATUS_UPDATE]: (data, { state, updateState }) => {
+        console.info('Uninstall Status:', {
+          isUninstalling: data.isUninstalling,
+          status: data.status,
+          currentState: state
         });
         
-        if (result.success) {
+        updateState({
+          isUninstalling: data.isUninstalling,
+          uninstallComplete: data.uninstallComplete || false,
+          uninstallSuccess: data.uninstallSuccess || false,
+          uninstallError: data.error || null,
+          status: data.status,
+          operationInProgress: data.isUninstalling
+        });
+      },
+      [BACKEND_EVENTS.TAKSERVER_UNINSTALL.events.COMPLETE]: (data, { state, updateState }) => {
+        updateState({
+          isUninstalling: false,
+          uninstallComplete: true,
+          uninstallSuccess: data.success,
+          uninstallError: data.success ? null : data.message,
+          status: null,
+          operationInProgress: false
+        });
+        
+        if (data.success) {
           setShowNextButton(true);
           appendUninstallOutput('✓ TAK Server uninstallation completed successfully');
         } else {
-          appendUninstallOutput(`Error: ${result.message}`);
+          appendUninstallOutput(`Error: ${data.message}`);
         }
       },
       handleTerminalOutput: true,
       onError: (error) => {
         updateUninstallState({
-          uninstallError: error.message || 'Failed to connect to uninstall service'
+          uninstallError: error.message || 'Failed to connect to uninstall service',
+          status: 'error',
+          operationInProgress: false
         });
       }
     }
@@ -568,7 +575,7 @@ function TakServerStatus() {
 
       {/* Docker Error Popup */}
       <DockerPopup 
-        isVisible={!dockerState.isInstalled || !dockerState.isRunning}
+        isVisible={true}
       />
 
       {/* Uninstall Confirmation Popup */}

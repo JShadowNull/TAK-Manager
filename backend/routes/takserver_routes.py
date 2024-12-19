@@ -102,8 +102,36 @@ class TakServerStatusNamespace(Namespace):
         if not self.monitor_thread:
             # Use thread_manager to spawn the monitor thread
             self.monitor_thread = thread_manager.spawn(self.monitor_takserver_status)
-        # Send immediate status update when client connects
-        self.on_check_status()
+
+    def on_request_initial_state(self):
+        """Handle initial state request from client"""
+        try:
+            if not self.operation_in_progress:
+                status = self.tak_status.get_status()
+                socketio.emit('initial_state', {
+                    'isInstalled': status.get('isInstalled', False),
+                    'isRunning': status.get('isRunning', False),
+                    'dockerRunning': status.get('dockerRunning', False),
+                    'version': status.get('version'),
+                    'error': status.get('error'),
+                    'isStarting': status.get('isStarting', False),
+                    'isStopping': status.get('isStopping', False),
+                    'isRestarting': status.get('isRestarting', False),
+                    'isUninstalling': status.get('isUninstalling', False)
+                }, namespace='/takserver-status')
+        except Exception as e:
+            error_status = {
+                'isInstalled': False,
+                'isRunning': False,
+                'dockerRunning': False,
+                'version': None,
+                'error': str(e),
+                'isStarting': False,
+                'isStopping': False,
+                'isRestarting': False,
+                'isUninstalling': False
+            }
+            socketio.emit('initial_state', error_status, namespace='/takserver-status')
 
     def on_disconnect(self):
         print('Client disconnected from /takserver-status namespace')
@@ -215,8 +243,29 @@ class TakServerUninstallNamespace(Namespace):
 
     def on_connect(self):
         print('Client connected to /takserver-uninstall namespace')
-        # Send initial status on connect
-        self.emit_status()
+
+    def on_request_initial_state(self):
+        """Handle initial state request from client"""
+        try:
+            initial_state = {
+                'isUninstalling': self.operation_in_progress,
+                'uninstallComplete': False,
+                'uninstallSuccess': False,
+                'uninstallError': None,
+                'status': None,
+                'operationInProgress': self.operation_in_progress
+            }
+            socketio.emit('initial_state', initial_state, namespace='/takserver-uninstall')
+        except Exception as e:
+            error_state = {
+                'isUninstalling': False,
+                'uninstallComplete': False,
+                'uninstallSuccess': False,
+                'uninstallError': str(e),
+                'status': 'error',
+                'operationInProgress': False
+            }
+            socketio.emit('initial_state', error_state, namespace='/takserver-uninstall')
 
     def on_disconnect(self):
         print('Client disconnected from /takserver-uninstall namespace')
@@ -289,8 +338,36 @@ class TakServerInstallerNamespace(Namespace):
 
     def on_connect(self):
         print('Client connected to /takserver-installer namespace')
-        # Send initial docker status on connect
-        self.on_check_docker_installed()
+
+    def on_request_initial_state(self):
+        """Handle initial state request from client"""
+        try:
+            docker_status = self.docker_installed.is_docker_installed()
+            initial_state = {
+                'isInstalling': self.operation_in_progress,
+                'installationComplete': False,
+                'installationSuccess': False,
+                'installationError': None,
+                'isRollingBack': False,
+                'isStoppingInstallation': False,
+                'status': None,
+                'operationInProgress': self.operation_in_progress,
+                'dockerInstalled': docker_status.get('isInstalled', False)
+            }
+            socketio.emit('initial_state', initial_state, namespace='/takserver-installer')
+        except Exception as e:
+            error_state = {
+                'isInstalling': False,
+                'installationComplete': False,
+                'installationSuccess': False,
+                'installationError': str(e),
+                'isRollingBack': False,
+                'isStoppingInstallation': False,
+                'status': 'error',
+                'operationInProgress': False,
+                'dockerInstalled': False
+            }
+            socketio.emit('initial_state', error_state, namespace='/takserver-installer')
 
     def on_disconnect(self):
         print('Client disconnected from /takserver-installer namespace')

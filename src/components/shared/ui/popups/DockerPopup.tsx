@@ -2,7 +2,7 @@ import type { FC } from 'react';
 import { useEffect } from 'react';
 import Popup from './Popup';
 import Button from '../Button';
-import useSocket from '../../hooks/useSocket';
+import useSocket, { BACKEND_EVENTS } from '../../hooks/useSocket';
 import useFetch from '../../hooks/useFetch';
 
 interface DockerPopupProps {
@@ -18,7 +18,7 @@ const DockerPopup: FC<DockerPopupProps> = ({ isVisible }) => {
     emit,
     updateState,
     error
-  } = useSocket('/docker-manager', {
+  } = useSocket(BACKEND_EVENTS.DOCKER_MANAGER.namespace, {
     initialState: {
       isInstalled: false,
       isRunning: false,
@@ -29,7 +29,19 @@ const DockerPopup: FC<DockerPopupProps> = ({ isVisible }) => {
       error: null
     },
     eventHandlers: {
-      docker_status: (data, { state, updateState }) => {
+      'initial_state': (data, { updateState }) => {
+        console.log('DockerPopup received initial state:', data);
+        updateState({
+          isInstalled: data.isInstalled,
+          isRunning: data.isRunning,
+          dockerRunning: data.isRunning || false,
+          isLoading: false,
+          error: data.error || null,
+          containers: data.containers || [],
+          operationInProgress: false
+        });
+      },
+      [BACKEND_EVENTS.DOCKER_MANAGER.events.STATUS_UPDATE]: (data, { state, updateState }) => {
         console.log('DockerPopup received docker status:', data);
         // Only update if not in a loading state
         if (!state.operationInProgress) {
@@ -44,7 +56,7 @@ const DockerPopup: FC<DockerPopupProps> = ({ isVisible }) => {
           });
         }
       },
-      docker_operation: (data, { state, updateState }) => {
+      [BACKEND_EVENTS.DOCKER_MANAGER.events.DOCKER_OPERATION]: (data, { state, updateState }) => {
         console.log('Docker Operation Event Received:', data);
         
         const isComplete = data.status === 'complete';
@@ -65,57 +77,9 @@ const DockerPopup: FC<DockerPopupProps> = ({ isVisible }) => {
         if (isComplete) {
           emit('check_status');
         }
-      },
-      error: (data, { updateState, state }) => {
-        // Don't treat Docker daemon not running as an error
-        if (data.message === 'Docker daemon is not running') {
-          updateState({ 
-            ...state,
-            isLoading: false,
-            operationInProgress: false,
-            isRunning: false,
-            dockerRunning: false
-          });
-          return;
-        }
-
-        console.error('Docker manager error:', data.message);
-        updateState({ 
-          ...state,
-          error: data.message,
-          isLoading: false,
-          operationInProgress: false 
-        });
       }
     }
   });
-
-  // Request status when socket connects
-  useEffect(() => {
-    if (isConnected) {
-      emit('check_status');
-    }
-  }, [isConnected, emit]);
-
-  // Request status when popup becomes visible
-  useEffect(() => {
-    if (isVisible && isConnected) {
-      emit('check_status');
-    }
-  }, [isVisible, isConnected, emit]);
-
-  // Periodically request status while visible
-  useEffect(() => {
-    if (!isVisible || !isConnected) return;
-
-    const intervalId = setInterval(() => {
-      if (!dockerState.operationInProgress) {
-        emit('check_status');
-      }
-    }, 2000); // Check every 2 seconds like Dashboard
-
-    return () => clearInterval(intervalId);
-  }, [isVisible, isConnected, emit, dockerState.operationInProgress]);
 
   const handleStartDocker = async (): Promise<void> => {
     if (!dockerState.operationInProgress) {
@@ -143,6 +107,7 @@ const DockerPopup: FC<DockerPopupProps> = ({ isVisible }) => {
     }
   };
 
+  const shouldShowPopup = isVisible && (!dockerState.isInstalled || !dockerState.isRunning);
   const isButtonDisabled = dockerState.dockerRunning || dockerState.operationInProgress || !isConnected;
 
   const getButtonText = (): string => {
@@ -158,12 +123,16 @@ const DockerPopup: FC<DockerPopupProps> = ({ isVisible }) => {
   const errorMessage = error?.message || dockerState.error;
   const isUnexpectedError = errorMessage && errorMessage !== 'Docker daemon is not running';
   
+  if (!shouldShowPopup) {
+    return null;
+  }
+
   if (isUnexpectedError) {
     return (
       <Popup
         id="docker-error-popup"
         title="Docker Connection Error"
-        isVisible={isVisible}
+        isVisible={true}
         onClose={() => {}}
         variant="standard"
         blurSidebar={false}
