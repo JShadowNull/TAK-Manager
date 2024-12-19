@@ -13,11 +13,11 @@ class DockerInstaller:
         """Check if Docker is already installed based on the detected OS"""
         try:
             if self.os_type == 'macos':
-                result = self.run_command.run_command(["docker", "--version"], namespace='/docker-installer')
+                result = self.run_command.run_command(["docker", "--version"], namespace='/docker-manager')
             elif self.os_type == 'windows':
-                result = self.run_command.run_command(["powershell", "Get-Process", "-Name", "Docker Desktop"], namespace='/docker-installer')
+                result = self.run_command.run_command(["powershell", "Get-Process", "-Name", "Docker Desktop"], namespace='/docker-manager')
             elif self.os_type == 'linux':
-                result = self.run_command.run_command(["sudo", "systemctl", "is-active", "--quiet", "docker"], namespace='/docker-installer')
+                result = self.run_command.run_command(["sudo", "systemctl", "is-active", "--quiet", "docker"], namespace='/docker-manager')
             else:
                 return {"error": "Unsupported OS. Cannot check Docker installation."}
 

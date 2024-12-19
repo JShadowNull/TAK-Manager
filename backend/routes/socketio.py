@@ -31,26 +31,3 @@ def safe_emit(event, data, namespace=None, broadcast=False):
             socketio.emit(event, data, namespace=namespace, include_self=True)
     except Exception as e:
         print(f"Error in safe_emit: {e}")
-
-# Docker Installer Socket
-from backend.services.helpers.docker_installer import DockerInstaller
-
-# DockerInstallerNamespace handles the Docker installation process
-class DockerInstallerNamespace(Namespace):
-    def __init__(self, namespace=None):
-        super().__init__(namespace)
-        self.docker_installer = DockerInstaller()
-
-    def on_connect(self):
-        print("Client connected to Docker installer namespace")
-
-    def on_disconnect(self):
-        print("Client disconnected from Docker installer namespace")
-
-    def on_check_docker_installed(self):
-        print('Received request to check if Docker is installed')
-        result = self.docker_installer.is_docker_installed()
-        socketio.emit('docker_installed_status', result, namespace='/docker-installer')
-
-# Register the docker installer namespace
-socketio.on_namespace(DockerInstallerNamespace('/docker-installer'))
