@@ -1,5 +1,5 @@
 import React, { forwardRef } from 'react';
-import type { ReactNode } from 'react';
+import type { ReactNode, ElementType } from 'react';
 import { Slot } from '@radix-ui/react-slot';
 import { Loader2 } from 'lucide-react';
 import { HelpIconTooltip } from './shadcn/tooltip/HelpIconTooltip';
@@ -31,7 +31,9 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 export type { ButtonProps };
 
-const Button = forwardRef<HTMLElement, ButtonProps>(({
+type ButtonComponent = ElementType<any>;
+
+const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
   children,
   onClick,
   variant = 'primary',
@@ -55,7 +57,7 @@ const Button = forwardRef<HTMLElement, ButtonProps>(({
   rel,
   ...rest
 }, ref) => {
-  const Component = href ? 'a' : asChild ? Slot : 'button';
+  const Component = href ? ('a' as ButtonComponent) : asChild ? Slot : ('button' as ButtonComponent);
 
   const linkProps = href ? {
     href,
