@@ -1,5 +1,4 @@
 import type { FC } from 'react';
-import { useEffect } from 'react';
 import Popup from './Popup';
 import Button from '../Button';
 import useSocket, { BACKEND_EVENTS } from '../../hooks/useSocket';
