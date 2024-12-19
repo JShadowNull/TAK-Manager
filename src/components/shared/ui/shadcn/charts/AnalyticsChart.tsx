@@ -98,7 +98,7 @@ export function AnalyticsChart({
             <CardTitle>{title}</CardTitle>
             <CardDescription>{description}</CardDescription>
           </div>
-          <div className="text-2xl font-bold" style={{ color: colors.stroke }}>{trendingValue}</div>
+          <div className="text-xl font-bold" style={{ color: colors.stroke }}>{trendingValue}</div>
         </div>
       </CardHeader>
       <CardContent>
