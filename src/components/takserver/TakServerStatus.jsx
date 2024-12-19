@@ -11,7 +11,7 @@ import InstallationPopup from './InstallationPopup';
 import UninstallationPopup from './UninstallationPopup';
 import useFetch from '../shared/hooks/useFetch';
 
-function TakServerStatus({ handleStartStop }) {
+function TakServerStatus() {
   const [showInstallForm, setShowInstallForm] = useState(false);
   const [showInstallProgress, setShowInstallProgress] = useState(false);
   const terminalRef = useRef(null);
@@ -27,10 +27,9 @@ function TakServerStatus({ handleStartStop }) {
   });
   const [showCompletionPopup, setShowCompletionPopup] = useState(false);
   const [operationError, setOperationError] = useState(null);
-  const [dockerError, setDockerError] = useState(null);
   const [showUninstallConfirm, setShowUninstallConfirm] = useState(false);
   const [showNextButton, setShowNextButton] = useState(false);
-  const { post, loading: fetchLoading, error: fetchError, clearError } = useFetch();
+  const { post, error: fetchError, clearError } = useFetch();
 
   // Docker Manager Socket
   const {
@@ -50,9 +49,6 @@ function TakServerStatus({ handleStartStop }) {
           isRunning: status.isRunning,
           error: status.error
         });
-        if (status.isInstalled && status.isRunning) {
-          setDockerError(null);
-        }
       },
       onError: (error) => {
         console.error('Docker manager socket connection error:', error);
@@ -451,10 +447,6 @@ function TakServerStatus({ handleStartStop }) {
     emitUninstall('start_uninstall');
   };
 
-  const LoadingSpinner = () => (
-    <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground border-t-transparent"/>
-  );
-
   return (
     <>
       <div className="w-full border border-border bg-card p-6 rounded-lg">
@@ -494,6 +486,11 @@ function TakServerStatus({ handleStartStop }) {
                       )}
                     </div>
                   </div>
+                  {operationError && (
+                    <div className="text-sm text-red-500">
+                      Error: {operationError}
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="flex items-center gap-2">

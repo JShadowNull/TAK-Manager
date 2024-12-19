@@ -17,6 +17,18 @@ class TakServerStatus:
         self.working_dir = self.get_default_working_directory()
         self.operation_status = OperationStatus('/takserver-status')
 
+    def _emit_status(self, is_running, error=None):
+        """Helper method to emit consistent status updates."""
+        status = {
+            'isInstalled': True,
+            'isRunning': is_running,
+            'dockerRunning': True,
+            'version': self.get_takserver_version(),
+            'error': error,
+            'isUninstalling': False
+        }
+        socketio.emit('takserver_status', status, namespace='/takserver-status')
+
     def get_default_working_directory(self):
         """Determine the default working directory based on the OS."""
         os_type = self.os_detector.detect_os()
@@ -167,25 +179,14 @@ class TakServerStatus:
 
             docker_compose_dir = self.get_docker_compose_dir()
             
-            # Start operation status
             self.operation_status.start_operation('start', "Starting TAK Server containers...")
-            
-            # Emit status without isStarting flag
-            socketio.emit('takserver_status', {
-                'isInstalled': True,
-                'isRunning': False,
-                'dockerRunning': True,
-                'version': self.get_takserver_version(),
-                'error': None,
-                'isUninstalling': False
-            }, namespace='/takserver-status')
+            self._emit_status(False)
             
             self.run_command.emit_log_output(
                 "Starting TAK Server containers...", 
                 'takserver-status'
             )
             
-            # Start the containers
             result = self.run_command.run_command(
                 ["docker-compose", "up", "-d"],
                 working_dir=docker_compose_dir,
@@ -193,22 +194,11 @@ class TakServerStatus:
                 capture_output=True
             )
 
-            # Wait for containers to be running
             if not self.wait_for_containers_state(True):
                 raise Exception("Timeout waiting for containers to start")
 
-            # Complete operation status
             self.operation_status.complete_operation('start', "TAK Server containers started successfully")
-            
-            # Emit success status
-            socketio.emit('takserver_status', {
-                'isInstalled': True,
-                'isRunning': True,
-                'dockerRunning': True,
-                'version': self.get_takserver_version(),
-                'error': None,
-                'isUninstalling': False
-            }, namespace='/takserver-status')
+            self._emit_status(True)
 
             self.run_command.emit_log_output(
                 "TAK Server containers started successfully", 
@@ -217,18 +207,8 @@ class TakServerStatus:
             return True
 
         except Exception as e:
-            # Fail operation status
             self.operation_status.fail_operation('start', str(e))
-            
-            # Emit error status
-            socketio.emit('takserver_status', {
-                'isInstalled': True,
-                'isRunning': False,
-                'dockerRunning': True,
-                'version': self.get_takserver_version(),
-                'error': str(e),
-                'isUninstalling': False
-            }, namespace='/takserver-status')
+            self._emit_status(False, str(e))
             
             self.run_command.emit_log_output(
                 f"Error starting TAK Server: {str(e)}", 
@@ -244,25 +224,14 @@ class TakServerStatus:
 
             docker_compose_dir = self.get_docker_compose_dir()
             
-            # Start operation status
             self.operation_status.start_operation('stop', "Stopping TAK Server containers...")
-            
-            # Emit status without isStopping flag
-            socketio.emit('takserver_status', {
-                'isInstalled': True,
-                'isRunning': True,
-                'dockerRunning': True,
-                'version': self.get_takserver_version(),
-                'error': None,
-                'isUninstalling': False
-            }, namespace='/takserver-status')
+            self._emit_status(True)
             
             self.run_command.emit_log_output(
                 "Stopping TAK Server containers...", 
                 'takserver-status'
             )
             
-            # Stop the containers
             result = self.run_command.run_command(
                 ["docker-compose", "down"],
                 working_dir=docker_compose_dir,
@@ -270,22 +239,11 @@ class TakServerStatus:
                 capture_output=True
             )
 
-            # Wait for containers to be stopped
             if not self.wait_for_containers_state(False):
                 raise Exception("Timeout waiting for containers to stop")
 
-            # Complete operation status
             self.operation_status.complete_operation('stop', "TAK Server containers stopped successfully")
-            
-            # Emit success status
-            socketio.emit('takserver_status', {
-                'isInstalled': True,
-                'isRunning': False,
-                'dockerRunning': True,
-                'version': self.get_takserver_version(),
-                'error': None,
-                'isUninstalling': False
-            }, namespace='/takserver-status')
+            self._emit_status(False)
 
             self.run_command.emit_log_output(
                 "TAK Server containers stopped successfully", 
@@ -294,18 +252,8 @@ class TakServerStatus:
             return True
 
         except Exception as e:
-            # Fail operation status
             self.operation_status.fail_operation('stop', str(e))
-            
-            # Emit error status
-            socketio.emit('takserver_status', {
-                'isInstalled': True,
-                'isRunning': True,
-                'dockerRunning': True,
-                'version': self.get_takserver_version(),
-                'error': str(e),
-                'isUninstalling': False
-            }, namespace='/takserver-status')
+            self._emit_status(True, str(e))
             
             self.run_command.emit_log_output(
                 f"Error stopping TAK Server: {str(e)}", 
@@ -321,25 +269,14 @@ class TakServerStatus:
 
             docker_compose_dir = self.get_docker_compose_dir()
             
-            # Start operation status
             self.operation_status.start_operation('restart', "Restarting TAK Server containers...")
-            
-            # Emit status without isRestarting flag
-            socketio.emit('takserver_status', {
-                'isInstalled': True,
-                'isRunning': True,
-                'dockerRunning': True,
-                'version': self.get_takserver_version(),
-                'error': None,
-                'isUninstalling': False
-            }, namespace='/takserver-status')
+            self._emit_status(True)
             
             self.run_command.emit_log_output(
                 "Restarting TAK Server containers...", 
                 'takserver-status'
             )
             
-            # Stop the containers
             result = self.run_command.run_command(
                 ["docker-compose", "restart"],
                 working_dir=docker_compose_dir,
@@ -347,22 +284,11 @@ class TakServerStatus:
                 capture_output=True
             )
 
-            # Wait for containers to be running
             if not self.wait_for_containers_state(True):
                 raise Exception("Timeout waiting for containers to restart")
 
-            # Complete operation status
             self.operation_status.complete_operation('restart', "TAK Server containers restarted successfully")
-            
-            # Emit success status
-            socketio.emit('takserver_status', {
-                'isInstalled': True,
-                'isRunning': True,
-                'dockerRunning': True,
-                'version': self.get_takserver_version(),
-                'error': None,
-                'isUninstalling': False
-            }, namespace='/takserver-status')
+            self._emit_status(True)
 
             self.run_command.emit_log_output(
                 "TAK Server containers restarted successfully", 
@@ -371,18 +297,8 @@ class TakServerStatus:
             return True
 
         except Exception as e:
-            # Fail operation status
             self.operation_status.fail_operation('restart', str(e))
-            
-            # Emit error status
-            socketio.emit('takserver_status', {
-                'isInstalled': True,
-                'isRunning': False,
-                'dockerRunning': True,
-                'version': self.get_takserver_version(),
-                'error': str(e),
-                'isUninstalling': False
-            }, namespace='/takserver-status')
+            self._emit_status(False, str(e))
             
             self.run_command.emit_log_output(
                 f"Error restarting TAK Server: {str(e)}", 
