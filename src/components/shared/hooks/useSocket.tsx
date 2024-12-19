@@ -13,7 +13,7 @@ const SOCKET_NAMESPACES = [
   '/cert-manager'
 ] as const;
 
-type SocketNamespace = typeof SOCKET_NAMESPACES[number];
+export type SocketNamespace = typeof SOCKET_NAMESPACES[number];
 
 // Type definitions
 type Subscriber = {

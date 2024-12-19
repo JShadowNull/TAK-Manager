@@ -6,9 +6,18 @@ import useSocket from '../components/shared/hooks/useSocket';
 import useFetch from '../components/shared/hooks/useFetch';
 import CustomScrollbar from '../components/shared/ui/CustomScrollbar';
 import { Switch } from '../components/shared/ui/shadcn/switch';
+import { LoadingSwitch } from '../components/shared/ui/LoadingSwitch';
+import { useOperationStatus } from '../components/shared/hooks/useOperationStatus';
 
 function Services() {
   const { post } = useFetch();
+  const { isOperationInProgress, operationState, subscribeToOperationStatus } = useOperationStatus('/docker-manager');
+
+  // Subscribe to operation status events when component mounts
+  React.useEffect(() => {
+    const unsubscribe = subscribeToOperationStatus();
+    return () => unsubscribe();
+  }, [subscribeToOperationStatus]);
 
   // Docker Manager Socket
   const {
@@ -39,7 +48,7 @@ function Services() {
         });
         
         // Only update if not in a loading state
-        if (!state.operationInProgress) {
+        if (!isOperationInProgress(state.status === 'stopping' ? 'stop' : 'start')) {
           // If Docker is running but we have no containers, request container list
           if (data.isRunning && (!state.containers || state.containers.length === 0)) {
             emit('check_status');
@@ -67,10 +76,8 @@ function Services() {
           isInstalled: state.isInstalled,
           isRunning: data.isRunning !== undefined ? data.isRunning : state.isRunning,
           error: data.error || null,
-          operationInProgress: !isComplete,
-          isLoading: !isComplete,
-          status: isComplete ? 'complete' : (
-            state.status === 'stopping' || data.status === 'stoping' ? 'stopping' : state.status
+          status: isComplete ? null : (
+            state.status === 'stopping' || data.status === 'stopping' ? 'stopping' : 'starting'
           )
         };
         
@@ -108,16 +115,23 @@ function Services() {
   });
 
   const handleDockerToggle = async (isChecked) => {
-    console.info('Docker Toggle:', isChecked ? 'Starting' : 'Stopping');
+    console.debug('Docker Toggle called:', {
+      isChecked,
+      currentState: dockerState,
+      operationState
+    });
 
     try {
       const newState = {
         ...dockerState,
         error: null,
-        isLoading: true,
-        operationInProgress: true,
         status: isChecked ? 'starting' : 'stopping'
       };
+      
+      console.debug('Updating docker state:', {
+        prevState: dockerState,
+        newState
+      });
       
       updateState(newState);
       await post(`/docker-manager/docker/${isChecked ? 'start' : 'stop'}`);
@@ -126,8 +140,7 @@ function Services() {
       const errorState = {
         ...dockerState,
         error: `Error ${isChecked ? 'starting' : 'stopping'} Docker`,
-        isLoading: false,
-        operationInProgress: false
+        status: null
       };
       updateState(errorState);
     }
@@ -195,28 +208,34 @@ function Services() {
     );
   }
 
+  const dockerSwitchSection = (
+    <div className="bg-card p-6 rounded-lg shadow-lg foreground w-full border border-border max-w-fit max-h-[8rem]">
+      <h2 className="text-base mb-4 text-center">Start/Stop Services</h2>
+      <div className="flex items-center justify-between px-2 gap-3">
+        <LoadingSwitch
+          checked={dockerState.isRunning}
+          onCheckedChange={handleDockerToggle}
+          operation={dockerState.status === 'stopping' ? 'stop' : 'start'}
+          isLoading={isOperationInProgress(dockerState.status === 'stopping' ? 'stop' : 'start')}
+          progress={operationState.progress}
+          showProgress={true}
+          showLoadingState={true}
+          className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-red-500"
+          message={operationState.message}
+        />
+        {!isOperationInProgress(dockerState.status === 'stopping' ? 'stop' : 'start') && (
+          <span className="text-sm foreground">
+            {dockerState.isRunning ? 'Docker is running' : 'Docker is stopped'}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex gap-6 flex-wrap">
       <div className="flex flex-wrap">
-        {/* Start/Stop Services */}
-        <div className="bg-card p-6 rounded-lg shadow-lg foreground w-full border border-border max-w-fit max-h-[8rem]">
-          <h2 className="text-base mb-4 text-center">Start/Stop Services</h2>
-          <div className="flex items-center justify-between px-2 gap-3">
-            <Switch
-              checked={dockerState.isRunning}
-              onCheckedChange={handleDockerToggle}
-              disabled={!isConnected || dockerState.isLoading}
-              className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-red-500"
-            />
-            <span className="text-sm foreground">
-              {!isConnected ? 'Connecting...' :
-               dockerState.isLoading ? (
-                dockerState.status === 'stopping' || dockerState.status === 'stoping' ? 'Stopping Docker...' : 'Starting Docker...'
-               ) :
-               dockerState.isRunning ? 'Docker is running' : 'Docker is stopped'}
-            </span>
-          </div>
-        </div>
+        {dockerSwitchSection}
       </div>
 
       {/* Docker Containers */}
