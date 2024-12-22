@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import InputField from '../shared/ui/InputField';
+import { Input } from '../shared/ui/shadcn/input';
 import Popup from '../shared/ui/popups/Popup';
 import AdvancedFeatures from './AdvancedFeatures';
 import Configuration from './Configuration';
@@ -658,7 +658,7 @@ function TakServerStatus() {
                 <label className="text-sm font-semibold text-primary">
                   Database Password <span className="text-red-500">*</span>
                 </label>
-                <InputField
+                <Input
                   id="postgres_password"
                   type="password"
                   value={formData.postgres_password}
@@ -672,7 +672,7 @@ function TakServerStatus() {
                 <label className="text-sm font-semibold text-primary">
                   Certificate Password <span className="text-red-500">*</span>
                 </label>
-                <InputField
+                <Input
                   id="certificate_password"
                   type="password"
                   value={formData.certificate_password}
@@ -687,7 +687,7 @@ function TakServerStatus() {
                 <label className="text-sm font-semibold text-primary">
                   Organization <span className="text-red-500">*</span>
                 </label>
-                <InputField
+                <Input
                   id="organization"
                   type="text"
                   value={formData.organization}
@@ -701,7 +701,7 @@ function TakServerStatus() {
                 <label className="text-sm font-semibold text-primary">
                   Organizational Unit <span className="text-red-500">*</span>
                 </label>
-                <InputField
+                <Input
                   id="organizational_unit"
                   type="text"
                   value={formData.organizational_unit}
@@ -715,7 +715,7 @@ function TakServerStatus() {
                 <label className="text-sm font-semibold text-primary">
                   State/Province <span className="text-red-500">*</span>
                 </label>
-                <InputField
+                <Input
                   id="state"
                   type="text"
                   value={formData.state}
@@ -729,7 +729,7 @@ function TakServerStatus() {
                 <label className="text-sm font-semibold text-primary">
                   City <span className="text-red-500">*</span>
                 </label>
-                <InputField
+                <Input
                   id="city"
                   type="text"
                   value={formData.city}
@@ -743,7 +743,7 @@ function TakServerStatus() {
                 <label className="text-sm font-semibold text-primary">
                   Name <span className="text-red-500">*</span>
                 </label>
-                <InputField
+                <Input
                   id="name"
                   type="text"
                   value={formData.name}
