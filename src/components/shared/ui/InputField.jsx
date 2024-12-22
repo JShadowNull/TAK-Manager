@@ -60,7 +60,7 @@ const InputField = ({
           disabled={disabled}
           required={required}
           className={`
-            w-16 text-center bg-primary text-sm border border-border 
+            w-16 text-center bg-background text-sm border border-border 
             p-2 rounded-lg text-primary-foreground
             focus:outline-none focus:ring-2 focus:ring-selectedColor
             ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
@@ -162,8 +162,8 @@ const InputField = ({
         disabled={disabled}
         required={required}
         className={`
-          w-full bg-primary text-sm border border-border 
-          p-2 rounded-lg cursor-pointer text-primary-foreground 
+          w-full bg-sidebar text-sm border border-border 
+          p-2 rounded-lg cursor-pointer text-primary 
           placeholder-textSecondary
           focus:outline-none focus:ring-2 focus:ring-selectedColor 
           ${disabled ? 'opacity-50 cursor-not-allowed' : ''}

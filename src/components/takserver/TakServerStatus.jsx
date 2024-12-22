@@ -29,14 +29,12 @@ function TakServerStatus() {
   const [operationError, setOperationError] = useState(null);
   const [showUninstallConfirm, setShowUninstallConfirm] = useState(false);
   const [showNextButton, setShowNextButton] = useState(false);
-  const { post, error: fetchError, clearError } = useFetch();
+  const { post, clearError } = useFetch();
 
   // TAK Server Status Socket
   const {
     state: takState,
     updateState: updateTakState,
-    error: takError,
-    isConnected: isTakConnected,
     emit: emitTakStatus
   } = useSocket(BACKEND_EVENTS.TAKSERVER_STATUS.namespace, {
     initialState: {
@@ -130,10 +128,7 @@ function TakServerStatus() {
     updateState: updateInstallState,
     emit: emitInstall,
     terminalOutput: installTerminalOutput,
-    appendToTerminal: appendInstallOutput,
-    clearTerminal: clearInstallOutput,
-    isConnected: isInstallConnected,
-    error: installError
+    clearTerminal: clearInstallOutput
   } = useSocket(BACKEND_EVENTS.TAKSERVER_INSTALLER.namespace, {
     initialState: {
       isInstalling: false,
@@ -185,9 +180,7 @@ function TakServerStatus() {
     emit: emitUninstall,
     terminalOutput: uninstallTerminalOutput,
     appendToTerminal: appendUninstallOutput,
-    clearTerminal: clearUninstallTerminal,
-    isConnected: isUninstallConnected,
-    error: uninstallError
+    clearTerminal: clearUninstallTerminal
   } = useSocket(BACKEND_EVENTS.TAKSERVER_UNINSTALL.namespace, {
     initialState: {
       isUninstalling: false,
@@ -258,14 +251,10 @@ function TakServerStatus() {
     }
   });
 
-  // Clear fetch errors when component unmounts or when error state changes
+  // Clear fetch errors when error state changes
   useEffect(() => {
-    return () => {
-      if (fetchError) {
-        clearError();
-      }
-    };
-  }, [fetchError, clearError]);
+    clearError();
+  }, [clearError]);
 
   const handleInputChange = (e) => {
     const { id, value, files, type } = e.target;
@@ -623,7 +612,7 @@ function TakServerStatus() {
             {/* Purpose Section */}
             <div className="bg-background border border-border p-4 rounded-lg mb-4">
               <h4 className="text-sm font-semibold text-selectedColor mb-2">Purpose</h4>
-              <p className="text-sm text-gray-300 leading-relaxed">
+              <p className="text-sm text-muted-foreground leading-relaxed">
                 TAK Server is a powerful middleware solution that enables real-time situational awareness and information sharing. 
                 It acts as a central hub for connecting ATAK clients, managing user authentication, and facilitating secure data exchange between team members. 
                 The server provides essential features like data persistence, user management, and mission data sharing capabilities.
@@ -633,7 +622,7 @@ function TakServerStatus() {
             {/* Installation Summary */}
             <div className="bg-background border border-border p-4 rounded-lg mb-4">
               <h4 className="text-sm font-semibold text-selectedColor mb-2">Installation Summary</h4>
-              <ul className="text-sm text-gray-300 list-disc list-inside space-y-1">
+              <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
                 <li>This will install TAK Server and PostgreSQL database within Docker Desktop</li>
                 <li>Certificate enrollment will be configured by default for client authentication</li>
                 <li>All data will be stored in your Documents folder using Docker volumes</li>
@@ -642,21 +631,21 @@ function TakServerStatus() {
             </div>
 
             {/* Required Fields Note */}
-            <div className="text-sm text-yellow-400 mb-2">
+            <div className="text-sm dark:text-yellow-400 text-yellow-600 mb-2">
               All fields are required
             </div>
 
             {/* File Upload Section */}
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-semibold text-foreground">
+              <label className="text-sm font-semibold text-primary">
                 Docker ZIP File <span className="text-red-500">*</span>
               </label>
-              <p className="text-sm text-textSecondary">Example: takserver-docker-5.2-RELEASE-43.zip</p>
+              <p className="text-sm text-muted-foreground">Example: takserver-docker-5.2-RELEASE-43.zip</p>
               <input
                 type="file"
                 id="docker_zip_file"
                 onChange={handleInputChange}
-                className="w-full text-sm p-2 rounded-lg bg-inputBg border border-inputBorder focus:border-accentBorder focus:outline-none"
+                className="w-full text-sm p-2 rounded-lg bg-sidebar border border-inputBorder focus:border-accentBorder focus:outline-none"
                 accept=".zip"
                 required
               />
@@ -666,7 +655,7 @@ function TakServerStatus() {
             <div className="grid grid-cols-2 gap-4">
               {/* Password Fields */}
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-semibold text-foreground">
+                <label className="text-sm font-semibold text-primary">
                   Database Password <span className="text-red-500">*</span>
                 </label>
                 <InputField
@@ -680,7 +669,7 @@ function TakServerStatus() {
               </div>
 
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-semibold text-foreground">
+                <label className="text-sm font-semibold text-primary">
                   Certificate Password <span className="text-red-500">*</span>
                 </label>
                 <InputField
@@ -695,7 +684,7 @@ function TakServerStatus() {
 
               {/* Organization Details */}
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-semibold text-foreground">
+                <label className="text-sm font-semibold text-primary">
                   Organization <span className="text-red-500">*</span>
                 </label>
                 <InputField
@@ -709,7 +698,7 @@ function TakServerStatus() {
               </div>
 
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-semibold text-foreground">
+                <label className="text-sm font-semibold text-primary">
                   Organizational Unit <span className="text-red-500">*</span>
                 </label>
                 <InputField
@@ -723,7 +712,7 @@ function TakServerStatus() {
               </div>
 
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-semibold text-foreground">
+                <label className="text-sm font-semibold text-primary">
                   State/Province <span className="text-red-500">*</span>
                 </label>
                 <InputField
@@ -737,7 +726,7 @@ function TakServerStatus() {
               </div>
 
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-semibold text-foreground">
+                <label className="text-sm font-semibold text-primary">
                   City <span className="text-red-500">*</span>
                 </label>
                 <InputField
@@ -751,7 +740,7 @@ function TakServerStatus() {
               </div>
 
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-semibold text-foreground">
+                <label className="text-sm font-semibold text-primary">
                   Name <span className="text-red-500">*</span>
                 </label>
                 <InputField
