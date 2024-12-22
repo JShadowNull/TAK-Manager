@@ -1,26 +1,36 @@
-import React, { ButtonHTMLAttributes } from 'react';
+import React from 'react';
 import Button from './Button';
-import type { OperationType } from '../hooks/useLoader';
-import { useLoader } from '../hooks/useLoader';
+import type { OperationType, OperationStatus } from '../hooks/useLoader';
 import { cn } from '../../../lib/utils';
 import type { ButtonProps } from './Button';
+import { LoadingSpinner } from '../../transfer/Icons/LoadingSpinner';
 
 interface LoadingButtonProps extends Omit<ButtonProps, 'loading' | 'loadingText'> {
   operation: OperationType;
   isLoading: boolean;
+  status?: OperationStatus['status'] | null;
   message?: string;
   progress?: number;
+  error?: string;
   showProgress?: boolean;
   progressType?: 'spinner' | 'bar' | 'percentage';
+  loadingMessage?: string;
+  successMessage?: string;
+  failedMessage?: string;
 }
 
 const LoadingButton: React.FC<LoadingButtonProps> = ({
   operation,
   isLoading,
+  status,
   message,
   progress,
+  error,
   showProgress = false,
   progressType = 'spinner',
+  loadingMessage,
+  successMessage,
+  failedMessage = 'Operation failed',
   children,
   ...buttonProps
 }) => {
@@ -36,13 +46,25 @@ const LoadingButton: React.FC<LoadingButtonProps> = ({
     validate: 'Validating...',
   };
 
-  const loadingMessage = message || defaultMessages[operation] || 'Loading...';
+  const getStateMessage = () => {
+    if (isLoading) {
+      const progressText = showProgress && typeof progress === 'number' ? ` (${Math.round(progress)}%)` : '';
+      const currentLoadingMessage = message || loadingMessage || defaultMessages[operation] || `${operation}ing...`;
+      return `${currentLoadingMessage}${progressText}`;
+    }
+    if (error) return error;
+    if (status === 'failed') return failedMessage;
+    if (status === 'complete') return successMessage;
+    return message;
+  };
 
   // Progress indicator based on type
   const renderProgress = () => {
     if (!showProgress || !progress) return null;
 
     switch (progressType) {
+      case 'spinner':
+        return <LoadingSpinner />;
       case 'percentage':
         return `(${Math.round(progress)}%)`;
       case 'bar':
@@ -59,12 +81,19 @@ const LoadingButton: React.FC<LoadingButtonProps> = ({
     }
   };
 
+  const getButtonClassName = () => {
+    if (error || status === 'failed') return cn(buttonProps.className, 'bg-destructive hover:bg-destructive/90');
+    return buttonProps.className;
+  };
+
   return (
     <div className="flex flex-col w-fit">
       <Button
         {...buttonProps}
+        className={getButtonClassName()}
         loading={isLoading}
-        loadingText={showProgress && progress ? `${loadingMessage} ${renderProgress()}` : loadingMessage}
+        loadingText={getStateMessage()}
+        disabled={isLoading || buttonProps.disabled}
       >
         {children}
       </Button>
