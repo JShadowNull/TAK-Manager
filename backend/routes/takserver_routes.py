@@ -231,6 +231,7 @@ class TakServerInstallerNamespace(BaseNamespace):
     def __init__(self, namespace=None):
         super().__init__(namespace)
         self.docker_installed = DockerInstaller()
+        self.operation_status = OperationStatus(namespace=namespace)
 
     def on_connect(self):
         print('Client connected to /takserver-installer namespace')
@@ -250,7 +251,12 @@ class TakServerInstallerNamespace(BaseNamespace):
                 'operationInProgress': self.operation_in_progress,
                 'dockerInstalled': docker_status.get('isInstalled', False)
             }
-            socketio.emit('initial_state', initial_state, namespace='/takserver-installer')
+            self.operation_status.emit_status(
+                operation='installation',
+                status='initial',
+                message='Ready for installation',
+                details=initial_state
+            )
         except Exception as e:
             error_state = {
                 'isInstalling': False,
@@ -263,13 +269,23 @@ class TakServerInstallerNamespace(BaseNamespace):
                 'operationInProgress': False,
                 'dockerInstalled': False
             }
-            socketio.emit('initial_state', error_state, namespace='/takserver-installer')
+            self.operation_status.emit_status(
+                operation='installation',
+                status='error',
+                message=str(e),
+                details=error_state
+            )
 
     def on_check_docker_installed(self):
         """Handle docker installation status check"""
         print('Received request to check if Docker is installed')
         result = self.docker_installed.is_docker_installed()
-        socketio.emit('docker_installed_status', result, namespace='/takserver-installer')
+        self.operation_status.emit_status(
+            operation='docker_check',
+            status='complete',
+            message='Docker installation status checked',
+            details=result
+        )
 
 # Register the TAK server namespaces
 socketio.on_namespace(TakServerStatusNamespace('/takserver-status'))

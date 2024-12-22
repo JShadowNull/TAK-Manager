@@ -117,7 +117,7 @@ const Popup: FC<PopupProps> = ({
             <div className="flex flex-col items-center space-y-1">
               <div className="text-green-500 text-xl">✓</div>
               {nextStepMessage && onNext && (
-                <p className="text-sm text-gray-300">
+                <p className="text-sm text-muted-foreground">
                   {nextStepMessage}
                 </p>
               )}
@@ -129,7 +129,7 @@ const Popup: FC<PopupProps> = ({
                 {failureMessage || 'Operation failed'}
               </p>
               {errorMessage && (
-                <p className="text-sm text-gray-300">
+                <p className="text-sm text-muted-foreground">
                   Error: {errorMessage}
                 </p>
               )}
