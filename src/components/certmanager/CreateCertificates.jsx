@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import InputField from '../shared/ui/InputField';
+import { Input } from '../shared/ui/shadcn/input';
 import useSocket from '../shared/hooks/useSocket';
 import StyledSwitch from '../shared/ui/StyledSwitch';
 import Button from '../shared/ui/Button';
@@ -314,7 +314,7 @@ function CreateCertificates({ onOperationProgress }) {
                   />
                 </span>
               </div>
-              <InputField
+              <Input
                 type="text"
                 id={`cert-${index}`}
                 label={index === 0 ? "Certificate Name" : `Additional Certificate ${index}`}
@@ -334,7 +334,7 @@ function CreateCertificates({ onOperationProgress }) {
                   />
                 </span>
               </div>
-              <InputField
+              <Input
                 type="text"
                 id={`group-${index}`}
                 label="Groups"

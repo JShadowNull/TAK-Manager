@@ -1,5 +1,5 @@
 import React from 'react';
-import InputField from '../../shared/ui/InputField';
+import { Input } from '../../shared/ui/shadcn/input';
 
 const PreferenceItem = ({
   name,
@@ -34,7 +34,7 @@ const PreferenceItem = ({
           </span>
           
           <div className="flex-shrink-0 flex justify-end w-48 mr-4">
-            <InputField
+            <Input
               id={label}
               type={input_type}
               value={value}

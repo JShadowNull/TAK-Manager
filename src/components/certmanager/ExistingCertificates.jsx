@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import CustomScrollbar from '../shared/ui/CustomScrollbar';
-import InputField from '../shared/ui/InputField';
+import { Input } from '../shared/ui/shadcn/input';
 import { Chip, Tooltip } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import LockIcon from '@mui/icons-material/Lock';
@@ -195,7 +195,7 @@ function ExistingCertificates({
       <div className="flex items-center mb-4 gap-4">
         <h3 className="text-base font-bold text-foreground">Existing Certificates</h3>
         <div className="flex-1 mx-4">
-          <InputField
+          <Input
             type="text"
             placeholder="Search certificates..."
             value={searchTerm}
