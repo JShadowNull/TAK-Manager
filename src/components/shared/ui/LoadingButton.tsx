@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { ButtonHTMLAttributes } from 'react';
 import Button from './Button';
-import type { OperationType } from '../hooks/useOperationStatus';
+import type { OperationType } from '../hooks/useLoader';
+import { useLoader } from '../hooks/useLoader';
+import { cn } from '../../../lib/utils';
 import type { ButtonProps } from './Button';
 
 interface LoadingButtonProps extends Omit<ButtonProps, 'loading' | 'loadingText'> {

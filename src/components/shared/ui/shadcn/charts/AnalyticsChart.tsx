@@ -50,7 +50,7 @@ const gradientColors = {
 } as const
 
 const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
+  if (active && payload?.length > 0 && payload[0]?.value != null) {
     return (
       <div className="rounded-lg border bg-background p-2 shadow-sm">
         <div className="grid grid-cols-2 gap-2">
@@ -151,7 +151,7 @@ export function AnalyticsChart({
       <CardFooter>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <TrendingUp className="h-4 w-4" />
-          <span>Last updated: {data.length > 0 ? format(new Date(data[data.length - 1].month), "HH:mm:ss") : "Never"}</span>
+          <span>Last updated: {data?.length > 0 ? format(new Date(data[data.length - 1].month), "HH:mm:ss") : "Never"}</span>
         </div>
       </CardFooter>
     </Card>

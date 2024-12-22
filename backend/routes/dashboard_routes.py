@@ -22,6 +22,23 @@ class ServicesMonitorNamespace(Namespace):
         self.monitor_thread = None
         self.operation_threads = []
 
+    def get_initial_status(self):
+        """Get initial system status"""
+        try:
+            metrics = self.system_monitor.get_current_metrics()
+            return {
+                'cpu_usage': metrics['cpu'],
+                'ram_usage': metrics['ram'],
+                'services': metrics['services']
+            }
+        except Exception as e:
+            print(f"Error getting initial status: {e}")
+            return {
+                'cpu_usage': 0,
+                'ram_usage': 0,
+                'services': []
+            }
+
     def cleanup_operation_threads(self):
         """Clean up completed operation threads"""
         self.operation_threads = [t for t in self.operation_threads if not t.dead]
@@ -37,19 +54,21 @@ class ServicesMonitorNamespace(Namespace):
         """Monitor system with initial data emission"""
         try:
             print("Starting system monitoring with initial data")
+            # Get and emit initial status
+            initial_status = self.get_initial_status()
+            socketio.emit('initial_state', initial_status, namespace='/services-monitor')
+            
+            # Start monitoring after sending initial state
             psutil.cpu_percent(interval=None)
             eventlet.sleep(0.1)
             
-            metrics = self.system_monitor.get_current_metrics()
-            print(f"Initial metrics: {metrics}")
-            
-            socketio.emit('cpu_usage', {'cpu_usage': metrics['cpu']}, namespace='/services-monitor')
+            socketio.emit('cpu_usage', {'cpu_usage': initial_status['cpu_usage']}, namespace='/services-monitor')
             eventlet.sleep(0.1)
             
-            socketio.emit('ram_usage', {'ram_usage': metrics['ram']}, namespace='/services-monitor')
+            socketio.emit('ram_usage', {'ram_usage': initial_status['ram_usage']}, namespace='/services-monitor')
             eventlet.sleep(0.1)
             
-            socketio.emit('services', {'services': metrics['services']}, namespace='/services-monitor')
+            socketio.emit('services', {'services': initial_status['services']}, namespace='/services-monitor')
             
             self.system_monitor.monitor_system()
         except Exception as e:
@@ -63,14 +82,25 @@ class ServicesMonitorNamespace(Namespace):
                 self.monitor_thread = thread_manager.spawn(self.monitor_system_with_initial_data)
                 self.operation_threads.append(self.monitor_thread)
             else:
-                metrics = self.system_monitor.get_current_metrics()
-                socketio.emit('cpu_usage', {'cpu_usage': metrics['cpu']}, namespace='/services-monitor')
+                # Send current state immediately on reconnection
+                initial_status = self.get_initial_status()
+                socketio.emit('initial_state', initial_status, namespace='/services-monitor')
+                socketio.emit('cpu_usage', {'cpu_usage': initial_status['cpu_usage']}, namespace='/services-monitor')
                 eventlet.sleep(0.1)
-                socketio.emit('ram_usage', {'ram_usage': metrics['ram']}, namespace='/services-monitor')
+                socketio.emit('ram_usage', {'ram_usage': initial_status['ram_usage']}, namespace='/services-monitor')
                 eventlet.sleep(0.1)
-                socketio.emit('services', {'services': metrics['services']}, namespace='/services-monitor')
+                socketio.emit('services', {'services': initial_status['services']}, namespace='/services-monitor')
         except Exception as e:
             print(f"Error in on_connect: {e}")
+            socketio.emit('error', {'message': str(e)}, namespace='/services-monitor')
+
+    def on_request_initial_state(self):
+        """Handle request for initial state"""
+        try:
+            initial_status = self.get_initial_status()
+            socketio.emit('initial_state', initial_status, namespace='/services-monitor')
+        except Exception as e:
+            print(f"Error in request_initial_state: {e}")
             socketio.emit('error', {'message': str(e)}, namespace='/services-monitor')
 
     def on_disconnect(self):
@@ -108,6 +138,29 @@ class IPFetcherNamespace(Namespace):
         self.monitor_thread = None
         self.operation_threads = []
 
+    def get_initial_status(self):
+        """Get initial network status"""
+        try:
+            metrics = self.ip_fetcher.get_metrics()
+            return {
+                'ip_address': metrics.get('ip_address', 'Unknown'),
+                'network': metrics.get('network', {
+                    'upload': 0,
+                    'download': 0,
+                    'total': 0
+                })
+            }
+        except Exception as e:
+            print(f"Error getting initial network status: {e}")
+            return {
+                'ip_address': 'Unknown',
+                'network': {
+                    'upload': 0,
+                    'download': 0,
+                    'total': 0
+                }
+            }
+
     def cleanup_operation_threads(self):
         """Clean up completed operation threads"""
         self.operation_threads = [t for t in self.operation_threads if not t.dead]
@@ -123,8 +176,9 @@ class IPFetcherNamespace(Namespace):
         """Monitor network metrics with initial data emission"""
         try:
             # Send initial metrics immediately
-            initial_metrics = self.ip_fetcher.get_metrics()
-            socketio.emit('network_metrics', initial_metrics, namespace='/ip-fetcher')
+            initial_status = self.get_initial_status()
+            socketio.emit('initial_state', initial_status, namespace='/ip-fetcher')
+            socketio.emit('network_metrics', initial_status, namespace='/ip-fetcher')
             
             # Then start regular monitoring
             self.ip_fetcher.monitor_ip()
@@ -139,11 +193,21 @@ class IPFetcherNamespace(Namespace):
                 self.monitor_thread = thread_manager.spawn(self.monitor_network_with_initial_data)
                 self.operation_threads.append(self.monitor_thread)
             else:
-                # If thread exists, just send current metrics
-                current_metrics = self.ip_fetcher.get_metrics()
-                socketio.emit('network_metrics', current_metrics, namespace='/ip-fetcher')
+                # If thread exists, send current metrics
+                initial_status = self.get_initial_status()
+                socketio.emit('initial_state', initial_status, namespace='/ip-fetcher')
+                socketio.emit('network_metrics', initial_status, namespace='/ip-fetcher')
         except Exception as e:
             print(f"Error in on_connect: {e}")
+            socketio.emit('error', {'message': str(e)}, namespace='/ip-fetcher')
+
+    def on_request_initial_state(self):
+        """Handle request for initial state"""
+        try:
+            initial_status = self.get_initial_status()
+            socketio.emit('initial_state', initial_status, namespace='/ip-fetcher')
+        except Exception as e:
+            print(f"Error in request_initial_state: {e}")
             socketio.emit('error', {'message': str(e)}, namespace='/ip-fetcher')
 
     def on_disconnect(self):

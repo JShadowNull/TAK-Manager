@@ -17,7 +17,6 @@ class DockerManagerNamespace(Namespace):
         super().__init__(namespace)
         self.docker_manager = DockerManager()
         self.docker_checker = DockerChecker()
-        self.operation_in_progress = False
         self.last_status = None
         self.last_containers = None
 
@@ -37,7 +36,6 @@ class DockerManagerNamespace(Namespace):
 
     def on_disconnect(self):
         print('Client disconnected from /docker-manager namespace')
-        self.operation_in_progress = False
         self.last_status = None
         self.last_containers = None
 
@@ -98,97 +96,44 @@ class DockerManagerNamespace(Namespace):
             self.last_status = None
             self.last_containers = None
 
-    def _execute_operation(self, operation_func, *args, emit_events=True):
-        """Execute a Docker operation in a thread-safe manner with proper event emission"""
-        self.operation_in_progress = True
-        try:
-            result = operation_func(*args)
-            if emit_events:
-                self.emit_status_update()
-            return result
-        except Exception as e:
-            error_message = str(e)
-            if emit_events:
-                error_status = {
-                    'isInstalled': True,
-                    'isRunning': False,
-                    'error': error_message
-                }
-                self.emit_status_update(error_status)
-            return {'error': error_message}
-        finally:
-            self.operation_in_progress = False
-
     def handle_docker_operation(self, operation_type, container_name=None):
         """Handle Docker operations (start/stop) for Docker daemon or containers"""
         try:
             if container_name:
+                # Initialize status helper for the operation
+                self.docker_manager.initialize_status_helper(socketio)
+                
                 # Container operation
                 operation_func = (self.docker_manager.start_container if operation_type == 'start' 
                                 else self.docker_manager.stop_container)
-                result = self._execute_operation(operation_func, container_name, emit_events=False)
+                result = operation_func(container_name)
                 
-                event_data = {
-                    'status': 'error' if 'error' in result else 'success',
-                    'message': result.get('error', result.get('status')),
-                    'container': container_name
-                }
-                socketio.emit('container_operation', event_data, namespace='/docker-manager')
+                # Emit status update after operation
+                self.emit_status_update(force=True)
+                
+                return result
             else:
                 # Docker daemon operation
-                # Emit starting/stopping status
-                socketio.emit('docker_operation', {
-                    'isInstalled': True,
-                    'isRunning': operation_type == 'stop',
-                    'status': operation_type + 'ing'
-                }, namespace='/docker-manager')
-                
                 operation_func = (self.docker_manager.start_docker if operation_type == 'start' 
                                 else self.docker_manager.stop_docker)
-                result = self._execute_operation(operation_func, emit_events=False)
+                result = operation_func()
 
                 # Wait briefly for Docker state to stabilize
                 socketio.sleep(2)
-                current_status = self.docker_checker.get_status()
-                
-                expected_running = operation_type == 'start'
-                event_data = {
-                    'isInstalled': True,
-                    'isRunning': current_status.get('isRunning', not expected_running),
-                    'status': 'complete' if current_status.get('isRunning') == expected_running else operation_type + 'ing',
-                    'error': result.get('error')
-                }
-                socketio.emit('docker_operation', event_data, namespace='/docker-manager')
+                self.emit_status_update(force=True)
 
-            return result
+                return result
 
         except Exception as e:
             error_message = f"Error during Docker {operation_type}: {str(e)}"
-            error_status = {
-                'isInstalled': True,
-                'isRunning': operation_type == 'stop',
-                'status': 'complete',
-                'error': error_message
-            }
-            
-            socketio.emit('docker_status', error_status, namespace='/docker-manager')
-            event_name = 'container_operation' if container_name else 'docker_operation'
-            event_data = {
-                'status': 'error',
-                'message': error_message
-            }
-            if container_name:
-                event_data['container'] = container_name
-                
-            socketio.emit(event_name, event_data, namespace='/docker-manager')
+            print(f"[DockerManager] {error_message}")
             return {'error': error_message}
 
     def on_check_status(self, data=None):
         """Handle manual status check requests"""
         try:
-            if not self.operation_in_progress:
-                status = self.docker_checker.get_status()
-                self.emit_status_update(status)
+            status = self.docker_checker.get_status()
+            self.emit_status_update(status)
         except Exception as e:
             error_status = {
                 'isInstalled': False,
@@ -235,9 +180,26 @@ def check_docker_status():
 
 def execute_operation(operation_type, container_name=None):
     """Execute a Docker operation through the namespace"""
-    namespace = get_docker_namespace()
-    result = namespace.handle_docker_operation(operation_type, container_name)
-    return jsonify({'message': result.get('status', 'Operation initiated successfully')})
+    try:
+        namespace = get_docker_namespace()
+        
+        # Initialize docker manager's status helper
+        namespace.docker_manager.initialize_status_helper(socketio)
+        
+        result = namespace.handle_docker_operation(operation_type, container_name)
+        
+        if 'error' in result:
+            print(f"[DockerManager] Operation failed: {result['error']}")
+            return jsonify({'error': result['error']}), 500
+            
+        return jsonify({
+            'message': result.get('status', 'Operation initiated successfully'),
+            'status': 'success'
+        })
+    except Exception as e:
+        error_msg = f"Failed to execute {operation_type} operation: {str(e)}"
+        print(f"[DockerManager] Error: {error_msg}")
+        return jsonify({'error': error_msg}), 500
 
 @docker_manager_bp.route('/docker/start', methods=['POST'])
 def start_docker():
