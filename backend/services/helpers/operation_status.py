@@ -1,4 +1,5 @@
 from flask_socketio import emit
+from backend.routes.socketio import socketio  # Import the global socketio instance
 
 class OperationStatus:
     def __init__(self, socketio=None, namespace=None):
@@ -20,12 +21,9 @@ class OperationStatus:
         print(f"[OperationStatus] Emitting operation status: {event_data}")
         
         try:
-            if self.socketio:
-                print(f"[OperationStatus] Emitting via socketio to namespace: {self.namespace}")
-                self.socketio.emit('operation_status', event_data, namespace=self.namespace)
-            else:
-                print(f"[OperationStatus] Emitting via flask-socketio emit to namespace: {self.namespace}")
-                emit('operation_status', event_data, namespace=self.namespace)
+            # Always use the global socketio instance for emitting
+            # This is safe for both request context and background threads
+            socketio.emit('operation_status', event_data, namespace=self.namespace)
         except Exception as e:
             print(f"[OperationStatus] Error emitting status: {str(e)}")
 

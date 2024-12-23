@@ -1,7 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FC, ReactNode } from 'react';
 import CustomScrollbar from '../CustomScrollbar';
 import Button from '../Button';
+import { Progress } from '../shadcn/progress';
+import useSocket, { SocketNamespace } from '../../hooks/useSocket';
 
 interface PopupProps {
   id: string;
@@ -13,17 +15,22 @@ interface PopupProps {
   blurSidebar?: boolean;
   variant?: 'standard' | 'terminal';
   showTerminal?: boolean;
-  terminalOutput?: Array<string | { data: string }>;
-  isInProgress?: boolean;
-  isComplete?: boolean;
-  isSuccess?: boolean;
-  errorMessage?: string | null;
-  progressMessage?: string;
+  namespace?: SocketNamespace;
+  onComplete?: () => void;
+  onError?: (error: string) => void;
   nextStepMessage?: string;
   failureMessage?: string;
   onNext?: () => void;
   onStop?: () => void;
   isStoppingInstallation?: boolean;
+  showNextButton?: boolean;
+}
+
+interface SocketState {
+  progress: number;
+  status: string;
+  message: string;
+  error: string | null;
 }
 
 const Popup: FC<PopupProps> = ({
@@ -36,140 +43,189 @@ const Popup: FC<PopupProps> = ({
   blurSidebar = false,
   variant = 'standard',
   showTerminal = false,
-  terminalOutput = [],
-  isInProgress = false,
-  isComplete = false,
-  isSuccess = false,
-  errorMessage = null,
-  progressMessage = '',
+  namespace,
+  onComplete,
+  onError,
   nextStepMessage = '',
   failureMessage = '',
   onNext,
   onStop,
-  isStoppingInstallation
+  isStoppingInstallation,
+  showNextButton
 }) => {
-  if (!isVisible) return null;
-
-  // Create ref for scroll container
+  const [showTerminalOutput, setShowTerminalOutput] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll effect when terminal output changes
-  useEffect(() => {
-    if (showTerminal && scrollContainerRef.current) {
-      const scrollContainer = scrollContainerRef.current;
-      scrollContainer.scrollTop = scrollContainer.scrollHeight;
-    }
-  }, [terminalOutput, showTerminal]);
+  // Initialize socket with terminal output handling
+  const {
+    terminalOutput,
+    clearTerminal,
+    appendToTerminal,
+    state
+  } = namespace ? useSocket(namespace, {
+    initialState: {
+      progress: 0,
+      status: 'initial',
+      message: '',
+      error: null
+    } as SocketState,
+    eventHandlers: {
+      handleTerminalOutput: true,
+      terminal_output: (data: { data: string }) => {
+        appendToTerminal(data.data);
+      },
+      operation_status: (data: { status: string; progress?: number; error?: string; message?: string; details?: { progress?: number } }, { updateState }) => {
+        console.debug('[Popup] Operation status update:', data);
+        
+        // Get progress from either direct progress field or details
+        const progress = data.progress ?? data.details?.progress ?? 0;
+        
+        updateState({
+          progress,
+          status: data.status,
+          message: data.message || '',
+          error: data.error || null
+        } as SocketState);
 
-  const getTerminalButtons = (): ReactNode => {
-    if (isInProgress) {
-      if (onStop) {
-        return (
-          <div className="flex justify-center w-full">
-            <Button
-              variant="danger"
-              onClick={onStop}
-              disabled={isStoppingInstallation}
-              loading={isStoppingInstallation}
-              loadingText="Stopping Installation..."
-            >
-              Stop Installation
-            </Button>
-          </div>
-        );
+        // Handle completion and error states
+        if (data.status === 'complete') {
+          onComplete?.();
+        } else if (data.status === 'failed' || data.error) {
+          onError?.(data.error || 'Operation failed');
+        }
       }
-      return null;
     }
-
-    if (isComplete) {
-      if (onNext) {
-        return (
-          <div className="flex justify-end w-full">
-            <Button
-              variant="primary"
-              onClick={onNext}
-            >
-              Next
-            </Button>
-          </div>
-        );
-      }
-      return (
-        <div className="flex justify-end w-full">
-          <Button
-            variant="primary"
-            onClick={onClose}
-          >
-            Close
-          </Button>
-        </div>
-      );
-    }
-
-    return null;
+  }) : {
+    terminalOutput: [],
+    clearTerminal: () => {},
+    appendToTerminal: () => {},
+    state: { progress: 0, status: 'initial', message: '', error: null } as SocketState
   };
 
-  const getTerminalContent = (): ReactNode => {
-    if (isComplete && !showTerminal) {
-      return (
-        <>
-          {isSuccess ? (
-            <div className="flex flex-col items-center space-y-1">
-              <div className="text-green-500 text-xl">✓</div>
-              {nextStepMessage && onNext && (
-                <p className="text-sm text-muted-foreground">
-                  {nextStepMessage}
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center space-y-1">
-              <div className="text-red-500 text-xl">✗</div>
-              <p className="text-red-500 font-semibold">
-                {failureMessage || 'Operation failed'}
-              </p>
-              {errorMessage && (
-                <p className="text-sm text-muted-foreground">
-                  Error: {errorMessage}
-                </p>
-              )}
-            </div>
-          )}
-        </>
-      );
+  // Set terminal hidden by default
+  useEffect(() => {
+    if (variant === 'terminal') {
+      setShowTerminalOutput(false);
     }
+  }, [variant]);
+
+  // Handle terminal cleanup when popup closes
+  useEffect(() => {
+    if (!isVisible && namespace) {
+      clearTerminal();
+    }
+  }, [isVisible, namespace, clearTerminal]);
+
+  // Auto scroll terminal to bottom
+  useEffect(() => {
+    if (terminalOutput?.length && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+    }
+  }, [terminalOutput]);
+
+  if (!isVisible) return null;
+
+  const getTerminalContent = (): ReactNode => {
+    if (variant !== 'terminal') return null;
 
     return (
-      <div className="space-y-1">
-        <p>
-          {progressMessage || 'Operation in progress...'}
-        </p>
-        {isInProgress && (
-          <p className="text-sm text-yellow-400">
-            This process may take several minutes.
-          </p>
+      <div className="space-y-4">
+        <div className="text-center">
+          {state.message && <p className="mb-2">{state.message}</p>}
+          <Progress value={state.progress} className="mb-4" />
+        </div>
+        {showTerminalOutput && (
+          <div className="bg-background foreground rounded-lg h-64 border text-wrap border-border overflow-hidden">
+            <CustomScrollbar ref={scrollContainerRef}>
+              <div className="p-4 break-words">
+                {terminalOutput?.map((line, index) => {
+                  const content = typeof line === 'string' ? line : (line as { data: string }).data;
+                  return (
+                    <div key={index} className="select-text font-mono text-sm whitespace-pre-wrap">
+                      {content}
+                    </div>
+                  );
+                })}
+              </div>
+            </CustomScrollbar>
+          </div>
         )}
       </div>
     );
   };
 
-  const renderTerminalOutput = (): ReactNode => {
-    return terminalOutput.map((line, index) => (
-      <div key={`${index}-${typeof line === 'object' ? line.data : line}`} className="select-text font-mono text-sm whitespace-pre-wrap">
-        {typeof line === 'object' ? line.data : line}
-      </div>
-    ));
-  };
+  const getTerminalButtons = (): ReactNode => {
+    const buttons = [];
+    
+    if (variant === 'terminal') {
+      buttons.push(
+        <Button
+          key="toggle-terminal"
+          variant="secondary"
+          onClick={() => setShowTerminalOutput(!showTerminalOutput)}
+        >
+          {showTerminalOutput ? 'Hide Terminal' : 'Show Terminal'}
+        </Button>
+      );
+    }
 
-  const terminalContent = showTerminal && (
-    <div className="mt-1 bg-background foreground rounded-lg h-64 border text-wrap border-border">
-      <CustomScrollbar ref={scrollContainerRef}>
-        <div className="p-4 break-words">
-          {renderTerminalOutput()}
+    const isOperationComplete = showNextButton || state.status === 'complete';
+    const isOperationInProgress = state.status === 'in_progress';
+    const isOperationFailed = state.status === 'failed';
+
+    // Show stop button during in_progress state
+    if (isOperationInProgress && onStop) {
+      buttons.push(
+        <Button
+          key="stop"
+          variant="danger"
+          onClick={onStop}
+          disabled={isStoppingInstallation}
+          loading={isStoppingInstallation}
+          loadingText="Stopping Installation..."
+        >
+          Stop Installation
+        </Button>
+      );
+    } 
+    // Show next/close button on complete or failed states
+    else if (isOperationComplete || isOperationFailed) {
+      if (onNext) {
+        buttons.push(
+          <Button
+            key="next"
+            variant="primary"
+            onClick={onNext}
+          >
+            Next
+          </Button>
+        );
+      } else {
+        buttons.push(
+          <Button
+            key="close"
+            variant="primary"
+            onClick={onClose}
+          >
+            Close
+          </Button>
+        );
+      }
+    }
+
+    return buttons.length > 0 ? (
+      <div className="flex justify-between w-full items-center">
+        <div>
+          {buttons[0]}
         </div>
-      </CustomScrollbar>
-    </div>
-  );
+        {buttons.length > 1 && (
+          <div>
+            {buttons.slice(1)}
+          </div>
+        )}
+      </div>
+    ) : null;
+  };
 
   return (
     <div 
@@ -179,11 +235,7 @@ const Popup: FC<PopupProps> = ({
       {/* Background Overlay with Blur Effect */}
       <div 
         className={`fixed ${blurSidebar ? 'inset-0' : 'inset-y-0 right-0 left-64'} bg-background bg-opacity-50 backdrop-filter backdrop-blur-sm`}
-        onClick={() => {
-          if (!isInProgress) {
-            onClose();
-          }
-        }}
+        onClick={onClose}
       />
       
       {/* Popup Content */}
@@ -196,10 +248,9 @@ const Popup: FC<PopupProps> = ({
           <div className="w-full space-y-1">
             {variant === 'terminal' ? (
               <>
-                <div className="text-center">
+                <div>
                   {getTerminalContent()}
                 </div>
-                {terminalContent}
               </>
             ) : (
               <div className="space-y-1">

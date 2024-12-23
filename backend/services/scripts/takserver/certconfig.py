@@ -23,14 +23,12 @@ class CertConfig:
         """
         self.tak_dir = tak_dir
 
-    def configure_cert_metadata(self, container_name, check_stop):
+    def configure_cert_metadata(self, container_name):
         """
         Configure the certificate metadata in TAKServer inside the Docker container.
 
         This function updates the STATE, CITY, ORGANIZATION, and ORGANIZATIONAL_UNIT values in the cert-metadata.sh file.
         """
-        check_stop()
-
         self.run_command.emit_log_output("Starting certificate metadata configuration...", 'takserver-installer')
         
         # Command to set STATE, CITY, ORGANIZATION, and ORGANIZATIONAL_UNIT
@@ -48,9 +46,7 @@ class CertConfig:
         
         self.run_command.emit_log_output("Certificate metadata configuration completed.", 'takserver-installer')
 
-    def certificate_generation(self, container_name, check_stop):
-        check_stop()
-
+    def certificate_generation(self, container_name):
         self.run_command.emit_log_output("Generating certificates for TAKServer...", 'takserver-installer')
         commands = [
             "cd /opt/tak/certs && yes y | ./makeRootCa.sh --ca-name root-ca",
@@ -59,19 +55,15 @@ class CertConfig:
             f"cd /opt/tak/certs && yes y | ./makeCert.sh client {self.name}"
         ]
         for command in commands:
-            check_stop()
             self.run_command.run_command(["docker", "exec", container_name, "bash", "-c", command], namespace='takserver-installer')
 
-    def run_certmod(self, container_name, check_stop):
-        check_stop()
-
+    def run_certmod(self, container_name):
         # Step 1: Wait 15 seconds to ensure containers are fully started
         self.run_command.emit_log_output("Waiting for containers to fully start (15 seconds)...", 'takserver-installer')
         eventlet.sleep(15)  # Use eventlet's cooperative sleep for initial wait
 
         retries = 5
         for i in range(1, retries + 1):
-            check_stop()
             self.run_command.emit_log_output(f"Running certmod (attempt {i} of {retries})...", 'takserver-installer')
             
             # Do not unpack the result, since it's a single boolean
@@ -90,12 +82,10 @@ class CertConfig:
         # If all retries fail, log the failure
         self.run_command.emit_log_output(f"Failed to configure {self.name} user after multiple attempts.", 'takserver-installer')
 
-    def install_admin_cert_to_keychain(self, check_stop):
+    def install_admin_cert_to_keychain(self):
         """
         Installs the {self.name}.p12 certificate to the OS certificate store (Windows, macOS, Linux).
         """
-        check_stop()
-
         # Ensure the tak_dir and certificate path exist
         if not self.tak_dir:
             raise ValueError("TAK directory not set. Please set the tak_dir before proceeding.")

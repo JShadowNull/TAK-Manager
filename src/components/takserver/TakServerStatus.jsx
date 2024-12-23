@@ -7,8 +7,6 @@ import DockerPopup from '../shared/ui/popups/DockerPopup';
 import Button from '../shared/ui/Button';
 import LoadingButton from '../shared/ui/LoadingButton';
 import useSocket, { BACKEND_EVENTS } from '../shared/hooks/useSocket';
-import InstallationPopup from './InstallationPopup';
-import UninstallationPopup from './UninstallationPopup';
 import useFetch from '../shared/hooks/useFetch';
 
 function TakServerStatus() {
@@ -23,7 +21,8 @@ function TakServerStatus() {
     state: '',
     city: '',
     organizational_unit: '',
-    name: ''
+    name: '',
+    installation_id: null
   });
   const [showCompletionPopup, setShowCompletionPopup] = useState(false);
   const [operationError, setOperationError] = useState(null);
@@ -139,7 +138,8 @@ function TakServerStatus() {
       isStoppingInstallation: false,
       status: null,
       operationInProgress: false,
-      dockerInstalled: false
+      dockerInstalled: false,
+      progress: 0
     },
     eventHandlers: {
       'initial_state': (data, { updateState }) => {
@@ -153,23 +153,38 @@ function TakServerStatus() {
           isStoppingInstallation: data.isStoppingInstallation || false,
           status: data.status,
           operationInProgress: data.operationInProgress,
-          dockerInstalled: data.dockerInstalled || false
+          dockerInstalled: data.dockerInstalled || false,
+          progress: data.progress || 0
         });
       },
 
       onConnect: () => {
         console.log('Connected to installer service');
       },
-      [BACKEND_EVENTS.TAKSERVER_INSTALLER.events.DOCKER_STATUS]: (data, { state, updateState }) => {
-        updateState({
-          isInstalling: data.isInstalling,
-          installationComplete: data.installationComplete || false,
-          installationSuccess: data.installationSuccess || false,
-          installationError: data.error || null,
-          status: data.status,
-          operationInProgress: data.isInstalling
-        });
-      }
+      operation_status: (data, { state, updateState }) => {
+        console.log('Received operation status:', data);
+        if (data.operation === 'install') {
+          const isComplete = data.status === 'complete';
+          const newState = {
+            ...state,
+            isInstalling: data.status === 'in_progress',
+            installationComplete: isComplete,
+            installationSuccess: isComplete,
+            installationError: data.status === 'error' ? data.message : null,
+            status: data.message,
+            operationInProgress: data.status === 'in_progress',
+            progress: isComplete ? 100 : (data.progress || data.details?.progress || state.progress)
+          };
+          console.log('Updating install state with progress:', isComplete ? 100 : (data.progress || data.details?.progress));
+          updateState(newState);
+
+          if (isComplete) {
+            console.log('Setting show next button to true');
+            setShowNextButton(true);
+          }
+        }
+      },
+      handleTerminalOutput: true
     }
   });
 
@@ -188,7 +203,8 @@ function TakServerStatus() {
       uninstallSuccess: false,
       uninstallError: null,
       status: null,
-      operationInProgress: false
+      operationInProgress: false,
+      progress: 0
     },
     eventHandlers: {
       'initial_state': (data, { updateState }) => {
@@ -199,55 +215,36 @@ function TakServerStatus() {
           uninstallSuccess: data.uninstallSuccess || false,
           uninstallError: data.error || null,
           status: data.status,
-          operationInProgress: data.operationInProgress
+          operationInProgress: data.operationInProgress,
+          progress: data.progress || data.details?.progress || 0
         });
       },
 
       onConnect: () => {
         console.log('Connected to uninstall service');
-        appendUninstallOutput('✓ Connected to uninstall service');
       },
-      [BACKEND_EVENTS.TAKSERVER_UNINSTALL.events.STATUS_UPDATE]: (data, { state, updateState }) => {
-        console.info('Uninstall Status:', {
-          isUninstalling: data.isUninstalling,
-          status: data.status,
-          currentState: state
-        });
-        
-        updateState({
-          isUninstalling: data.isUninstalling,
-          uninstallComplete: data.uninstallComplete || false,
-          uninstallSuccess: data.uninstallSuccess || false,
-          uninstallError: data.error || null,
-          status: data.status,
-          operationInProgress: data.isUninstalling
-        });
-      },
-      [BACKEND_EVENTS.TAKSERVER_UNINSTALL.events.COMPLETE]: (data, { state, updateState }) => {
-        updateState({
-          isUninstalling: false,
-          uninstallComplete: true,
-          uninstallSuccess: data.success,
-          uninstallError: data.success ? null : data.message,
-          status: null,
-          operationInProgress: false
-        });
-        
-        if (data.success) {
-          setShowNextButton(true);
-          appendUninstallOutput('✓ TAK Server uninstallation completed successfully');
-        } else {
-          appendUninstallOutput(`Error: ${data.message}`);
+      operation_status: (data, { state, updateState }) => {
+        console.log('Received operation status:', data);
+        if (data.operation === 'uninstall') {
+          const newState = {
+            ...state,
+            isUninstalling: data.status === 'in_progress',
+            uninstallComplete: data.status === 'complete',
+            uninstallSuccess: data.status === 'complete',
+            uninstallError: data.status === 'error' ? data.message : null,
+            status: data.message,
+            operationInProgress: data.status === 'in_progress',
+            progress: data.status === 'complete' ? 100 : (data.progress || data.details?.progress || state.progress)
+          };
+          console.log('Updating uninstall state with progress:', data.status === 'complete' ? 100 : (data.progress || data.details?.progress));
+          updateState(newState);
+
+          if (data.status === 'complete') {
+            setShowNextButton(true);
+          }
         }
       },
-      handleTerminalOutput: true,
-      onError: (error) => {
-        updateUninstallState({
-          uninstallError: error.message || 'Failed to connect to uninstall service',
-          status: 'error',
-          operationInProgress: false
-        });
-      }
+      handleTerminalOutput: true
     }
   });
 
@@ -274,7 +271,8 @@ function TakServerStatus() {
       state: '',
       city: '',
       organizational_unit: '',
-      name: ''
+      name: '',
+      installation_id: null
     });
   };
 
@@ -336,6 +334,12 @@ function TakServerStatus() {
         })
       });
 
+      // Store the installation_id
+      setFormData(prev => ({
+        ...prev,
+        installation_id: response.installation_id
+      }));
+
       // Start installation
       emitInstall('start_installation', { installation_id: response.installation_id });
 
@@ -345,7 +349,6 @@ function TakServerStatus() {
         isInstalling: false,
         installationError: error.message || 'Installation failed'
       });
-      setShowNextButton(true);
     }
   };
 
@@ -358,7 +361,14 @@ function TakServerStatus() {
 
       updateInstallState({ isStoppingInstallation: true });
       
-      await post('/api/takserver/rollback-takserver', null, {
+      // Get the installation_id from the current state
+      const installation_id = formData.installation_id;
+      
+      if (!installation_id) {
+        throw new Error('No installation ID found');
+      }
+      
+      await post('/api/takserver/rollback-takserver', { installation_id }, {
         validateResponse: (data) => ({
           isValid: true // Any response is valid for rollback
         })
@@ -783,30 +793,76 @@ function TakServerStatus() {
       )}
 
       {/* Terminal Progress Popups */}
-      <InstallationPopup
+      <Popup
+        id="installation-popup"
+        title={installState.isStoppingInstallation ? "Rolling Back Installation" : "Installing TAK Server"}
         isVisible={showInstallProgress && !uninstallState.isUninstalling && !uninstallState.uninstallComplete}
-        terminalOutput={installTerminalOutput}
-        terminalRef={terminalRef}
-        isInProgress={installState.isInstalling}
-        isComplete={!installState.isInstalling && (installState.installationSuccess || installState.installationError)}
-        isSuccess={installState.installationSuccess}
-        errorMessage={installState.installationError}
+        onClose={() => {
+          if (installState.isInstalling && !installState.isStoppingInstallation) {
+            return;
+          }
+          setShowInstallProgress(false);
+        }}
+        variant="terminal"
+        showTerminal={true}
+        blurSidebar={true}
+        namespace={BACKEND_EVENTS.TAKSERVER_INSTALLER.namespace}
+        operationType="install"
+        targetId="takserver"
+        operation={async () => {
+          return new Promise((resolve) => {
+            resolve({ success: true });
+          });
+        }}
+        onComplete={() => {
+          console.log('Installation complete callback');
+          setShowNextButton(true);
+        }}
+        onError={(error) => {
+          console.log('Installation error callback');
+          setShowNextButton(true);
+        }}
+        nextStepMessage="Installation completed successfully. Click Next to continue."
+        failureMessage={installState.installationError}
         onNext={handleNext}
-        onStop={handleCancelInstallation}
+        showNextButton={showNextButton && installState.installationComplete}
+        onStop={installState.isInstalling ? handleCancelInstallation : undefined}
         isStoppingInstallation={installState.isStoppingInstallation}
-        showNextButton={showNextButton}
       />
 
-      <UninstallationPopup
+      <Popup
+        id="uninstallation-popup"
+        title="Uninstalling TAK Server"
         isVisible={showInstallProgress && (uninstallState.isUninstalling || uninstallState.uninstallComplete)}
-        terminalOutput={uninstallTerminalOutput}
-        terminalRef={terminalRef}
-        isInProgress={uninstallState.isUninstalling}
-        isComplete={uninstallState.uninstallComplete}
-        isSuccess={uninstallState.uninstallSuccess}
-        errorMessage={uninstallState.uninstallError}
+        onClose={() => {
+          if (uninstallState.isUninstalling) {
+            return;
+          }
+          setShowInstallProgress(false);
+        }}
+        variant="terminal"
+        showTerminal={true}
+        blurSidebar={true}
+        namespace={BACKEND_EVENTS.TAKSERVER_UNINSTALL.namespace}
+        operationType="uninstall"
+        targetId="takserver"
+        operation={async () => {
+          return new Promise((resolve) => {
+            resolve({ success: true });
+          });
+        }}
+        onComplete={() => {
+          console.log('Uninstallation complete callback');
+          setShowNextButton(true);
+        }}
+        onError={(error) => {
+          console.log('Uninstallation error callback');
+          setShowNextButton(true);
+        }}
+        nextStepMessage="Uninstallation completed successfully. Click Next to continue."
+        failureMessage={uninstallState.uninstallError}
         onNext={handleNext}
-        showNextButton={showNextButton || uninstallState.uninstallSuccess}
+        showNextButton={showNextButton && uninstallState.uninstallComplete}
       />
 
       {/* Completion Popup */}

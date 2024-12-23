@@ -1,16 +1,98 @@
 import Popup from './Popup';
 import Button from '../Button';
 
-// Generate mock terminal output for testing
-const generateMockOutput = (lines = 50) => {
-  const outputs = [];
-  for (let i = 1; i <= lines; i++) {
-    outputs.push(`[${String(i).padStart(3, '0')}] ${i % 5 === 0 ? 'INFO: ' : ''}Terminal output line ${i}`);
-  }
-  return outputs;
+// Mock operation function that simulates progress updates from backend
+const mockOperation = async (targetId, operationType) => {
+  return new Promise((resolve) => {
+    // Simulate backend operation_status updates
+    const socket = window.socket; // This would be your actual socket instance
+    
+    // Simulate start
+    if (socket) {
+      socket.emit('operation_status', {
+        operation: operationType,
+        status: 'in_progress',
+        message: `${operationType.charAt(0).toUpperCase() + operationType.slice(1)}ing...`,
+        progress: 0
+      });
+
+      // Simulate terminal output
+      socket.emit('terminal_output', { data: `Starting ${operationType} operation...` });
+
+      // Simulate progress
+      setTimeout(() => {
+        socket.emit('operation_status', {
+          operation: operationType,
+          status: 'in_progress',
+          message: `${operationType.charAt(0).toUpperCase() + operationType.slice(1)}ing... (50%)`,
+          progress: 50
+        });
+        socket.emit('terminal_output', { data: `[INFO] Operation at 50% completion` });
+      }, 1000);
+
+      // Simulate completion
+      setTimeout(() => {
+        socket.emit('operation_status', {
+          operation: operationType,
+          status: 'complete',
+          message: `${operationType.charAt(0).toUpperCase() + operationType.slice(1)} completed`,
+          progress: 100
+        });
+        socket.emit('terminal_output', { data: `[SUCCESS] Operation completed successfully` });
+      }, 2000);
+    }
+
+    setTimeout(() => {
+      resolve({ success: true });
+    }, 2000);
+  });
 };
 
-const mockTerminalOutput = generateMockOutput();
+// Mock operation that fails
+const mockFailedOperation = async (targetId, operationType) => {
+  return new Promise((resolve, reject) => {
+    const socket = window.socket;
+    
+    // Simulate start
+    if (socket) {
+      socket.emit('operation_status', {
+        operation: operationType,
+        status: 'in_progress',
+        message: `${operationType.charAt(0).toUpperCase() + operationType.slice(1)}ing...`,
+        progress: 0
+      });
+      socket.emit('terminal_output', { data: `Starting ${operationType} operation...` });
+
+      // Simulate progress before failure
+      setTimeout(() => {
+        socket.emit('operation_status', {
+          operation: operationType,
+          status: 'in_progress',
+          message: `${operationType.charAt(0).toUpperCase() + operationType.slice(1)}ing... (25%)`,
+          progress: 25
+        });
+        socket.emit('terminal_output', { data: `[INFO] Operation at 25% completion` });
+        socket.emit('terminal_output', { data: `[WARN] Encountering issues...` });
+      }, 1000);
+
+      // Simulate failure
+      setTimeout(() => {
+        socket.emit('operation_status', {
+          operation: operationType,
+          status: 'failed',
+          message: 'Operation failed unexpectedly',
+          error: 'Operation failed unexpectedly'
+        });
+        socket.emit('terminal_output', { data: `[ERROR] Operation failed: Unexpected error occurred` });
+        socket.emit('terminal_output', { data: `[DEBUG] Error details: Connection timeout` });
+      }, 2000);
+    }
+
+    setTimeout(() => {
+      reject(new Error('Operation failed unexpectedly'));
+    }, 2000);
+  });
+};
 
 export default {
   title: 'Shared/Popup',
@@ -43,17 +125,10 @@ export default {
       control: 'boolean',
       description: 'Whether to blur the entire screen or just the main content'
     },
-    isInProgress: {
-      control: 'boolean',
-      description: 'Shows if an operation is in progress'
-    },
-    isComplete: {
-      control: 'boolean',
-      description: 'Shows if an operation is complete'
-    },
-    isSuccess: {
-      control: 'boolean',
-      description: 'Shows if the operation was successful'
+    operationType: {
+      control: 'select',
+      options: ['start', 'stop', 'restart', 'install', 'uninstall', 'update', 'configure', 'validate'],
+      description: 'Type of operation being performed'
     },
     showTerminal: {
       control: 'boolean',
@@ -78,81 +153,35 @@ export const Standard_Basic = {
   }
 };
 
-export const Standard_WithButtons = {
-  args: {
-    ...baseArgs,
-    title: 'Standard Popup with Buttons',
-    children: <p className="p-4 text-foreground">Popup demonstrating button configurations.</p>,
-    buttons: (
-      <>
-        <Button variant="secondary" onClick={() => console.log('Cancel clicked')}>Cancel</Button>
-        <Button variant="primary" onClick={() => console.log('Confirm clicked')}>Confirm</Button>
-      </>
-    )
-  }
-};
-
-export const Standard_FullscreenBlur = {
-  args: {
-    ...baseArgs,
-    title: 'Fullscreen Standard Popup',
-    children: <p className="p-4 text-foreground">This popup blurs the entire screen including sidebar.</p>,
-    blurSidebar: true,
-    buttons: (
-      <Button variant="primary" onClick={() => console.log('OK clicked')}>OK</Button>
-    )
-  }
-};
-
-// 2. Terminal Popup - Progress States
+// 2. Terminal Popup with Loader - Progress States
 export const Terminal_InProgress = {
   args: {
     ...baseArgs,
-    title: 'Terminal - In Progress',
+    title: 'Terminal - Installation Progress',
     variant: 'terminal',
     showTerminal: true,
-    terminalOutput: mockTerminalOutput.slice(0, 20),
-    isInProgress: true,
-    progressMessage: 'Installation in progress...',
+    namespace: '/docker-manager',
+    operationType: 'install',
+    targetId: 'test-container',
+    operation: mockOperation,
+    onComplete: () => console.log('Operation completed'),
+    onError: (error) => console.error('Operation failed:', error)
   }
 };
 
 export const Terminal_InProgress_WithStop = {
   args: {
     ...baseArgs,
-    title: 'Terminal - In Progress with Stop',
+    title: 'Terminal - Installation Progress with Stop',
     variant: 'terminal',
     showTerminal: true,
-    terminalOutput: mockTerminalOutput.slice(0, 20),
-    isInProgress: true,
-    progressMessage: 'Installation in progress...',
-    onStop: () => console.log('Stop clicked'),
-  }
-};
-
-export const Terminal_InProgress_NoOutput = {
-  args: {
-    ...baseArgs,
-    title: 'Terminal - In Progress (No Output)',
-    variant: 'terminal',
-    showTerminal: false,
-    isInProgress: true,
-    progressMessage: 'Processing your request...',
-  }
-};
-
-// 3. Terminal Popup - Success States
-export const Terminal_Success_Basic = {
-  args: {
-    ...baseArgs,
-    title: 'Terminal - Success Basic',
-    variant: 'terminal',
-    showTerminal: true,
-    terminalOutput: mockTerminalOutput,
-    isInProgress: false,
-    isComplete: true,
-    isSuccess: true,
-    successMessage: 'Operation completed successfully',
+    namespace: '/docker-manager',
+    operationType: 'install',
+    targetId: 'test-container',
+    operation: mockOperation,
+    onComplete: () => console.log('Operation completed'),
+    onError: (error) => console.error('Operation failed:', error),
+    onStop: () => console.log('Stop clicked')
   }
 };
 
@@ -162,26 +191,14 @@ export const Terminal_Success_WithNext = {
     title: 'Terminal - Success with Next Step',
     variant: 'terminal',
     showTerminal: true,
-    terminalOutput: mockTerminalOutput,
-    isInProgress: false,
-    isComplete: true,
-    isSuccess: true,
-    successMessage: 'Operation completed successfully',
+    namespace: '/docker-manager',
+    operationType: 'install',
+    targetId: 'test-container',
+    operation: mockOperation,
+    onComplete: () => console.log('Operation completed'),
+    onError: (error) => console.error('Operation failed:', error),
     nextStepMessage: 'Click Next to proceed to configuration',
-    onNext: () => console.log('Next clicked'),
-  }
-};
-
-export const Terminal_Success_NoOutput = {
-  args: {
-    ...baseArgs,
-    title: 'Terminal - Success (No Output)',
-    variant: 'terminal',
-    showTerminal: false,
-    isInProgress: false,
-    isComplete: true,
-    isSuccess: true,
-    successMessage: 'Operation completed successfully',
+    onNext: () => console.log('Next clicked')
   }
 };
 
@@ -189,78 +206,15 @@ export const Terminal_Success_NoOutput = {
 export const Terminal_Failure_Basic = {
   args: {
     ...baseArgs,
-    title: 'Terminal - Failure Basic',
+    title: 'Terminal - Failure with Progress',
     variant: 'terminal',
     showTerminal: true,
-    terminalOutput: [
-      ...mockTerminalOutput.slice(0, 15),
-      "ERROR: Operation failed unexpectedly",
-      ...mockTerminalOutput.slice(15, 20).map(line => `DEBUG: ${line}`)
-    ],
-    isInProgress: false,
-    isComplete: true,
-    isSuccess: false,
-    failureMessage: 'Operation failed',
-  }
-};
-
-export const Terminal_Failure_WithError = {
-  args: {
-    ...baseArgs,
-    title: 'Terminal - Failure with Error Details',
-    variant: 'terminal',
-    showTerminal: true,
-    terminalOutput: [
-      ...mockTerminalOutput.slice(0, 15),
-      "ERROR: Connection timeout",
-      "ERROR: Unable to reach server",
-      ...mockTerminalOutput.slice(15, 20).map(line => `DEBUG: ${line}`)
-    ],
-    isInProgress: false,
-    isComplete: true,
-    isSuccess: false,
-    failureMessage: 'Installation failed',
-    errorMessage: 'Connection timeout: Unable to reach server',
-  }
-};
-
-export const Terminal_Failure_NoOutput = {
-  args: {
-    ...baseArgs,
-    title: 'Terminal - Failure (No Output)',
-    variant: 'terminal',
-    showTerminal: false,
-    isInProgress: false,
-    isComplete: true,
-    isSuccess: false,
-    failureMessage: 'Operation failed',
-    errorMessage: 'An unexpected error occurred',
-  }
-};
-
-// 5. Special Configurations
-export const Special_LoadingState = {
-  args: {
-    ...baseArgs,
-    title: 'Special - Loading State',
-    variant: 'terminal',
-    showTerminal: true,
-    isInProgress: true,
-    progressMessage: 'Loading...',
-    isStoppingInstallation: true,
-    onStop: () => console.log('Stop clicked'),
-  }
-};
-
-export const Special_FullscreenTerminal = {
-  args: {
-    ...baseArgs,
-    title: 'Special - Fullscreen Terminal',
-    variant: 'terminal',
-    showTerminal: true,
-    terminalOutput: mockTerminalOutput,
-    blurSidebar: true,
-    isInProgress: true,
-    progressMessage: 'This terminal popup blurs the entire screen',
+    namespace: '/docker-manager',
+    operationType: 'install',
+    targetId: 'test-container',
+    operation: mockFailedOperation,
+    onComplete: () => console.log('Operation completed'),
+    onError: (error) => console.error('Operation failed:', error),
+    failureMessage: 'Installation failed'
   }
 }; 

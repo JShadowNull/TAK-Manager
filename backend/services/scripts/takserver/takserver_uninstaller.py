@@ -4,12 +4,14 @@ from pathlib import Path
 from backend.services.helpers.os_detector import OSDetector
 from backend.services.helpers.run_command import RunCommand
 from backend.routes.socketio import socketio
+from backend.services.helpers.operation_status import OperationStatus
 
 class TakServerUninstaller:
     def __init__(self):
         self.run_command = RunCommand()
         self.os_detector = OSDetector()
         self.working_dir = self.get_default_working_directory()
+        self.operation_status = OperationStatus(namespace='/takserver-uninstall')
 
     def get_default_working_directory(self):
         """Determine the default working directory based on the OS."""
@@ -43,6 +45,13 @@ class TakServerUninstaller:
             docker_compose_dir = self.get_docker_compose_dir()
             version = self.get_takserver_version()
             
+            # Update progress (0-40%)
+            self.operation_status.update_progress(
+                'uninstall',
+                10,
+                "Stopping TAK Server containers..."
+            )
+            
             # Emit stopping status
             socketio.emit('takserver_status', {
                 'isInstalled': True,
@@ -62,11 +71,23 @@ class TakServerUninstaller:
             )
             
             # Run docker-compose down with all cleanup flags
+            self.operation_status.update_progress(
+                'uninstall',
+                20,
+                "Removing TAK Server containers..."
+            )
+            
             self.run_command.run_command(
                 ["docker-compose", "down", "--rmi", "all", "--volumes", "--remove-orphans"],
                 working_dir=docker_compose_dir,
                 namespace='takserver-uninstall',
                 capture_output=False
+            )
+
+            self.operation_status.update_progress(
+                'uninstall',
+                40,
+                "TAK Server containers removed"
             )
 
             # Emit stopped status
@@ -108,11 +129,24 @@ class TakServerUninstaller:
         """Remove the TAK Server installation directory."""
         try:
             if os.path.exists(self.working_dir):
+                self.operation_status.update_progress(
+                    'uninstall',
+                    70,
+                    f"Removing TAK Server installation directory: {self.working_dir}"
+                )
+                
                 self.run_command.emit_log_output(
                     f"→ Removing TAK Server installation directory: {self.working_dir}", 
                     'takserver-uninstall'
                 )
                 shutil.rmtree(self.working_dir)
+                
+                self.operation_status.update_progress(
+                    'uninstall',
+                    80,
+                    "Installation directory removed successfully"
+                )
+                
                 self.run_command.emit_log_output(
                     "✓ Installation directory removed successfully", 
                     'takserver-uninstall'
@@ -128,6 +162,13 @@ class TakServerUninstaller:
     def clean_docker_build_cache(self):
         """Clean Docker build cache and BuildKit resources."""
         try:
+            # Update progress (40-70%)
+            self.operation_status.update_progress(
+                'uninstall',
+                45,
+                "Cleaning up Docker build cache..."
+            )
+            
             # Clean up BuildKit resources
             self.run_command.emit_log_output(
                 "→ Cleaning up BuildKit resources...", 
@@ -135,6 +176,12 @@ class TakServerUninstaller:
             )
             
             # Get and remove BuildKit containers
+            self.operation_status.update_progress(
+                'uninstall',
+                50,
+                "Removing BuildKit containers..."
+            )
+            
             buildkit_containers = [container_id for container_id in self.run_command.run_command(
                 ["docker", "ps", "-a", "--filter", "ancestor=moby/buildkit:buildx-stable-1", "--format", "{{.ID}}"],
                 namespace='takserver-uninstall',
@@ -153,6 +200,12 @@ class TakServerUninstaller:
                 )
             
             # Get and remove BuildKit volumes
+            self.operation_status.update_progress(
+                'uninstall',
+                60,
+                "Removing BuildKit volumes..."
+            )
+            
             buildkit_volumes = [volume_id for volume_id in self.run_command.run_command(
                 ["docker", "volume", "ls", "--filter", "name=buildkit", "--quiet"],
                 namespace='takserver-uninstall',
@@ -171,6 +224,12 @@ class TakServerUninstaller:
                 )
             
             # Remove BuildKit image
+            self.operation_status.update_progress(
+                'uninstall',
+                65,
+                "Removing BuildKit image..."
+            )
+            
             self.run_command.emit_log_output(
                 "→ Removing BuildKit image...", 
                 'takserver-uninstall'
@@ -179,6 +238,12 @@ class TakServerUninstaller:
                 ["docker", "rmi", "-f", "moby/buildkit:buildx-stable-1"],
                 namespace='takserver-uninstall',
                 capture_output=False
+            )
+
+            self.operation_status.update_progress(
+                'uninstall',
+                70,
+                "Docker build cache cleaned"
             )
 
             return True
@@ -192,8 +257,8 @@ class TakServerUninstaller:
     def uninstall(self):
         """Main uninstallation method."""
         try:
-            # Emit initial uninstall status
-            socketio.emit('takserver_status', {
+            # Start uninstall operation with 0% progress
+            initial_details = {
                 'isInstalled': True,
                 'isRunning': True,
                 'dockerRunning': True,
@@ -203,27 +268,58 @@ class TakServerUninstaller:
                 'isStopping': False,
                 'isRestarting': False,
                 'isUninstalling': True
-            }, namespace='/takserver-status')
+            }
+            
+            self.operation_status.start_operation(
+                'uninstall',
+                "Starting TAK Server uninstallation...",
+                {'progress': 0}
+            )
+
+            # Emit initial uninstall status
+            socketio.emit('takserver_status', initial_details, namespace='/takserver-status')
 
             self.run_command.emit_log_output(
                 "→ Starting TAK Server uninstallation...", 
                 'takserver-uninstall'
             )
 
-            # Stop and remove containers and volumes
+            # Stop and remove containers and volumes (0-40%)
+            self.operation_status.update_progress(
+                'uninstall',
+                10,
+                "Stopping TAK Server containers..."
+            )
             if not self.stop_and_remove_containers():
                 raise Exception("Failed to stop and remove containers")
 
-            # Clean Docker build cache
+            # Clean Docker build cache (40-70%)
+            self.operation_status.update_progress(
+                'uninstall',
+                45,
+                "Cleaning up Docker build cache..."
+            )
             if not self.clean_docker_build_cache():
                 raise Exception("Failed to clean Docker build cache")
 
-            # Remove installation directory
+            # Remove installation directory (70-80%)
+            self.operation_status.update_progress(
+                'uninstall',
+                70,
+                "Removing installation directory..."
+            )
             if not self.remove_installation_directory():
                 raise Exception("Failed to remove installation directory")
 
+            # Final cleanup and verification (80-100%)
+            self.operation_status.update_progress(
+                'uninstall',
+                90,
+                "Performing final cleanup..."
+            )
+
             # Emit final success status
-            socketio.emit('takserver_status', {
+            final_details = {
                 'isInstalled': False,
                 'isRunning': False,
                 'dockerRunning': True,
@@ -233,7 +329,14 @@ class TakServerUninstaller:
                 'isStopping': False,
                 'isRestarting': False,
                 'isUninstalling': False
-            }, namespace='/takserver-status')
+            }
+            socketio.emit('takserver_status', final_details, namespace='/takserver-status')
+
+            self.operation_status.complete_operation(
+                'uninstall',
+                "TAK Server uninstallation completed successfully",
+                {'progress': 100}
+            )
 
             self.run_command.emit_log_output(
                 "✓ TAK Server uninstallation completed successfully", 
@@ -242,8 +345,10 @@ class TakServerUninstaller:
             return True
 
         except Exception as e:
+            error_message = f"Uninstallation failed: {str(e)}"
+            
             # Emit error status
-            socketio.emit('takserver_status', {
+            error_details = {
                 'isInstalled': True,
                 'isRunning': False,
                 'dockerRunning': True,
@@ -253,10 +358,16 @@ class TakServerUninstaller:
                 'isStopping': False,
                 'isRestarting': False,
                 'isUninstalling': False
-            }, namespace='/takserver-status')
+            }
+            socketio.emit('takserver_status', error_details, namespace='/takserver-status')
+
+            self.operation_status.fail_operation(
+                'uninstall',
+                error_message
+            )
 
             self.run_command.emit_log_output(
-                f"× Uninstallation failed: {str(e)}", 
+                f"× {error_message}", 
                 'takserver-uninstall'
             )
             return False 

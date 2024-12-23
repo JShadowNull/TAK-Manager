@@ -10,7 +10,6 @@ from backend.services.scripts.docker.docker_manager import DockerManager
 from backend.services.scripts.takserver.certconfig import CertConfig
 from backend.services.helpers.os_detector import OSDetector  # Import the OSDetector class
 from pathlib import Path
-from eventlet.green import threading  # Use green threading
 from backend.routes.socketio import socketio
 from backend.services.scripts.docker.docker_checker import DockerChecker
 from backend.services.helpers.operation_status import OperationStatus
@@ -30,7 +29,6 @@ class TakServerInstaller:
         self.city = city
         self.organizational_unit = organizational_unit
         self.name = name
-        self.stop_event = threading.Event()
         self.completed_steps = []
         self.extracted_folder_name = None
         self.takserver_version = None
@@ -45,11 +43,18 @@ class TakServerInstaller:
             tak_dir=None  # Will be set later in unzip_docker_release
         )
 
-    def check_stop(self):
-        """Check if installation should be stopped and raise exception if so."""
-        if self.stop_event.is_set():
-            self.run_command.emit_log_output("Installation stop requested, initiating rollback...", 'takserver-installer')
-            raise Exception("Installation stopped by user.")
+    def check_docker_running(self):
+        """Check if Docker is running using DockerChecker."""
+        self.run_command.emit_log_output("Checking if Docker is running...", 'takserver-installer')
+
+        docker_status = self.docker_checker.get_status()
+        if not docker_status['isRunning']:
+            error_message = docker_status.get('error', 'Docker is not running')
+            self.run_command.emit_log_output(error_message, 'takserver-installer')
+            raise SystemExit(error_message)
+
+        self.run_command.emit_log_output("Docker is running.", 'takserver-installer')
+        return True
 
     def get_default_working_directory(self):
         """Determine the default working directory based on the OS."""
@@ -67,26 +72,11 @@ class TakServerInstaller:
             working_dir = os.path.join(home_dir, 'takserver-docker')
         return working_dir
 
-    def check_docker_running(self):
-        """Check if Docker is running using DockerChecker."""
-        self.run_command.emit_log_output("Checking if Docker is running...", 'takserver-installer')
-        self.check_stop()
-
-        docker_status = self.docker_checker.get_status()
-        if not docker_status['isRunning']:
-            error_message = docker_status.get('error', 'Docker is not running')
-            self.run_command.emit_log_output(error_message, 'takserver-installer')
-            raise SystemExit(error_message)
-
-        self.run_command.emit_log_output("Docker is running.", 'takserver-installer')
-        return True
-
     def start_docker(self):
         """
         Attempt to start Docker based on the OS platform using DockerManager's start_docker method.
         """
         self.run_command.emit_log_output("Attempting to start Docker...", 'takserver-installer')
-        self.check_stop()
 
         docker_start_result = self.docker_manager.start_docker()  # Use DockerManager's start_docker()
 
@@ -101,8 +91,6 @@ class TakServerInstaller:
 
     def create_working_directory(self):
         """Create the working directory, removing it first if it exists."""
-        self.check_stop()
-        
         # If directory exists, remove it
         if os.path.exists(self.working_dir):
             try:
@@ -126,7 +114,6 @@ class TakServerInstaller:
             raise SystemExit(error_message)
 
     def unzip_docker_release(self):
-        self.check_stop()
         if os.path.exists(self.docker_zip_path):
             zip_filename = os.path.basename(self.docker_zip_path)
             match = re.search(r'takserver-docker-(.+)\.zip', zip_filename)
@@ -148,8 +135,6 @@ class TakServerInstaller:
             # Use OS detection to adjust unzip command if necessary
             os_type = self.os_detector.detect_os()  # Detect the OS
             os.chdir(self.working_dir)  # Change to working directory
-
-            self.check_stop()
 
             if os_type == 'windows':
                 # Use PowerShell's Expand-Archive command on Windows
@@ -182,7 +167,6 @@ class TakServerInstaller:
 
     def copy_coreconfig(self):
         """Copy CoreConfig.xml from the example file."""
-        self.check_stop()
         core_config_path = os.path.join(self.tak_dir, "CoreConfig.xml")
         example_core_config = os.path.join(self.tak_dir, "CoreConfig.example.xml")
 
@@ -198,7 +182,6 @@ class TakServerInstaller:
 
     def update_coreconfig_password(self):
         """Update the database password in CoreConfig.xml."""
-        self.check_stop()
         core_config_path = os.path.join(self.tak_dir, "CoreConfig.example.xml")
 
         if os.path.exists(core_config_path):
@@ -228,8 +211,6 @@ class TakServerInstaller:
             self.run_command.emit_log_output(f"CoreConfig.xml not found at {core_config_path}.", 'takserver-installer')
 
     def modify_coreconfig_with_sed_on_host(self):
-        self.check_stop()
-
         # Set the path to CoreConfig.example.xml
         core_config_path = os.path.join(self.tak_dir, "CoreConfig.example.xml")
 
@@ -282,7 +263,6 @@ class TakServerInstaller:
 
     def create_docker_compose_file(self):
         """Create the Docker Compose file for the TAK server."""
-        self.check_stop()
         docker_compose_path = os.path.join(self.working_dir, self.extracted_folder_name, "docker-compose.yml")
         docker_compose_content = f"""
 services:
@@ -342,7 +322,6 @@ volumes:
 
     def start_docker_compose(self):
         """Start Docker Compose services."""
-        self.check_stop()
         docker_compose_dir = os.path.join(self.working_dir, self.extracted_folder_name)
         # Step 1: Start Docker Compose services
         self.run_command.run_command(
@@ -361,14 +340,12 @@ volumes:
 
     def verify_containers(self):
         """Verify that the containers are running."""
-        self.check_stop()
         docker_compose_dir = os.path.join(self.working_dir, self.extracted_folder_name)
         self.run_command.run_command_no_output(["docker-compose", "ps"], working_dir=docker_compose_dir)
         self.run_command.emit_log_output("TAKServer containers started.", 'takserver-installer')
 
     def restart_takserver(self):
         """Restart TAKServer and TAKServer database."""
-        self.check_stop()
         self.run_command.emit_log_output("Restarting TAKServer and TAKServer database...", 'takserver-installer')
         docker_compose_dir = os.path.join(self.working_dir, self.extracted_folder_name)
         self.run_command.run_command_no_output(
@@ -379,19 +356,38 @@ volumes:
 
     def rollback_takserver_installation(self):
         """Rollback TAK Server installation if something goes wrong."""
-        self.run_command.emit_log_output("Starting rollback of TAKServer installation...", 'takserver-installer')
-        self.operation_status.start_operation('rollback', message="Starting rollback of TAKServer installation", details={'progress': 0})
-
         try:
+            # Start rollback (0%)
+            rollback_details = {
+                'isInstalling': True,
+                'isStoppingInstallation': True,
+                'installationComplete': False,
+                'installationSuccess': False,
+                'installationError': None,
+                'version': getattr(self, 'takserver_version', None)
+            }
+            
+            self.operation_status.start_operation(
+                'installation',
+                'Starting TAK Server rollback',
+                details=rollback_details
+            )
+            
             # Check if docker-compose.yml exists
             docker_compose_path = os.path.join(self.working_dir, self.extracted_folder_name, "docker-compose.yml")
             if os.path.exists(docker_compose_path):
                 docker_compose_dir = os.path.join(self.working_dir, self.extracted_folder_name)
                 self.run_command.emit_log_output("Found docker-compose.yml, cleaning up containers, images, and volumes...", 'takserver-installer')
-                self.operation_status.update_progress('rollback', 20, "Starting Docker cleanup")
                 
                 try:
-                    # Use docker-compose down with flags to remove everything
+                    # Docker cleanup (25% progress)
+                    self.operation_status.update_progress(
+                        'installation',
+                        25,
+                        "Cleaning up Docker containers and images",
+                        details=rollback_details
+                    )
+                    
                     self.run_command.run_command(
                         ["docker-compose", "down", "--rmi", "all", "--volumes", "--remove-orphans"],
                         working_dir=docker_compose_dir,
@@ -399,11 +395,14 @@ volumes:
                         capture_output=True,
                         emit_output=True
                     )
-                    self.operation_status.update_progress('rollback', 40, "Removed Docker containers and images")
                     
-                    # Clean up BuildKit resources
-                    self.run_command.emit_log_output("Cleaning up BuildKit resources...", 'takserver-installer')
-                    self.operation_status.update_progress('rollback', 60, "Cleaning BuildKit resources")
+                    # BuildKit cleanup (45% progress)
+                    self.operation_status.update_progress(
+                        'installation',
+                        45,
+                        "Cleaning up BuildKit resources",
+                        details=rollback_details
+                    )
                     
                     # Get and remove BuildKit containers
                     buildkit_containers = [container_id for container_id in self.run_command.run_command(
@@ -420,9 +419,15 @@ volumes:
                             capture_output=True,
                             emit_output=True
                         )
-                        self.run_command.emit_log_output("BuildKit containers cleaned up", 'takserver-installer')
                     
-                    # Get and remove BuildKit volumes
+                    # Get and remove BuildKit volumes (65% progress)
+                    self.operation_status.update_progress(
+                        'installation',
+                        65,
+                        "Cleaning up BuildKit volumes",
+                        details=rollback_details
+                    )
+                    
                     buildkit_volumes = [volume_id for volume_id in self.run_command.run_command(
                         ["docker", "volume", "ls", "--filter", "name=buildkit", "--quiet"],
                         namespace='takserver-installer',
@@ -437,132 +442,364 @@ volumes:
                             capture_output=True,
                             emit_output=True
                         )
-                        self.run_command.emit_log_output("BuildKit volumes cleaned up", 'takserver-installer')
                     
-                    # Remove BuildKit image
+                    # Remove BuildKit image (85% progress)
+                    self.operation_status.update_progress(
+                        'installation',
+                        85,
+                        "Removing BuildKit image",
+                        details=rollback_details
+                    )
+                    
                     self.run_command.run_command(
                         ["docker", "rmi", "-f", "moby/buildkit:buildx-stable-1"],
                         namespace='takserver-installer',
                         capture_output=True,
                         emit_output=True
                     )
-                    self.run_command.emit_log_output("BuildKit image removed", 'takserver-installer')
-                    self.operation_status.update_progress('rollback', 80, "BuildKit cleanup completed")
                     
                 except Exception as e:
                     self.run_command.emit_log_output(f"Warning during docker-compose cleanup: {str(e)}", 'takserver-installer')
-            else:
-                self.run_command.emit_log_output("No docker-compose.yml found, skipping container/image/volume cleanup", 'takserver-installer')
-                self.operation_status.update_progress('rollback', 80, "No Docker cleanup needed")
-
-            # Remove the working directory if it exists
+            
+            # Remove working directory (95% progress)
+            self.operation_status.update_progress(
+                'installation',
+                95,
+                "Removing installation files",
+                details=rollback_details
+            )
+            
             if os.path.exists(self.working_dir):
                 try:
-                    self.run_command.emit_log_output(f"Removing working directory: {self.working_dir}", 'takserver-installer')
-                    self.operation_status.update_progress('rollback', 90, "Removing installation files")
                     shutil.rmtree(self.working_dir)
                     self.run_command.emit_log_output("Removed working directory", 'takserver-installer')
                 except Exception as e:
                     self.run_command.emit_log_output(f"Error removing working directory: {str(e)}", 'takserver-installer')
 
-            self.run_command.emit_log_output("Rollback completed successfully", 'takserver-installer')
-            self.operation_status.complete_operation('rollback', message="Rollback completed successfully", details={'progress': 100})
+            # Complete operation (100% progress)
+            complete_details = {
+                'isInstalling': False,
+                'isStoppingInstallation': False,
+                'installationComplete': True,
+                'installationSuccess': False,
+                'installationError': None,
+                'version': getattr(self, 'takserver_version', None)
+            }
+            self.operation_status.complete_operation(
+                'installation',
+                "Installation rolled back successfully",
+                details=complete_details
+            )
 
         except Exception as e:
             error_message = f"Error during rollback: {str(e)}"
             self.run_command.emit_log_output(error_message, 'takserver-installer')
-            self.operation_status.fail_operation('rollback', error_message, details={'progress': 0})
-            raise
+            error_details = {
+                'isInstalling': False,
+                'isStoppingInstallation': False,
+                'installationComplete': True,
+                'installationSuccess': False,
+                'installationError': error_message,
+                'version': getattr(self, 'takserver_version', None)
+            }
+            self.operation_status.fail_operation(
+                'installation',
+                error_message,
+                details=error_details
+            )
 
     def main(self):
         try:
-            # Start installation operation
-            self.operation_status.start_operation('installation', message="Starting TAK Server installation", details={'progress': 0})
+            # Start installation operation with 0% progress
+            initial_details = {
+                'isInstalling': True,
+                'isStoppingInstallation': False,
+                'installationComplete': False,
+                'installationSuccess': False,
+                'installationError': None,
+                'version': None
+            }
+            
+            self.operation_status.start_operation(
+                'installation',
+                message="Starting TAK Server installation",
+                details=initial_details
+            )
 
-            # Check Docker status first (5%)
+            # Check Docker status (0-5%)
+            details = initial_details.copy()
+            self.operation_status.update_progress(
+                'installation',
+                2,
+                "Checking Docker installation status",
+                details=details
+            )
+            
             docker_status = self.docker_checker.get_status()
             if not docker_status['isInstalled']:
-                self.operation_status.fail_operation('installation', "Docker is not installed")
+                error_details = {
+                    'isInstalling': False,
+                    'isStoppingInstallation': False,
+                    'installationComplete': True,
+                    'installationSuccess': False,
+                    'installationError': "Docker is not installed",
+                    'version': None
+                }
+                self.operation_status.fail_operation(
+                    'installation',
+                    "Docker is not installed",
+                    details=error_details
+                )
                 raise SystemExit("Docker is not installed")
+            
             if not docker_status['isRunning']:
+                self.operation_status.update_progress(
+                    'installation',
+                    3,
+                    "Starting Docker service",
+                    details=details
+                )
                 self.start_docker()
-            self.operation_status.update_progress('installation', 5, "Docker environment checked")
+            
+            self.operation_status.update_progress(
+                'installation',
+                5,
+                "Docker environment verified",
+                details=details
+            )
 
-            # Extract version from zip filename (10%)
+            # Extract version from zip filename (5-10%)
+            self.operation_status.update_progress(
+                'installation', 
+                7, 
+                "Validating TAK Server package",
+                details=details
+            )
+            
             zip_filename = os.path.basename(self.docker_zip_path)
             match = re.search(r'takserver-docker-(.+)\.zip', zip_filename)
             if not match:
+                error_details = {
+                    'isInstalling': False,
+                    'isStoppingInstallation': False,
+                    'installationComplete': True,
+                    'installationSuccess': False,
+                    'installationError': "Invalid TAK Server ZIP filename format",
+                    'version': None
+                }
+                self.operation_status.fail_operation(
+                    'installation',
+                    "Invalid TAK Server ZIP filename format",
+                    details=error_details
+                )
                 raise ValueError("Invalid TAK Server ZIP filename format")
+                
             self.takserver_version = match.group(1)
-            self.operation_status.update_progress('installation', 10, "Version extracted from ZIP file")
+            details['version'] = self.takserver_version
+            self.operation_status.update_progress(
+                'installation', 
+                10, 
+                "TAK Server package validated",
+                details=details
+            )
 
-            # Initial setup phase (25%)
+            # Initial setup phase (10-30%)
+            self.operation_status.update_progress(
+                'installation', 
+                15, 
+                "Creating working directory",
+                details=details
+            )
             self.create_working_directory()
-            self.operation_status.update_progress('installation', 15, "Working directory created")
             
+            self.operation_status.update_progress(
+                'installation', 
+                20, 
+                "Extracting TAK Server files",
+                details=details
+            )
             self.unzip_docker_release()
-            self.operation_status.update_progress('installation', 25, "Docker release files extracted")
+            
+            self.operation_status.update_progress(
+                'installation', 
+                30, 
+                "TAK Server files extracted",
+                details=details
+            )
 
-            # Configuration phase (50%)
+            # Configuration phase (30-50%)
+            self.operation_status.update_progress(
+                'installation', 
+                35, 
+                "Updating core configuration",
+                details=details
+            )
             self.update_coreconfig_password()
-            self.operation_status.update_progress('installation', 35, "Core configuration password updated")
             
+            self.operation_status.update_progress(
+                'installation', 
+                40, 
+                "Modifying core configuration",
+                details=details
+            )
             self.modify_coreconfig_with_sed_on_host()
-            self.operation_status.update_progress('installation', 40, "Core configuration modified")
             
+            self.operation_status.update_progress(
+                'installation', 
+                45, 
+                "Finalizing core configuration",
+                details=details
+            )
             self.copy_coreconfig()
-            self.operation_status.update_progress('installation', 45, "Core configuration copied")
             
+            self.operation_status.update_progress(
+                'installation', 
+                50, 
+                "Creating Docker compose configuration",
+                details=details
+            )
             self.create_docker_compose_file()
-            self.operation_status.update_progress('installation', 50, "Docker compose file created")
 
-            # Container deployment phase (75%)
+            # Container deployment phase (50-75%)
+            self.operation_status.update_progress(
+                'installation', 
+                55, 
+                "Starting Docker containers",
+                details=details
+            )
             self.start_docker_compose()
-            self.operation_status.update_progress('installation', 65, "Docker containers starting")
             
+            self.operation_status.update_progress(
+                'installation', 
+                70, 
+                "Verifying container status",
+                details=details
+            )
             self.verify_containers()
-            self.operation_status.update_progress('installation', 75, "Docker containers verified")
+            
+            self.operation_status.update_progress(
+                'installation', 
+                75, 
+                "Containers running successfully",
+                details=details
+            )
 
-            # Save version information
+            # Version information (75-80%)
+            self.operation_status.update_progress(
+                'installation', 
+                77, 
+                "Saving version information",
+                details=details
+            )
             version_file_path = os.path.join(self.working_dir, "version.txt")
             with open(version_file_path, "w") as version_file:
                 version_file.write(self.takserver_version)
-            self.operation_status.update_progress('installation', 80, "Version information saved")
+            
+            self.operation_status.update_progress(
+                'installation', 
+                80, 
+                "Version information saved",
+                details=details
+            )
 
-            # Certificate configuration phase (100%)
+            # Certificate configuration phase (80-100%)
             takserver_name = f"takserver-{self.takserver_version}"
-            self.cert_config.configure_cert_metadata(takserver_name, check_stop=self.check_stop)
-            self.operation_status.update_progress('installation', 85, "Certificate metadata configured")
             
-            self.cert_config.certificate_generation(takserver_name, check_stop=self.check_stop)
-            self.operation_status.update_progress('installation', 90, "Certificates generated")
+            self.operation_status.update_progress(
+                'installation', 
+                85, 
+                "Configuring certificates",
+                details=details
+            )
+            self.cert_config.configure_cert_metadata(takserver_name)
             
+            self.operation_status.update_progress(
+                'installation', 
+                90, 
+                "Generating certificates",
+                details=details
+            )
+            self.cert_config.certificate_generation(takserver_name)
+            
+            self.operation_status.update_progress(
+                'installation', 
+                95, 
+                "Restarting TAK Server",
+                details=details
+            )
             self.restart_takserver()
-            self.operation_status.update_progress('installation', 95, "TAK Server restarted")
             
-            self.cert_config.run_certmod(takserver_name, check_stop=self.check_stop)
-            self.cert_config.install_admin_cert_to_keychain(check_stop=self.check_stop)
+            self.operation_status.update_progress(
+                'installation', 
+                97, 
+                "Installing certificates",
+                details=details
+            )
+            self.cert_config.run_certmod(takserver_name)
+            self.cert_config.install_admin_cert_to_keychain()
             self.completed_steps.append('install_admin_cert_to_keychain')
-            self.operation_status.update_progress('installation', 98, "Certificates installed")
 
-            # Complete installation
+            # Complete installation (100%)
+            success_details = {
+                'version': self.takserver_version,
+                'isInstalling': False,
+                'isStoppingInstallation': False,
+                'installationComplete': True,
+                'installationSuccess': True,
+                'installationError': None
+            }
             self.operation_status.complete_operation(
                 'installation',
                 message="TAK Server installation completed successfully",
-                details={
-                    'version': self.takserver_version,
-                    'isInstalled': True,
-                    'isRunning': True,
-                    'progress': 100
-                }
+                details=success_details
             )
             return True
 
         except Exception as e:
             error_message = str(e)
             self.run_command.emit_log_output(f"Installation failed: {error_message}", 'takserver-installer')
-            self.operation_status.fail_operation('installation', error_message, details={'progress': 0})
-            self.rollback_takserver_installation()
+            
+            # Update status to indicate stopping installation
+            error_details = {
+                'isInstalling': True,
+                'isStoppingInstallation': True,
+                'installationComplete': False,
+                'installationSuccess': False,
+                'installationError': error_message,
+                'version': getattr(self, 'takserver_version', None)
+            }
+            
+            current_progress = 0
+            if 'details' in locals():
+                try:
+                    current_progress = int(self.operation_status.get_current_operation()['progress'])
+                except:
+                    pass
+                    
+            self.operation_status.update_progress(
+                'installation',
+                current_progress,
+                "Installation failed, starting rollback",
+                details=error_details
+            )
+            
+            try:
+                self.rollback_takserver_installation()
+            except Exception as rollback_error:
+                # If rollback fails, update the status accordingly
+                final_error_details = {
+                    'isInstalling': False,
+                    'isStoppingInstallation': False,
+                    'installationComplete': True,
+                    'installationSuccess': False,
+                    'installationError': f"Installation and rollback failed: {str(rollback_error)}",
+                    'version': getattr(self, 'takserver_version', None)
+                }
+                self.operation_status.fail_operation(
+                    'installation',
+                    f"Installation and rollback failed: {str(rollback_error)}",
+                    details=final_error_details
+                )
             raise
 
 

@@ -46,6 +46,7 @@ export function useLoader({
   const { emit, socket, on } = useSocket(namespace);
   const [operationState, setOperationState] = useState<OperationStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
 
   // Check if this operation is for our target
   const isTargetOperation = useCallback((details?: Record<string, any>) => {
@@ -103,6 +104,7 @@ export function useLoader({
             });
             setIsLoading(true);
             if (status.progress !== undefined) {
+              setProgress(status.progress);
               onProgress?.(status.progress);
             }
             break;
@@ -112,6 +114,7 @@ export function useLoader({
               message: status.message
             });
             setIsLoading(false);
+            setProgress(100);
             if (timeoutId) {
               clearTimeout(timeoutId);
               timeoutId = null;
@@ -170,10 +173,12 @@ export function useLoader({
       });
       
       setIsLoading(true);
+      setProgress(0);
       setOperationState({
         operation: operationType,
         status: 'in_progress',
         message: options.loadingMessage || 'Operation in progress...',
+        progress: 0,
         details: { container: targetId }
       });
       
@@ -198,10 +203,12 @@ export function useLoader({
       timeoutId = setTimeout(() => {
         console.debug('[useLoader] No status update received, completing operation');
         setIsLoading(false);
+        setProgress(100);
         setOperationState({
           operation: operationType,
           status: 'complete',
           message: options.successMessage || 'Operation completed successfully',
+          progress: 100,
           details: { container: targetId }
         });
       }, 5000); // 5 second timeout
@@ -214,11 +221,13 @@ export function useLoader({
         (error instanceof Error ? error.message : 'Operation failed');
       
       setIsLoading(false);
+      setProgress(0);
       setOperationState({
         operation: operationType,
         status: 'failed',
         message: errorMsg,
         error: errorMsg,
+        progress: 0,
         details: { container: targetId }
       });
       
@@ -243,34 +252,13 @@ export function useLoader({
     return emit(event, { ...data, container: targetId });
   }, [socket, emit, targetId]);
 
-  // Get loading text for current operation
-  const getLoadingText = useCallback((): string => {
-    if (!isLoading) return '';
-
-    const defaultMessages: Record<OperationType, string> = {
-      start: 'Starting...',
-      stop: 'Stopping...',
-      restart: 'Restarting...',
-      install: 'Installing...',
-      uninstall: 'Uninstalling...',
-      update: 'Updating...',
-      configure: 'Configuring...',
-      validate: 'Validating...',
-    };
-
-    return operationState?.message || defaultMessages[operationType];
-  }, [isLoading, operationState, operationType]);
-
   return {
     isLoading,
-    message: getLoadingText(),
+    progress,
+    message: operationState?.message || '',
     error: operationState?.error,
-    progress: operationState?.progress,
-    operation: operationState?.operation,
-    details: operationState?.details,
-    executeWithLoading,
-    emit: safeEmit,
-    socket
+    execute: executeWithLoading,
+    emit: safeEmit
   };
 }
 

@@ -177,6 +177,7 @@ class TakServerUninstallNamespace(BaseNamespace):
     def __init__(self, namespace=None):
         super().__init__(namespace)
         self.uninstaller = TakServerUninstaller()
+        self.operation_status = OperationStatus(namespace='/takserver-uninstall')
 
     def on_connect(self):
         print('Client connected to /takserver-uninstall namespace')
@@ -189,9 +190,16 @@ class TakServerUninstallNamespace(BaseNamespace):
             'uninstallSuccess': False,
             'uninstallError': None,
             'status': None,
-            'operationInProgress': self.operation_in_progress
+            'operationInProgress': self.operation_in_progress,
+            'progress': 0
         }
-        socketio.emit('initial_state', initial_state, namespace='/takserver-uninstall')
+        self.operation_status.emit_status(
+            operation='uninstall',
+            status='initial',
+            message='Ready for uninstallation',
+            details=initial_state,
+            progress=0
+        )
 
     def emit_status(self):
         """Emit current uninstall status"""
@@ -207,7 +215,11 @@ class TakServerUninstallNamespace(BaseNamespace):
         """Handle uninstall request"""
         if not self.operation_in_progress:
             self.operation_in_progress = True
-            self.emit_status()
+            self.operation_status.start_operation(
+                'uninstall',
+                'Starting TAK Server uninstallation',
+                {'progress': 0}
+            )
             thread = thread_manager.spawn(self.uninstall_task)
             self.operation_threads.append(thread)
 
@@ -215,24 +227,30 @@ class TakServerUninstallNamespace(BaseNamespace):
         """Background task for uninstallation"""
         try:
             success = self.uninstaller.uninstall()
-            socketio.emit('uninstall_complete', create_operation_result(
-                success,
-                'TAK Server uninstallation completed successfully' if success else 'TAK Server uninstallation failed'
-            ), namespace='/takserver-uninstall')
+            if success:
+                self.operation_status.complete_operation(
+                    'uninstall',
+                    'TAK Server uninstallation completed successfully',
+                    {'progress': 100}
+                )
+            else:
+                self.operation_status.fail_operation(
+                    'uninstall',
+                    'TAK Server uninstallation failed'
+                )
         except Exception as e:
-            socketio.emit('uninstall_complete', create_operation_result(
-                False,
+            self.operation_status.fail_operation(
+                'uninstall',
                 f'Uninstallation error: {str(e)}'
-            ), namespace='/takserver-uninstall')
+            )
         finally:
             self.operation_in_progress = False
-            self.emit_status()
 
 class TakServerInstallerNamespace(BaseNamespace):
     def __init__(self, namespace=None):
         super().__init__(namespace)
         self.docker_installed = DockerInstaller()
-        self.operation_status = OperationStatus(namespace=namespace)
+        self.operation_status = OperationStatus(namespace='/takserver-installer')
 
     def on_connect(self):
         print('Client connected to /takserver-installer namespace')
@@ -250,13 +268,15 @@ class TakServerInstallerNamespace(BaseNamespace):
                 'isStoppingInstallation': False,
                 'status': None,
                 'operationInProgress': self.operation_in_progress,
-                'dockerInstalled': docker_status.get('isInstalled', False)
+                'dockerInstalled': docker_status.get('isInstalled', False),
+                'progress': 0
             }
             self.operation_status.emit_status(
-                operation='installation',
+                operation='install',
                 status='initial',
                 message='Ready for installation',
-                details=initial_state
+                details=initial_state,
+                progress=0
             )
         except Exception as e:
             error_state = {
@@ -268,25 +288,25 @@ class TakServerInstallerNamespace(BaseNamespace):
                 'isStoppingInstallation': False,
                 'status': 'error',
                 'operationInProgress': False,
-                'dockerInstalled': False
+                'dockerInstalled': False,
+                'progress': 0
             }
             self.operation_status.emit_status(
-                operation='installation',
+                operation='install',
                 status='error',
                 message=str(e),
                 details=error_state
             )
 
-    def on_check_docker_installed(self):
-        """Handle docker installation status check"""
-        print('Received request to check if Docker is installed')
-        result = self.docker_installed.is_docker_installed()
-        self.operation_status.emit_status(
-            operation='docker_check',
-            status='complete',
-            message='Docker installation status checked',
-            details=result
-        )
+    def on_start_installation(self, data):
+        """Handle installation start request"""
+        if not self.operation_in_progress:
+            self.operation_in_progress = True
+            installation_id = data.get('installation_id')
+            installer = installations.get(installation_id)
+            if installer:
+                thread = thread_manager.spawn(lambda: installer.main())
+                self.operation_threads.append(thread)
 
 # Register the TAK server namespaces
 socketio.on_namespace(TakServerStatusNamespace('/takserver-status'))
@@ -351,11 +371,34 @@ def install_takserver():
         installation_id = str(uuid.uuid4())
         installations[installation_id] = installer
 
+        # Get installer namespace and emit initial status
+        installer_namespace = get_namespace(TakServerInstallerNamespace)
+        installer_namespace.operation_status.start_operation(
+            'install',
+            'Starting TAK Server installation',
+            {'progress': 0}
+        )
+
         def installation_operation():
             try:
                 success = installer.main()
+                if success:
+                    installer_namespace.operation_status.complete_operation(
+                        'install',
+                        'Installation completed successfully',
+                        {'progress': 100}
+                    )
+                else:
+                    installer_namespace.operation_status.fail_operation(
+                        'install',
+                        'Installation failed'
+                    )
                 return create_operation_result(success, 'Installation completed successfully' if success else 'Installation failed')
             except Exception as e:
+                installer_namespace.operation_status.fail_operation(
+                    'install',
+                    str(e)
+                )
                 return create_operation_result(False, str(e))
 
         # Execute installation
@@ -425,14 +468,29 @@ def rollback_takserver():
         if not takserver_installer:
             return jsonify({"error": "No installation found with the provided ID."}), 400
 
+        # Get installer namespace to manage threads
+        installer_namespace = get_namespace(TakServerInstallerNamespace)
+
         def rollback_operation():
             try:
-                takserver_installer.stop_event.set()
+                # First, kill any running installation threads
+                installer_namespace.cleanup_operation_threads()
+                
+                # Wait a moment for threads to clean up
                 eventlet.sleep(1)
+                
+                # Perform rollback
                 takserver_installer.rollback_takserver_installation()
+                
+                # Clean up the installer instance
+                if installation_id in installations:
+                    del installations[installation_id]
+                
                 return create_operation_result(True, 'TAKServer rollback completed successfully')
             except Exception as e:
                 return create_operation_result(False, str(e))
+            finally:
+                installer_namespace.operation_in_progress = False
 
         return jsonify(execute_takserver_operation(rollback_operation))
 

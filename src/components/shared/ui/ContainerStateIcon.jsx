@@ -16,7 +16,7 @@ const ContainerStateIcon = ({
     error: hasError,
     message,
     operation,
-    executeWithLoading
+    execute
   } = useLoader({
     namespace: '/docker-manager',
     operationType: isRunning ? 'stop' : 'start',
@@ -57,7 +57,7 @@ const ContainerStateIcon = ({
     });
     
     try {
-      await executeWithLoading({
+      await execute({
         loadingMessage: `${action.charAt(0).toUpperCase() + action.slice(1)}ing container...`,
         errorMessage: `Failed to ${action} container`
       });
@@ -68,7 +68,7 @@ const ContainerStateIcon = ({
         action
       });
     }
-  }, [isLoading, isRunning, executeWithLoading, containerName, disabled]);
+  }, [isLoading, isRunning, execute, containerName, disabled]);
 
   const getStatusColor = () => {
     if (isLoading) return "text-primary animate-pulse";
