@@ -1,4 +1,4 @@
-import Button from '../../shared/ui/Button';
+import { Button } from '../../shared/ui/shadcn/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../shared/ui/shadcn/tooltip/tooltip';
 
 export const StatusButtons = ({ 

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Input } from '../shared/ui/shadcn/input';
 import useSocket from '../shared/hooks/useSocket';
 import StyledSwitch from '../shared/ui/StyledSwitch';
-import Button from '../shared/ui/Button';
+import { Button } from '../shared/ui/shadcn/button';
 import { HelpIconTooltip } from '../shared/ui/shadcn/tooltip/HelpIconTooltip';
 
 // Checkmark icon component

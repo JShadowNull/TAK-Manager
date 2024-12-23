@@ -7,7 +7,7 @@ import StepContent from '@mui/material/StepContent';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
 import CustomScrollbar from '../shared/ui/CustomScrollbar';
-import Button from '../shared/ui/Button';
+import { Button } from '../shared/ui/shadcn/button';
 
 const defaultSteps = [
   {

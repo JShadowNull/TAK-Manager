@@ -1,8 +1,7 @@
 import React from 'react';
-import Button from './Button';
+import { Button, type ButtonProps } from './shadcn/button';
 import type { OperationType, OperationStatus } from '../hooks/useLoader';
 import { cn } from '../../../lib/utils';
-import type { ButtonProps } from './Button';
 import { LoadingSpinner } from '../../transfer/Icons/LoadingSpinner';
 
 interface LoadingButtonProps extends Omit<ButtonProps, 'loading' | 'loadingText'> {

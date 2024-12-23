@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import Button from '../shared/ui/Button';
+import { Button } from '../shared/ui/shadcn/button';
 
 function Configuration() {
   const navigate = useNavigate();

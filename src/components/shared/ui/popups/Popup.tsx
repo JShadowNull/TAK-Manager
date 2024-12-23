@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FC, ReactNode } from 'react';
 import CustomScrollbar from '../CustomScrollbar';
-import Button from '../Button';
+import { Button } from '../shadcn/button';
 import { Progress } from '../shadcn/progress';
 import useSocket, { SocketNamespace } from '../../hooks/useSocket';
 

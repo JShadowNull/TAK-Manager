@@ -1,6 +1,6 @@
 import type { FC } from 'react';
 import Popup from './Popup';
-import Button from '../Button';
+import { Button } from '../shadcn/button';
 import useSocket, { BACKEND_EVENTS } from '../../hooks/useSocket';
 import useFetch from '../../hooks/useFetch';
 
