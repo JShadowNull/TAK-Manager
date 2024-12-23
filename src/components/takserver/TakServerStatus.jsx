@@ -5,7 +5,7 @@ import AdvancedFeatures from './AdvancedFeatures';
 import Configuration from './Configuration';
 import DockerPopup from '../shared/ui/popups/DockerPopup';
 import { Button } from '../shared/ui/shadcn/button';
-import LoadingButton from '../shared/ui/LoadingButton';
+import LoadingButton from '../shared/ui/inputs/LoadingButton';
 import useSocket, { BACKEND_EVENTS } from '../shared/hooks/useSocket';
 import useFetch from '../shared/hooks/useFetch';
 

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useLocation } from 'react-router-dom';
 import useSocket from '../components/shared/hooks/useSocket';
 import Popup from '../components/shared/ui/popups/Popup';
-import CustomScrollbar from '../components/shared/ui/CustomScrollbar';
+import CustomScrollbar from '../components/shared/ui/layout/CustomScrollbar';
 import ZipNameSection from '../components/datapackage/ZipNameSection/ZipNameSection';
 import CotStreamsSection from '../components/datapackage/CotStreamsSection/CotStreamsSection';
 import AtakPreferencesSection from '../components/datapackage/AtakPreferencesSection/AtakPreferencesSection';

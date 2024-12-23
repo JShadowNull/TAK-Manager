@@ -2,10 +2,10 @@ import React, { useEffect, useState } from 'react';
 import DockerPopup from '../components/shared/ui/popups/DockerPopup';
 import useSocket, { BACKEND_EVENTS } from '../components/shared/hooks/useSocket';
 import useFetch from '../components/shared/hooks/useFetch';
-import CustomScrollbar from '../components/shared/ui/CustomScrollbar';
-import { LoadingSwitch } from '../components/shared/ui/LoadingSwitch';
+import CustomScrollbar from '../components/shared/ui/layout/CustomScrollbar';
+import { LoadingSwitch } from '../components/shared/ui/inputs/LoadingSwitch';
 import { useLoader } from '../components/shared/hooks/useLoader';
-import ContainerStateIcon from '../components/shared/ui/ContainerStateIcon';
+import ContainerStateIcon from '../components/shared/ui/inputs/ContainerStateIcon';
 
 const INITIAL_DOCKER_STATE = {
   isInstalled: false,

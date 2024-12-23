@@ -1,11 +1,11 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
-import { AppSidebar } from './shadcn/sidebar/app-sidebar';
-import { SidebarProvider } from './shadcn/sidebar/sidebar';
+import { AppSidebar } from '../shadcn/sidebar/app-sidebar';
+import { SidebarProvider } from '../shadcn/sidebar/sidebar';
 import TitleBar from './TitleBar';
 import CustomScrollbar from './CustomScrollbar';
 
-function Layout() {
+const Layout: React.FC = () => {
   return (
     <div className="flex min-h-screen bg-background">
       <div className="flex-none">
@@ -26,6 +26,6 @@ function Layout() {
       </div>
     </div>
   );
-}
+};
 
-export default Layout;
+export default Layout; 

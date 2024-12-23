@@ -1,6 +1,6 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
-import Layout from './components/shared/ui/Layout';
+import Layout from './components/shared/ui/layout/Layout';
 import Dashboard from './pages/Dashboard';
 import Services from './pages/Services';
 import Takserver from './pages/Takserver';

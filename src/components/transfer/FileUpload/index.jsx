@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { UploadIcon } from '../Icons/UploadIcon';
+import { UploadIcon } from '../../shared/ui/icons/UploadIcon';
 import { FileList } from './FileList';
 
 export const FileUpload = ({ 

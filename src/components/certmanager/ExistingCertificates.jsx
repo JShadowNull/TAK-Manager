@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
-import CustomScrollbar from '../shared/ui/CustomScrollbar';
+import CustomScrollbar from '../shared/ui/layout/CustomScrollbar';
 import { Input } from '../shared/ui/shadcn/input';
 import { Chip, Tooltip } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';

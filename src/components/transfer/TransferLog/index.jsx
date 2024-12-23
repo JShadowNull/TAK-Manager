@@ -1,4 +1,4 @@
-import CustomScrollbar from '../../shared/ui/CustomScrollbar';
+import CustomScrollbar from '../../shared/ui/layout/CustomScrollbar';
 
 export const TransferLog = ({ logs }) => {
   return (

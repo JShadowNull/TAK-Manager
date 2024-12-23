@@ -1,5 +1,5 @@
 import React from 'react';
-import CustomScrollbar from '../components/shared/ui/CustomScrollbar';
+import CustomScrollbar from '../components/shared/ui/layout/CustomScrollbar';
 import useSocket from '../components/shared/hooks/useSocket';
 import { AnalyticsChart } from '../components/shared/ui/shadcn/charts/AnalyticsChart';
 import {

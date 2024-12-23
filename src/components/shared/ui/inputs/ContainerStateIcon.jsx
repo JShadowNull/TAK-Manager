@@ -1,8 +1,8 @@
 import React, { useCallback } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlay, faStop, faSpinner } from '@fortawesome/free-solid-svg-icons';
-import { cn } from '../../../lib/utils';
-import { useLoader } from '../hooks/useLoader';
+import { cn } from '../../../../lib/utils';
+import { useLoader } from '../../hooks/useLoader';
 
 const ContainerStateIcon = ({ 
   containerName, 

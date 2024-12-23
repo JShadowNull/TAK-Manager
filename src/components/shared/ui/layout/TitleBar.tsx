@@ -1,10 +1,10 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
 
-function TitleBar() {
+const TitleBar: React.FC = () => {
   const location = useLocation();
   
-  const getTitle = () => {
+  const getTitle = (): string => {
     switch (location.pathname) {
       case '/':
         return 'Dashboard';
@@ -30,6 +30,6 @@ function TitleBar() {
       <h1 className="text-lg font-bold text-foreground">{getTitle()}</h1>
     </div>
   );
-}
+};
 
 export default TitleBar; 

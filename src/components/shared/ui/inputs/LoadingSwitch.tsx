@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
-import { Switch } from './shadcn/switch';
-import { cn } from '../../../lib/utils';
-import { OperationType, OperationStatus } from '../hooks/useLoader';
+import { Switch } from '../shadcn/switch';
+import { cn } from '../../../../lib/utils';
+import { OperationType, OperationStatus } from '../../hooks/useLoader';
 
 interface LoadingSwitchProps {
   checked: boolean;
