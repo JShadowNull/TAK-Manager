@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Input } from '../shared/ui/shadcn/input';
 import useSocket from '../shared/hooks/useSocket';
-import StyledSwitch from '../shared/ui/StyledSwitch';
+import { Switch } from '../shared/ui/shadcn/switch';
 import { Button } from '../shared/ui/shadcn/button';
 import { HelpIconTooltip } from '../shared/ui/shadcn/tooltip/HelpIconTooltip';
 
@@ -294,11 +294,19 @@ function CreateCertificates({ onOperationProgress }) {
       <div className="space-y-4">
         {/* Mode Switch */}
         <div className="flex gap-4 items-center">
-          <StyledSwitch
-            checked={isBatchMode}
-            onChange={(e) => setIsBatchMode(e.target.checked)}
-            label="Batch Generation"
-          />
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="batch-mode"
+              checked={isBatchMode}
+              onCheckedChange={setIsBatchMode}
+            />
+            <label
+              htmlFor="batch-mode"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              Batch Generation
+            </label>
+          </div>
         </div>
 
         {/* Single/Custom Mode - Create one or more custom certificates */}
@@ -365,11 +373,19 @@ function CreateCertificates({ onOperationProgress }) {
               />
             </div>
             <div className="flex items-center gap-4 mt-8">
-              <StyledSwitch
-                checked={field.isAdmin}
-                onChange={(e) => handleCertFieldChange(index, 'isAdmin', e.target.checked)}
-                label="Admin"
-              />
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id={`admin-${index}`}
+                  checked={field.isAdmin}
+                  onCheckedChange={(checked) => handleCertFieldChange(index, 'isAdmin', checked)}
+                />
+                <label
+                  htmlFor={`admin-${index}`}
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  Admin
+                </label>
+              </div>
               {index > 0 && (
                 <Button
                   onClick={() => handleRemoveCertField(index)}

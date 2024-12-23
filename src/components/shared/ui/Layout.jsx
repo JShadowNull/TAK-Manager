@@ -1,7 +1,7 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
 import { AppSidebar } from './shadcn/sidebar/app-sidebar';
-import { SidebarProvider } from './shadcn/sidebar';
+import { SidebarProvider } from './shadcn/sidebar/sidebar';
 import TitleBar from './TitleBar';
 import CustomScrollbar from './CustomScrollbar';
 

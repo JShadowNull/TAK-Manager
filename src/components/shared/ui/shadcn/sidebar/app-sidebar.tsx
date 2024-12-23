@@ -21,7 +21,7 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarFooter,
-} from "@/components/shared/ui/shadcn/sidebar"
+} from "@/components/shared/ui/shadcn/sidebar/sidebar"
 
 const items = [
   {

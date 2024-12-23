@@ -2439,6 +2439,14 @@ body {
   color: hsl(var(--sidebar-accent-foreground));
 }
 
+.peer:disabled ~ .peer-disabled\:cursor-not-allowed {
+  cursor: not-allowed;
+}
+
+.peer:disabled ~ .peer-disabled\:opacity-70 {
+  opacity: 0.7;
+}
+
 .peer:not(:checked) ~ .peer-\[\&\:not\(\:checked\)\]\:block {
   display: block;
 }
