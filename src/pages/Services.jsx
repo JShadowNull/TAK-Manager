@@ -87,7 +87,7 @@ function Services() {
     progress, 
     status,
     error: operationError,
-    executeWithLoading 
+    execute 
   } = useLoader({
     namespace: BACKEND_EVENTS.DOCKER_MANAGER.namespace,
     operationType: dockerOperation,
@@ -141,7 +141,7 @@ function Services() {
 
     try {
       const operationText = operation === 'stop' ? 'Stopping' : 'Starting';
-      await executeWithLoading({
+      await execute({
         loadingMessage: `${operationText} Docker...`,
         successMessage: `Docker ${operation}ed successfully`,
         errorMessage: `Error ${operation}ing Docker`
@@ -182,7 +182,6 @@ function Services() {
           isLoading={isLoading}
           status={status}
           message={message}
-          progress={progress}
           error={operationError}
           showProgress={true}
           showLoadingState={true}
