@@ -496,11 +496,6 @@ function TakServerStatus() {
                       )}
                     </div>
                   </div>
-                  {operationError && (
-                    <div className="text-sm text-red-500">
-                      Error: {operationError}
-                    </div>
-                  )}
                 </>
               ) : (
                 <div className="flex items-center gap-2">

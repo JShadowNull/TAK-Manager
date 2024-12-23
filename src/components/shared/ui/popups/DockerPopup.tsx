@@ -1,6 +1,6 @@
 import type { FC } from 'react';
 import Popup from './Popup';
-import { Button } from '../shadcn/button';
+import LoadingButton from '../inputs/LoadingButton';
 import useSocket, { BACKEND_EVENTS } from '../../hooks/useSocket';
 import useFetch from '../../hooks/useFetch';
 
@@ -153,25 +153,29 @@ const DockerPopup: FC<DockerPopupProps> = ({ isVisible }) => {
       blurSidebar={false}
       buttons={
         dockerState.isInstalled ? (
-          <Button
+          <LoadingButton
             onClick={handleStartDocker}
-            loading={dockerState.operationInProgress}
-            loadingText="Starting Docker Desktop..."
+            operation="start"
+            isLoading={dockerState.operationInProgress}
+            status={dockerState.status === 'complete' ? 'complete' : dockerState.status === 'failed' ? 'failed' : null}
+            loadingMessage="Starting Docker Desktop..."
             variant="primary"
             className="hover:bg-green-500"
             disabled={isButtonDisabled}
           >
             {getButtonText()}
-          </Button>
+          </LoadingButton>
         ) : (
-          <Button
+          <LoadingButton
             variant="primary"
             className="hover:bg-green-500"
             href="https://www.docker.com/products/docker-desktop/"
             target="_blank"
+            operation="install"
+            isLoading={false}
           >
             Download Docker Desktop
-          </Button>
+          </LoadingButton>
         )
       }
     >
