@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request
 from werkzeug.utils import secure_filename
 from flask_socketio import Namespace
 from backend.services.scripts.ota.ota_updates import OTAUpdate
+from backend.services.helpers.operation_status import OperationStatus
 import os
 import uuid
 import eventlet
@@ -16,35 +17,56 @@ thread_manager = ThreadManager()
 updates = {}
 
 # ============================================================================
-# Helper Functions
+# Constants and Shared Functions
 # ============================================================================
-def get_ota_status_namespace():
-    """Helper function to get the OTA status namespace instance"""
+def create_error_status(error_msg=None):
+    """Create a standardized error status dictionary"""
+    return {
+        'isUpdating': False,
+        'updateComplete': False,
+        'updateSuccess': False,
+        'updateError': error_msg
+    }
+
+def create_operation_result(success, message):
+    """Create a standardized operation result"""
+    return {
+        'success': success,
+        'message': message
+    }
+
+def allowed_file(filename):
+    """Check if the file extension is allowed (zip)"""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'zip'
+
+def get_namespace(namespace_class):
+    """Helper function to get a namespace instance"""
     try:
         return next(ns for ns in socketio.server.namespace_handlers.values() 
-                   if isinstance(ns, OTAUpdateNamespace))
+                   if isinstance(ns, namespace_class))
     except StopIteration:
-        raise RuntimeError("OTA status namespace not found")
+        raise RuntimeError(f"{namespace_class.__name__} not found")
 
 def execute_ota_operation(operation_func):
     """Execute an OTA operation in a background thread"""
-    status_namespace = get_ota_status_namespace()
+    status_namespace = get_namespace(OTAUpdateNamespace)
     
     def operation_thread():
         try:
             status_namespace.start_operation()
             result = operation_func()
-            status_namespace.end_operation()
-            status_namespace.cleanup_operation_threads()
-            return result
+            if isinstance(result, dict) and result.get('error'):
+                return create_operation_result(False, result['error'])
+            return create_operation_result(True, 'Operation completed successfully')
         except Exception as e:
+            return create_operation_result(False, str(e))
+        finally:
             status_namespace.end_operation()
             status_namespace.cleanup_operation_threads()
-            raise e
     
     thread = thread_manager.spawn(operation_thread)
     status_namespace.operation_threads.append(thread)
-    return {'message': 'Operation initiated'}
+    return {'message': 'Operation initiated successfully'}
 
 def process_ota_file(request):
     """Process and validate OTA file from request"""
@@ -68,10 +90,6 @@ def process_ota_file(request):
     
     return file_path
 
-def allowed_file(filename):
-    """Check if the file extension is allowed (zip)"""
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'zip'
-
 # ============================================================================
 # Socket.IO Namespace
 # ============================================================================
@@ -81,6 +99,7 @@ class OTAUpdateNamespace(Namespace):
         self.operation_in_progress = False
         self.operation_threads = []
         self.monitor_thread = None
+        self.operation_status = OperationStatus(namespace='/ota-update')
 
     def cleanup_operation_threads(self):
         """Clean up completed operation threads"""
@@ -114,19 +133,54 @@ class OTAUpdateNamespace(Namespace):
         last_status = None
         while True:
             try:
-                current_status = {'isUpdating': self.operation_in_progress}
+                current_status = {
+                    'isUpdating': self.operation_in_progress,
+                    'updateComplete': not self.operation_in_progress,
+                    'updateSuccess': not self.operation_in_progress,
+                    'updateError': None
+                }
                 if current_status != last_status:
                     self.emit_status()
                     last_status = current_status
             except Exception as e:
-                socketio.emit('ota_error', {'error': str(e)}, namespace='/ota-update')
+                error_status = create_error_status(str(e))
+                self.operation_status.emit_status(
+                    operation='ota_update',
+                    status='error',
+                    message=str(e),
+                    details=error_status
+                )
             eventlet.sleep(2)
 
     def emit_status(self):
         """Emit current OTA update status"""
-        socketio.emit('ota_status', {
-            'isUpdating': self.operation_in_progress
-        }, namespace='/ota-update')
+        status = {
+            'isUpdating': self.operation_in_progress,
+            'updateComplete': not self.operation_in_progress,
+            'updateSuccess': not self.operation_in_progress,
+            'updateError': None
+        }
+        self.operation_status.emit_status(
+            operation='ota_update',
+            status='in_progress' if self.operation_in_progress else 'complete',
+            message='OTA update in progress' if self.operation_in_progress else 'OTA update complete',
+            details=status
+        )
+
+    def on_request_initial_state(self):
+        """Handle initial state request from client"""
+        initial_state = {
+            'isUpdating': self.operation_in_progress,
+            'updateComplete': False,
+            'updateSuccess': False,
+            'updateError': None
+        }
+        self.operation_status.emit_status(
+            operation='ota_update',
+            status='initial',
+            message='Ready for update',
+            details=initial_state
+        )
 
     def on_check_status(self):
         """Handle status check request"""
@@ -165,13 +219,68 @@ def handle_ota_update():
         ota_updater = OTAUpdate(file_path)
         updates[update_id] = ota_updater
 
+        # Get OTA namespace to manage status updates
+        ota_namespace = get_namespace(OTAUpdateNamespace)
+
         def update_operation():
             try:
+                # Start the operation with initial status
+                initial_details = {
+                    'isUpdating': True,
+                    'updateComplete': False,
+                    'updateSuccess': False,
+                    'updateError': None
+                }
+                ota_namespace.operation_status.start_operation(
+                    'ota_update',
+                    f"Starting OTA {operation_type}",
+                    initial_details
+                )
+
+                # Execute the operation
                 if operation_type == 'update':
-                    return ota_updater.update()
+                    success = ota_updater.update()
                 else:  # install
-                    return ota_updater.main()
+                    success = ota_updater.main()
+
+                # Update final status
+                if success:
+                    success_details = {
+                        'isUpdating': False,
+                        'updateComplete': True,
+                        'updateSuccess': True,
+                        'updateError': None
+                    }
+                    ota_namespace.operation_status.complete_operation(
+                        'ota_update',
+                        f"OTA {operation_type} completed successfully",
+                        success_details
+                    )
+                else:
+                    error_details = {
+                        'isUpdating': False,
+                        'updateComplete': True,
+                        'updateSuccess': False,
+                        'updateError': "Operation failed"
+                    }
+                    ota_namespace.operation_status.fail_operation(
+                        'ota_update',
+                        f"OTA {operation_type} failed",
+                        error_details
+                    )
+                return success
             except Exception as e:
+                error_details = {
+                    'isUpdating': False,
+                    'updateComplete': True,
+                    'updateSuccess': False,
+                    'updateError': str(e)
+                }
+                ota_namespace.operation_status.fail_operation(
+                    'ota_update',
+                    str(e),
+                    error_details
+                )
                 raise e
 
         # Execute the operation
@@ -188,9 +297,13 @@ def handle_ota_update():
 def get_ota_status():
     """Get current OTA update status"""
     try:
-        status_namespace = get_ota_status_namespace()
-        return jsonify({
-            'isUpdating': status_namespace.operation_in_progress
-        })
+        status_namespace = get_namespace(OTAUpdateNamespace)
+        status = {
+            'isUpdating': status_namespace.operation_in_progress,
+            'updateComplete': not status_namespace.operation_in_progress,
+            'updateSuccess': not status_namespace.operation_in_progress,
+            'updateError': None
+        }
+        return jsonify(status)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify(create_error_status(str(e))), 500
