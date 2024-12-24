@@ -51,14 +51,10 @@ const Popup: FC<PopupProps> = ({
   blurSidebar = false,
   variant = 'standard',
   namespace,
-  onComplete,
   onError,
-  nextStepMessage = '',
-  failureMessage = '',
   onNext,
   onStop,
-  isStoppingInstallation,
-  showNextButton
+  isStoppingInstallation
 }) => {
   const [showTerminalOutput, setShowTerminalOutput] = useState(false);
   const userHidTerminal = useRef(false);
