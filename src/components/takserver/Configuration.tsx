@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../shared/ui/shadcn/button';
 
-function Configuration() {
+const Configuration: React.FC = () => {
   const navigate = useNavigate();
 
   return (
@@ -26,6 +26,6 @@ function Configuration() {
       </div>
     </div>
   );
-}
+};
 
-export default Configuration;
+export default Configuration; 

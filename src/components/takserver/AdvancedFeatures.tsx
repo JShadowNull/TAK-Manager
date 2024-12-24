@@ -1,23 +1,42 @@
 import React, { useState } from 'react';
 import Popup from '../shared/ui/popups/Popup';
-import useSocket from '../shared/hooks/useSocket';
+import useSocket, { SocketNamespace } from '../shared/hooks/useSocket';
 import { Button } from '../shared/ui/shadcn/button';
+import type { Socket } from 'socket.io-client';
 
-function AdvancedFeatures() {
-  const [showOtaForm, setShowOtaForm] = useState(false);
-  const [showUpdatePluginsForm, setShowUpdatePluginsForm] = useState(false);
-  const [showOtaProgress, setShowOtaProgress] = useState(false);
-  const [otaFormData, setOtaFormData] = useState({
+interface OtaFormData {
+  ota_zip_file: File | null;
+}
+
+type EventHandlers = {
+  [key: string]: ((data: any, helpers: {
+    state: any;
+    updateState: (updates: any) => void;
+    appendToTerminal: (message: string) => void;
+    clearTerminal: () => void;
+    socket: Socket | undefined;
+  }) => void) | ((socket: Socket) => void) | ((error: Error) => void) | (() => void) | boolean | undefined;
+  onConnect?: (socket: Socket) => void;
+  onError?: (error: Error) => void;
+  onDisconnect?: () => void;
+  handleTerminalOutput?: boolean;
+};
+
+const AdvancedFeatures: React.FC = () => {
+  const [showOtaForm, setShowOtaForm] = useState<boolean>(false);
+  const [showUpdatePluginsForm, setShowUpdatePluginsForm] = useState<boolean>(false);
+  const [showOtaProgress, setShowOtaProgress] = useState<boolean>(false);
+  const [otaFormData, setOtaFormData] = useState<OtaFormData>({
     ota_zip_file: null,
   });
-  const [updatePluginsFormData, setUpdatePluginsFormData] = useState({
+  const [updatePluginsFormData, setUpdatePluginsFormData] = useState<OtaFormData>({
     ota_zip_file: null,
   });
-  const [showCompletionPopup, setShowCompletionPopup] = useState(false);
-  const [completedOperation, setCompletedOperation] = useState(null);
+  const [showCompletionPopup, setShowCompletionPopup] = useState<boolean>(false);
+  const [completedOperation, setCompletedOperation] = useState<'config' | 'update' | null>(null);
 
   // Socket event handlers
-  const eventHandlers = {
+  const eventHandlers: EventHandlers = {
     handleTerminalOutput: true,
     onConnect: () => {
       console.log('Connected to OTA update namespace');
@@ -88,10 +107,10 @@ function AdvancedFeatures() {
       installationSuccessful = false,
       installationError = null,
       showNextButton = false,
-      installationFailed = false,
     },
-    clearTerminalOutput,
-  } = useSocket('/ota-update', {
+    clearTerminal: clearTerminalOutput,
+    updateState,
+  } = useSocket('/ota-update' as SocketNamespace, {
     eventHandlers,
     initialState: {
       isInstalling: false,
@@ -102,12 +121,14 @@ function AdvancedFeatures() {
     }
   });
 
-  const handleOtaInputChange = (e) => {
+  const handleOtaInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, files } = e.target;
-    setOtaFormData(prev => ({
-      ...prev,
-      [id]: files[0]
-    }));
+    if (files) {
+      setOtaFormData(prev => ({
+        ...prev,
+        [id]: files[0]
+      }));
+    }
   };
 
   const handleOtaClose = () => {
@@ -139,25 +160,25 @@ function AdvancedFeatures() {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Configuration failed');
       }
-
-      // Don't update UI state here - wait for socket events
     } catch (error) {
       console.error('OTA configuration error:', error);
-      // Update UI state for immediate errors (like validation or network errors)
+      const errorMessage = error instanceof Error ? error.message : 'Configuration failed';
       updateState({
-        installationError: error.message,
+        installationError: errorMessage,
         installationFailed: true,
         isInstalling: false,
       });
     }
   };
 
-  const handleUpdatePluginsInputChange = (e) => {
+  const handleUpdatePluginsInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, files } = e.target;
-    setUpdatePluginsFormData(prev => ({
-      ...prev,
-      [id]: files[0]
-    }));
+    if (files) {
+      setUpdatePluginsFormData(prev => ({
+        ...prev,
+        [id]: files[0]
+      }));
+    }
   };
 
   const handleUpdatePluginsClose = () => {
@@ -189,13 +210,11 @@ function AdvancedFeatures() {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Update failed');
       }
-
-      // Don't update UI state here - wait for socket events
     } catch (error) {
       console.error('Plugin update error:', error);
-      // Update UI state for immediate errors (like validation or network errors)
+      const errorMessage = error instanceof Error ? error.message : 'Update failed';
       updateState({
-        installationError: error.message,
+        installationError: errorMessage,
         installationFailed: true,
         isInstalling: false,
       });
@@ -403,7 +422,6 @@ function AdvancedFeatures() {
         }
         variant="terminal"
         terminalOutput={terminalOutput}
-        showTerminal={true}
         isInProgress={isInstalling}
         isComplete={!isInstalling && (installationSuccessful || installationError)}
         isSuccess={installationSuccessful}
@@ -450,7 +468,7 @@ function AdvancedFeatures() {
         }
       >
         <div className="text-center">
-          <p className="text-green-500 font-semibold">✓</p>
+          <p className="text-green-500 font-semibold">��</p>
           {completedOperation === 'config' ? (
             <>
               <p className="text-green-500 font-semibold">OTA Plugins Configuration Completed Successfully</p>

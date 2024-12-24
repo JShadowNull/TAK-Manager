@@ -99,7 +99,7 @@ type UseSocketOptions = {
   initialState?: any;
 };
 
-type UseSocketReturn = {
+export type UseSocketReturn = {
   socket: Socket | undefined;
   isConnected: boolean;
   error: Error | null;

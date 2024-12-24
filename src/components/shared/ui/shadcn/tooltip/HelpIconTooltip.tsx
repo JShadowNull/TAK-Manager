@@ -1,25 +1,11 @@
 import React, { useState } from 'react';
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
-import { styled } from '@mui/material/styles';
+import { HelpCircle } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from './tooltip';
-
-interface StyledHelpIconProps {
-  $isOpen?: boolean;
-}
-
-const StyledHelpIcon = styled(HelpOutlineIcon)<StyledHelpIconProps>(({ theme, $isOpen }) => ({
-  fontSize: '16px',
-  color: $isOpen ? 'rgba(208, 219, 229, 1.000)' : 'rgba(86, 119, 153, 1.000)',
-  transition: 'color 0.2s ease-in-out',
-  '&:hover': {
-    color: 'rgba(208, 219, 229, 1.000)',
-  },
-}));
 
 interface HelpIconTooltipProps {
   tooltip: string;
@@ -55,8 +41,14 @@ export const HelpIconTooltip = ({
   };
 
   const tooltipTrigger = showIcon ? (
-    <div className={`cursor-pointer ${className}`} onClick={handleClick}>
-      <StyledHelpIcon sx={{ fontSize: iconSize }} $isOpen={isOpen} />
+    <div 
+      className={`cursor-pointer text-muted-foreground hover:text-foreground transition-colors ${className}`} 
+      onClick={handleClick}
+    >
+      <HelpCircle 
+        size={iconSize} 
+        className={isOpen ? 'text-foreground' : ''} 
+      />
     </div>
   ) : (
     children
