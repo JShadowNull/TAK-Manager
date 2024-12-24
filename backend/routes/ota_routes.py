@@ -1,3 +1,6 @@
+# ============================================================================
+# Imports
+# ============================================================================ 
 from flask import Blueprint, jsonify, request
 from werkzeug.utils import secure_filename
 from flask_socketio import Namespace
