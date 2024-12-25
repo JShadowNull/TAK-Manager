@@ -68,7 +68,7 @@ const LoadingButton: React.FC<LoadingButtonProps> = ({
         return `(${Math.round(progress)}%)`;
       case 'bar':
         return (
-          <div className="w-full bg-gray-200 rounded-full h-1.5 mb-1">
+          <div className="w-full bg-primary rounded-full h-1.5 mb-1">
             <div
               className="bg-primary h-1.5 rounded-full transition-all duration-300"
               style={{ width: `${progress}%` }}

@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Input } from '../shared/ui/shadcn/input';
-import useSocket from '../shared/hooks/useSocket';
+import useFetch from '../shared/hooks/useFetch';
 import { Switch } from '../shared/ui/shadcn/switch';
 import { Button } from '../shared/ui/shadcn/button';
 import { HelpIconTooltip } from '../shared/ui/shadcn/tooltip/HelpIconTooltip';
+import LoadingButton from '../shared/ui/inputs/LoadingButton';
+import { useCertificateValidation, useBatchValidation } from './hooks/useCertificateValidation';
 
 // Checkmark icon component
 const CheckmarkIcon = () => (
@@ -59,7 +61,7 @@ const generateAlphabeticSequence = (n) => {
   return sequence;
 };
 
-function CreateCertificates({ onOperationProgress }) {
+function CreateCertificates({ onOperationProgress, isConnected }) {
   const [buttonState, setButtonState] = useState('idle');
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [certFields, setCertFields] = useState([
@@ -69,84 +71,62 @@ function CreateCertificates({ onOperationProgress }) {
   const [batchGroup, setBatchGroup] = useState('__ANON__');
   const [count, setCount] = useState(1);
   const [prefixType, setPrefixType] = useState('numeric');
-  const [completedCerts, setCompletedCerts] = useState(0);
-  const [expectedCerts, setExpectedCerts] = useState(0);
+  const [operationProgress, setOperationProgress] = useState({
+    total: 0,
+    completed: 0,
+    currentCert: '',
+    step: '',
+    message: '',
+    progress: 0
+  });
+  const [existingCertificates, setExistingCertificates] = useState([]);
+
+  const { post, get } = useFetch();
+
+  // Fetch existing certificates on mount
+  useEffect(() => {
+    const fetchExistingCertificates = async () => {
+      try {
+        const response = await get('/certmanager/certmanager/list');
+        if (response?.certificates) {
+          setExistingCertificates(response.certificates.map(cert => cert.name));
+        }
+      } catch (error) {
+        console.error('Error fetching certificates:', error);
+      }
+    };
+    fetchExistingCertificates();
+  }, []);
+
+  // Validate single mode certificates
+  const certFieldsValidation = useCertificateValidation(certFields, existingCertificates);
+
+  // Validate batch mode
+  const batchValidation = useBatchValidation(batchName, batchGroup, existingCertificates);
+
+  const isCreateButtonDisabled = useMemo(() => {
+    if (buttonState !== 'idle') return true;
+    if (!isConnected) return true;
+    
+    if (isBatchMode) {
+      return !batchValidation.isValid || !batchName.trim() || count < 1;
+    } else {
+      return certFields.some((field, index) => {
+        if (!field.name.trim()) return true;
+        return !certFieldsValidation[index].isValid;
+      });
+    }
+  }, [buttonState, isConnected, isBatchMode, batchValidation, batchName, count, certFields, certFieldsValidation]);
 
   const prefixOptions = [
     { value: 'numeric', text: 'Numeric (1, 2, 3...)' },
     { value: 'alpha', text: 'Alphabetic (a, b, c...)' }
   ];
 
-  // Socket event handlers
-  const eventHandlers = {
-    cert_operation: (data) => {
-      console.log('Received cert operation:', data);
-      
-      if (data.type === 'create') {
-        if (typeof onOperationProgress === 'function') {
-          try {
-            onOperationProgress(data);
-          } catch (error) {
-            console.error('Error in operation progress callback:', error);
-          }
-        }
-        
-        switch (data.status) {
-          case 'started':
-            setButtonState('loading');
-            break;
-            
-          case 'in_progress':
-            // Keep loading state, do nothing
-            break;
-            
-          case 'completed':
-            // For single certificate creation
-            if (!isBatchMode) {
-              setButtonState('success');
-              setTimeout(() => {
-                setCertFields([{ name: '', isAdmin: false, group: '__ANON__', password: '' }]);
-                setButtonState('idle');
-              }, 3000);
-            }
-            break;
-
-          case 'batch_completed':
-            // For batch completion
-            setButtonState('success');
-            setTimeout(() => {
-              setBatchName('');
-              setBatchGroup('__ANON__');
-              setCount(1);
-              setButtonState('idle');
-            }, 3000);
-            break;
-            
-          case 'failed':
-            setButtonState('failed');
-            setTimeout(() => {
-              setButtonState('idle');
-            }, 3000);
-            break;
-            
-          default:
-            console.warn('Unknown operation status:', data.status);
-            break;
-        }
-      }
-    },
-    onError: (error) => {
-      console.error('Socket error:', error);
-      setButtonState('failed');
-      setTimeout(() => setButtonState('idle'), 3000);
-    }
-  };
-
-  // Initialize socket with useSocket hook
-  const { isConnected } = useSocket('/cert-manager', {
-    eventHandlers,
-    autoConnect: false // Only connect when needed
-  });
+  // Debug connection status
+  useEffect(() => {
+    console.log('Socket connection status:', isConnected);
+  }, [isConnected]);
 
   // Preview for batch generation
   const getCertificatePreview = () => {
@@ -181,16 +161,6 @@ function CreateCertificates({ onOperationProgress }) {
     setCertFields(newFields);
   };
 
-  const isCreateButtonDisabled = () => {
-    if (buttonState !== 'idle') return true;
-    
-    if (isBatchMode) {
-      return !batchName.trim() || count < 1;
-    } else {
-      return certFields.every(field => !field.name.trim());
-    }
-  };
-
   const formatCertificateData = () => {
     if (isBatchMode) {
       const groups = batchGroup
@@ -199,8 +169,9 @@ function CreateCertificates({ onOperationProgress }) {
         .filter(g => g);
       
       return {
+        mode: 'batch',
         name: batchName.trim(),
-        group: groups.length ? groups[0] : '__ANON__', // Send single group for batch mode
+        group: groups.length ? groups[0] : '__ANON__',
         count: parseInt(count, 10),
         prefixType,
         isAdmin: false,
@@ -208,6 +179,7 @@ function CreateCertificates({ onOperationProgress }) {
       };
     } else {
       return {
+        mode: 'single',
         certificates: certFields
           .filter(field => field.name.trim())
           .map(field => ({
@@ -221,6 +193,57 @@ function CreateCertificates({ onOperationProgress }) {
       };
     }
   };
+
+  // Handle operation status updates from WebSocket
+  useEffect(() => {
+    if (typeof onOperationProgress === 'function') {
+      const data = onOperationProgress();
+      if (data?.operation === 'certificate_operation') {
+        // Update progress based on socket events
+        setOperationProgress(prev => ({
+          ...prev,
+          completed: data.details?.completed_certs || 0,
+          total: data.details?.total_certs || prev.total,
+          currentCert: data.details?.current_cert?.username || '',
+          step: data.details?.current_cert?.step || '',
+          stepProgress: data.details?.current_cert?.step_progress || 0,
+          message: data.message || '',
+          progress: data.progress || 0
+        }));
+
+        // Handle completion
+        if (data.status === 'complete') {
+          setButtonState('complete');
+          setTimeout(() => {
+            setButtonState('idle');
+            setOperationProgress({
+              total: 0,
+              completed: 0,
+              currentCert: '',
+              step: '',
+              message: '',
+              progress: 0
+            });
+            // Reset form if successful
+            if (isBatchMode) {
+              setBatchName('');
+              setBatchGroup('__ANON__');
+              setCount(1);
+            } else {
+              setCertFields([{ name: '', isAdmin: false, group: '__ANON__', password: '' }]);
+            }
+          }, 1000);
+        } else if (data.status === 'failed') {
+          setButtonState('failed');
+          setOperationProgress(prev => ({
+            ...prev,
+            message: data.message || 'Failed to create certificates',
+            progress: 0
+          }));
+        }
+      }
+    }
+  }, [onOperationProgress, isBatchMode]);
 
   const handleCreateCertificates = async () => {
     if (isCreateButtonDisabled()) return;
@@ -238,42 +261,45 @@ function CreateCertificates({ onOperationProgress }) {
     }
 
     try {
+      // Set initial loading state immediately
       setButtonState('loading');
-      setCompletedCerts(0);
-      // Set expected number of certificates
-      setExpectedCerts(isBatchMode ? data.count : data.certificates.length);
-
-      const response = await fetch('/certmanager/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data)
+      setOperationProgress({
+        total: isBatchMode ? data.count : data.certificates.length,
+        completed: 0,
+        currentCert: '',
+        step: 'Initializing',
+        message: `Starting certificate creation`,
+        progress: 0
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      const response = await post('/certmanager/certmanager/create', data);
+      
+      if (!response || response.error) {
+        throw new Error(response?.error || 'Failed to create certificates');
       }
 
-      const result = await response.json();
-      
-      if (result.message !== "Operation initiated successfully") {
-        setButtonState('failed');
-        setTimeout(() => {
-          setButtonState('idle');
-          setCompletedCerts(0);
-          setExpectedCerts(0);
-        }, 3000);
-      }
-      // Don't set any button state here for success case, let socket events handle it
+      console.log('Certificate creation initiated:', response);
       
     } catch (error) {
       console.error('Error creating certificates:', error);
       setButtonState('failed');
+      setOperationProgress(prev => ({
+        ...prev,
+        message: error.message || 'Failed to create certificates',
+        progress: 0
+      }));
+      
+      // Reset state after error
       setTimeout(() => {
         setButtonState('idle');
-        setCompletedCerts(0);
-        setExpectedCerts(0);
+        setOperationProgress({
+          total: 0,
+          completed: 0,
+          currentCert: '',
+          step: '',
+          message: '',
+          progress: 0
+        });
       }, 3000);
     }
   };
@@ -299,10 +325,12 @@ function CreateCertificates({ onOperationProgress }) {
               id="batch-mode"
               checked={isBatchMode}
               onCheckedChange={setIsBatchMode}
+              className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-primary"
+              aria-label="Toggle batch mode"
             />
             <label
               htmlFor="batch-mode"
-              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              className="text-sm font-medium text-primary cursor-pointer select-none"
             >
               Batch Generation
             </label>
@@ -310,93 +338,104 @@ function CreateCertificates({ onOperationProgress }) {
         </div>
 
         {/* Single/Custom Mode - Create one or more custom certificates */}
-        {!isBatchMode && certFields.map((field, index) => (
-          <div key={index} className="flex gap-4 items-end">
-            <div className="flex-1">
-              <div className="mb-2">
-                <span className="text-sm text-primary-foreground font-medium flex items-center">
-                  Certificate Name
-                  <HelpIconTooltip 
-                    tooltip="The unique identifier for this certificate"
-                    triggerMode="hover"
-                  />
-                </span>
-              </div>
-              <Input
-                type="text"
-                id={`cert-${index}`}
-                label={index === 0 ? "Certificate Name" : `Additional Certificate ${index}`}
-                value={field.name}
-                onChange={(e) => handleCertFieldChange(index, 'name', e.target.value)}
-                placeholder="Enter certificate name"
-                className="text-primary-foreground placeholder-textSecondary"
-              />
-            </div>
-            <div className="flex-1">
-              <div className="mb-2">
-                <span className="text-sm text-primary-foreground font-medium flex items-center">
-                  Groups
-                  <HelpIconTooltip 
-                    tooltip="The groups this certificate belongs to (separate multiple groups with commas)"
-                    triggerMode="hover"
-                  />
-                </span>
-              </div>
-              <Input
-                type="text"
-                id={`group-${index}`}
-                label="Groups"
-                value={field.group}
-                onChange={(e) => handleCertFieldChange(index, 'group', e.target.value)}
-                placeholder="Enter group names (comma-separated)"
-                className="text-primary-foreground placeholder-textSecondary"
-              />
-            </div>
-            <div className="flex-1">
-              <div className="mb-2">
-                <span className="text-sm text-primary-foreground font-medium flex items-center">
-                  Login Password (Optional)
-                  <HelpIconTooltip 
-                    tooltip="Optional password for certificate authentication"
-                    triggerMode="hover"
-                  />
-                </span>
-              </div>
-              <InputField
-                type="password"
-                id={`password-${index}`}
-                label="Password (Optional)"
-                value={field.password || ''}
-                onChange={(e) => handleCertFieldChange(index, 'password', e.target.value)}
-                placeholder="Enter password"
-                className="text-primary-foreground placeholder-textSecondary"
-              />
-            </div>
-            <div className="flex items-center gap-4 mt-8">
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id={`admin-${index}`}
-                  checked={field.isAdmin}
-                  onCheckedChange={(checked) => handleCertFieldChange(index, 'isAdmin', checked)}
+        {!isBatchMode && certFields.map((field, index) => {
+          const validation = certFieldsValidation[index];
+          return (
+            <div key={index} className="flex gap-4 items-end">
+              <div className="flex-1">
+                <div className="mb-2">
+                  <span className="text-sm text-primary font-medium flex items-center gap-1">
+                    Certificate Name
+                    <HelpIconTooltip 
+                      tooltip="The unique identifier for this certificate"
+                      triggerMode="hover"
+                    />
+                  </span>
+                </div>
+                <Input
+                  type="text"
+                  id={`cert-${index}`}
+                  value={field.name}
+                  onChange={(e) => handleCertFieldChange(index, 'name', e.target.value)}
+                  placeholder="Enter certificate name"
+                  className="flex h-10 w-full rounded-md border border-input bg-sidebar px-3 py-2 text-base ring-offset-background"
                 />
-                <label
-                  htmlFor={`admin-${index}`}
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                >
-                  Admin
-                </label>
+                {validation?.errors?.name && (
+                  <p className="mt-1 text-sm text-red-500">{validation.errors.name}</p>
+                )}
               </div>
-              {index > 0 && (
-                <Button
-                  onClick={() => handleRemoveCertField(index)}
-                  variant="danger"
-                  iconOnly
-                  leadingIcon={<DeleteIcon />}
+              <div className="flex-1">
+                <div className="mb-2">
+                  <span className="text-sm text-primary font-medium flex items-center gap-1">
+                    Groups
+                    <HelpIconTooltip 
+                      tooltip="The groups this certificate belongs to (separate multiple groups with commas)"
+                      triggerMode="hover"
+                    />
+                  </span>
+                </div>
+                <Input
+                  type="text"
+                  id={`group-${index}`}
+                  value={field.group}
+                  onChange={(e) => handleCertFieldChange(index, 'group', e.target.value)}
+                  placeholder="Enter group names (comma-separated)"
+                  className="flex h-10 w-full rounded-md border border-input bg-sidebar px-3 py-2 text-base ring-offset-background"
                 />
-              )}
+                {validation?.errors?.group && (
+                  <p className="mt-1 text-sm text-red-500">{validation.errors.group}</p>
+                )}
+              </div>
+              <div className="flex-1">
+                <div className="mb-2">
+                  <span className="text-sm text-primary font-medium flex items-center gap-1">
+                    Login Password (Optional)
+                    <HelpIconTooltip 
+                      tooltip="Optional password for certificate authentication"
+                      triggerMode="hover"
+                    />
+                  </span>
+                </div>
+                <Input
+                  type="password"
+                  id={`password-${index}`}
+                  value={field.password || ''}
+                  onChange={(e) => handleCertFieldChange(index, 'password', e.target.value)}
+                  placeholder="Enter password"
+                  className="flex h-10 w-full rounded-md border border-input bg-sidebar px-3 py-2 text-base ring-offset-background"
+                />
+                {validation?.errors?.password && (
+                  <p className="mt-1 text-sm text-red-500">{validation.errors.password}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-4 mt-8">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id={`admin-${index}`}
+                    checked={field.isAdmin}
+                    onCheckedChange={(checked) => handleCertFieldChange(index, 'isAdmin', checked)}
+                    className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-primary"
+                    aria-label={`Toggle admin mode for certificate ${index + 1}`}
+                  />
+                  <label
+                    htmlFor={`admin-${index}`}
+                    className="text-sm font-medium text-primary cursor-pointer select-none"
+                  >
+                    Admin
+                  </label>
+                </div>
+                {index > 0 && (
+                  <Button
+                    onClick={() => handleRemoveCertField(index)}
+                    variant="danger"
+                    iconOnly
+                    leadingIcon={<DeleteIcon />}
+                  />
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {/* Batch Generation Mode - Create multiple certificates with standard naming */}
         {isBatchMode && (
@@ -404,7 +443,7 @@ function CreateCertificates({ onOperationProgress }) {
             <div className="flex gap-4">
               <div className="flex-1">
                 <div className="mb-2">
-                  <span className="text-sm text-primary-foreground font-medium flex items-center">
+                  <span className="text-sm text-primary font-medium flex items-center gap-1">
                     Base Name
                     <HelpIconTooltip 
                       tooltip="The prefix used for all generated certificates (e.g. 'user')"
@@ -412,19 +451,21 @@ function CreateCertificates({ onOperationProgress }) {
                     />
                   </span>
                 </div>
-                <InputField
+                <Input
                   type="text"
                   id="batchName"
-                  label="Base Name"
                   value={batchName}
                   onChange={(e) => setBatchName(e.target.value)}
                   placeholder="Enter base name (e.g. jake)"
-                  className="text-primary-foreground placeholder-textSecondary"
+                  className="flex h-10 w-full rounded-md border border-input bg-sidebar px-3 py-2 text-base ring-offset-background"
                 />
+                {batchValidation.errors.name && (
+                  <p className="mt-1 text-sm text-red-500">{batchValidation.errors.name}</p>
+                )}
               </div>
               <div className="flex-1">
                 <div className="mb-2">
-                  <span className="text-sm text-primary-foreground font-medium flex items-center">
+                  <span className="text-sm text-primary font-medium flex items-center gap-1">
                     Groups
                     <HelpIconTooltip 
                       tooltip="The groups all certificates will belong to (separate multiple groups with commas)"
@@ -432,19 +473,21 @@ function CreateCertificates({ onOperationProgress }) {
                     />
                   </span>
                 </div>
-                <InputField
+                <Input
                   type="text"
                   id="batchGroup"
-                  label="Groups"
                   value={batchGroup}
                   onChange={(e) => setBatchGroup(e.target.value)}
                   placeholder="Enter group names (comma-separated)"
-                  className="text-primary-foreground placeholder-textSecondary"
+                  className="flex h-10 w-full rounded-md border border-input bg-sidebar px-3 py-2 text-base ring-offset-background"
                 />
+                {batchValidation.errors.group && (
+                  <p className="mt-1 text-sm text-red-500">{batchValidation.errors.group}</p>
+                )}
               </div>
               <div className="flex-1">
                 <div className="mb-2">
-                  <span className="text-sm text-primary-foreground font-medium flex items-center">
+                  <span className="text-sm text-primary font-medium flex items-center gap-1">
                     Suffix Type
                     <HelpIconTooltip 
                       tooltip="How to number the certificates (e.g. 1,2,3 or a,b,c)"
@@ -452,19 +495,18 @@ function CreateCertificates({ onOperationProgress }) {
                     />
                   </span>
                 </div>
-                <InputField
+                <Input
                   type="select"
                   id="prefixType"
-                  label="Suffix Type"
                   value={prefixType}
-                  onChange={setPrefixType}
+                  onChange={(e) => setPrefixType(e.target.value)}
                   options={prefixOptions}
-                  className="text-primary-foreground"
+                  className="flex h-10 w-full rounded-md border border-input bg-sidebar px-3 py-2 text-base ring-offset-background"
                 />
               </div>
               <div className="flex-1">
                 <div className="mb-2">
-                  <span className="text-sm text-primary-foreground font-medium flex items-center">
+                  <span className="text-sm text-primary font-medium flex items-center gap-1">
                     Number of Certificates
                     <HelpIconTooltip 
                       tooltip="How many certificates to generate in this batch"
@@ -472,46 +514,47 @@ function CreateCertificates({ onOperationProgress }) {
                     />
                   </span>
                 </div>
-                <InputField
+                <Input
                   type="number"
                   id="count"
-                  label="Number of Certificates"
                   value={count}
                   onChange={(e) => setCount(parseInt(e.target.value, 10))}
                   min={1}
-                  className="text-primary-foreground"
+                  className="flex h-10 w-full rounded-md border border-input bg-sidebar px-3 py-2 text-base ring-offset-background"
                 />
               </div>
             </div>
             
             {/* Certificate Name Preview */}
-            <div className="text-sm text-textSecondary italic">
+            <div className="text-sm text-primary italic">
               Preview: {getCertificatePreview()}
             </div>
           </div>
         )}
 
-        {/* Create Button */}
-        <Button
-          onClick={handleCreateCertificates}
-          disabled={isCreateButtonDisabled() || buttonState === 'loading'}
-          loading={buttonState === 'loading'}
-          loadingText="Creating..."
-          variant="primary"
-          className={`hover:bg-green-500 ${
-            buttonState === 'success' ? 'bg-green-500 !opacity-100' : 
-            buttonState === 'failed' ? 'bg-red-500 hover:bg-red-500 !opacity-100' : ''
-          }`}
-          leadingIcon={
-            buttonState === 'success' ? <CheckmarkIcon /> :
-            buttonState === 'failed' ? <ErrorIcon /> :
-            null
-          }
-        >
-          {buttonState === 'success' ? 'Done' :
-           buttonState === 'failed' ? 'Failed' :
-           `Create Certificate${(isBatchMode || certFields.length > 1) ? 's' : ''}`}
-        </Button>
+        {/* Create Button with LoadingButton component */}
+        <div>
+          <LoadingButton
+            operation="configure"
+            isLoading={buttonState === 'loading'}
+            status={buttonState === 'idle' ? null : buttonState}
+            disabled={isCreateButtonDisabled}
+            showProgress={true}
+            progressType="percentage"
+            progress={operationProgress.progress || 0}
+            message={buttonState === 'loading' ? 
+              `${operationProgress.message || `Creating certificate${(isBatchMode || certFields.length > 1) ? 's' : ''}`} (${operationProgress.completed}/${operationProgress.total})${operationProgress.currentCert ? ` - ${operationProgress.currentCert}` : ''}${operationProgress.step ? ` (${operationProgress.step}${operationProgress.stepProgress ? ` - ${operationProgress.stepProgress}%` : ''})` : ''}` 
+              : undefined}
+            loadingMessage={`Creating certificate${(isBatchMode || certFields.length > 1) ? 's' : ''}`}
+            successMessage={operationProgress.message || "Certificates created successfully"}
+            failedMessage={operationProgress.message || "Failed to create certificates"}
+            onClick={handleCreateCertificates}
+            variant="primary"
+            className="hover:bg-green-500"
+          >
+            {`Create Certificate${(isBatchMode || certFields.length > 1) ? 's' : ''}`}
+          </LoadingButton>
+        </div>
       </div>
     </div>
   );

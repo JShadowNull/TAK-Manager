@@ -117,7 +117,7 @@ function useFetch(): FetchHook {
 
   const del = useCallback(<T = any>(
     endpoint: string,
-    _data?: never,
+    data?: any,
     config: FetchConfig = {}
   ): Promise<T> => {
     setLoading(true);
@@ -125,8 +125,19 @@ function useFetch(): FetchHook {
     try {
       const { rawResponse, validateResponse, ...axiosConfig } = config;
       return axios
-        .delete(`${API_BASE_URL}${endpoint}`, axiosConfig)
+        .delete(`${API_BASE_URL}${endpoint}`, {
+          ...axiosConfig,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(axiosConfig.headers || {})
+          },
+          data
+        })
         .then((response) => handleResponse<T>(response, { rawResponse, validateResponse }))
+        .catch((err) => {
+          console.error('Delete request failed:', err);
+          throw err;
+        })
         .finally(() => setLoading(false));
     } catch (err) {
       const error = err as Error;

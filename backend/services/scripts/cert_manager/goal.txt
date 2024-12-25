@@ -1,0 +1,415 @@
+Certificate Manager Goals and Requirements
+
+1. Certificate Listing and Real-time Monitoring
+- List existing certificates on the system
+- Monitor changes in real-time for:
+  - Certificate creation (via app or manual)
+  - Certificate deletion (via app or manual)
+- Automatically update frontend when changes detected
+
+2. Certificate Creation
+- Support multiple certificate attributes:
+  - Username
+  - Admin status
+  - User groups
+  - Password
+- Two creation modes:
+  a) Individual Creation
+    - Create multiple certificates with different attributes
+  b) Batch Creation
+    - Use prefix + counter (e.g. jake_group_1, jake_group_2)
+    - Specify shared attributes and groups
+    - Choose suffix type (numerical or alphabetical)
+    - Set number of certificates to generate
+
+3. Certificate Deletion
+- Remove all associated certificate files (e.g. .p12, .pem)
+- Support single or multiple certificate deletion
+- Delete associated user data
+- Success Criteria:
+  * Success determined by command execution, not file system state
+  * User deletion and file deletion must both succeed
+  * No additional file existence checks needed
+  * Batch operations succeed if all individual operations succeed
+
+4. Progress and State Management
+- Track progress for batch operations
+- Show percentage completion for user feedback
+- Ensure completion status only emitted after all tasks finish
+- Keep creation and deletion operations independent
+- Maintain reliable frontend loading states
+- Success/Failure States:
+  * Operation status reflects actual command execution results
+  * No redundant success flags in details
+  * Single source of truth for operation status
+  * Clear distinction between operation types
+
+5. Implementation Requirements
+- Ensure clear and consistent event emissions
+- Make events easily interpretable by frontend
+- Maintain 100% reliability in state management
+- Leverage existing root code structure
+
+6. Initial State and Certificate List Retrieval
+
+A. Backend Requirements
+1. OperationStatus Class:
+   - Must implement emit_certificates_data method
+   - Should emit both 'initial_state' and 'certificates_data' events
+   - Handle errors gracefully with logging
+   - Track operation state during fetching
+
+2. Event Emissions:
+   - 'initial_state': First load and reconnects
+   - 'certificates_data': All updates including initial
+   - 'operation_status': Progress of fetch operation
+   - 'certificates_error': Any errors during fetch
+
+3. Error Handling:
+   - Log all errors with details
+   - Emit appropriate error events
+   - Maintain consistent state
+   - Allow for retry mechanisms
+
+B. Frontend Setup with useSocket
+1. Component Implementation:
+```typescript
+function CertificateManager() {
+  const { state, isConnected } = useSocket('/cert-manager', {
+    // Initial state shape
+    initialState: {
+      certificates: []
+    },
+    // Event handlers for certificate updates
+    eventHandlers: {
+      // Automatically called after connection
+      initial_state: (data) => {
+        // State is automatically updated by useSocket
+        console.log('Received initial state:', data);
+      },
+      // Handle certificate updates
+      certificates_data: (data) => {
+        // State is automatically updated by useSocket
+        console.log('Received certificate update:', data);
+      },
+      // Handle errors
+      certificates_error: (error) => {
+        console.error('Certificate error:', error);
+      }
+    }
+  });
+
+  // Access certificates from state
+  const certificates = state.certificates || [];
+  
+  return (
+    // Render certificates
+  );
+}
+```
+
+B. Socket Connection Flow (Handled by useSocket)
+1. useSocket automatically:
+   - Connects to '/cert-manager' namespace
+   - Emits 'request_initial_state' on connect/reconnect
+   - Manages connection state
+   - Updates local state with received data
+   - Handles reconnection logic
+
+C. State Management with useSocket
+1. State Updates:
+   - Initial state set via initialState option
+   - Automatically updated on 'initial_state' event
+   - Automatically updated on 'certificates_data' event
+   - Persists during socket disconnections
+   - Resyncs on reconnection
+
+2. Connection Status:
+   - Track via isConnected boolean
+   - Automatically handles reconnection
+   - Maintains state during disconnects
+   - Re-requests data on reconnect
+
+3. Error Handling:
+   - Automatic error state management
+   - Connection error tracking
+   - Event error handling
+
+D. Event Flow
+1. On Mount:
+   - useSocket connects to namespace
+   - Automatic 'request_initial_state' emission
+   - State initialized with initialState
+
+2. On Connect/Reconnect:
+   - Automatic 'request_initial_state' emission
+   - State rehydration from backend
+
+3. During Operation:
+   - Real-time updates via 'certificates_data'
+   - Automatic state updates
+   - UI reflects latest state
+
+7. Event Flow and Emissions
+
+A. Certificate List Updates
+Event: 'certificates_data'
+Payload:
+```json
+{
+    'certificates': [
+        {
+            'identifier': 'username',
+            'role': 'ROLE_ANONYMOUS/ROLE_ADMIN',
+            'groups': ['group1', 'group2'],
+            'passwordHashed': true/false
+        }
+    ]
+}
+```
+When:
+- On initial load
+- After any successful creation/deletion
+- When file system changes detected
+
+B. Certificate Creation Flow
+1. Start Operation
+Event: 'operation_status'
+```json
+{
+    'operation': 'certificate_operation',
+    'status': 'started',
+    'message': 'Starting certificate creation',
+    'details': {
+        'mode': 'single' | 'batch',
+        'total_certs': number,
+        'completed_certs': 0
+    },
+    'progress': 0
+}
+```
+
+2. Progress Updates
+Event: 'operation_status'
+```json
+{
+    'operation': 'certificate_operation',
+    'status': 'in_progress',
+    'message': 'Processing certificate X of Y',
+    'details': {
+        'total_certs': number,
+        'completed_certs': number,
+        'current_cert': {
+            'username': string,
+            'step': 'Creating certificate' | 'Registering user',
+            'step_progress': number
+        }
+    },
+    'progress': number
+}
+```
+
+3. Completion/Failure
+Event: 'operation_status'
+```json
+{
+    'operation': 'certificate_operation',
+    'status': 'complete' | 'failed',
+    'message': string,
+    'details': {
+        'total_certs': number,
+        'completed_certs': number,
+        'results': [
+            {
+                'username': string,
+                'message': string
+            }
+        ]
+    },
+    'progress': number
+}
+```
+
+C. Certificate Deletion Flow
+1. Start Operation
+Event: 'operation_status'
+```json
+{
+    'operation': 'deletion_operation',
+    'status': 'started',
+    'message': 'Starting deletion',
+    'details': {
+        'total_certs': number,
+        'completed_certs': 0
+    },
+    'progress': 0
+}
+```
+
+2. Progress Updates
+Event: 'operation_status'
+```json
+{
+    'operation': 'deletion_operation',
+    'status': 'in_progress',
+    'message': 'Deleting certificate X of Y',
+    'details': {
+        'total_certs': number,
+        'completed_certs': number,
+        'current_cert': string
+    },
+    'progress': number
+}
+```
+
+3. Completion/Failure
+Event: 'operation_status'
+```json
+{
+    'operation': 'deletion_operation',
+    'status': 'complete' | 'failed',
+    'message': string,
+    'details': {
+        'total_certs': number,
+        'completed_certs': number
+    },
+    'progress': number
+}
+```
+
+7. Frontend State Management
+- Track operation type: 'certificate_operation' | 'deletion_operation'
+- Track operation status: 'started' | 'in_progress' | 'complete' | 'failed'
+- Maintain separate loading states for creation and deletion
+- Update certificate list on 'certificates_data' event
+- Show progress based on:
+  - overall progress percentage
+  - current certificate being processed
+  - step progress for creation operations
+- Reset states only after operation completion/failure
+- Handle edge cases:
+  - Socket disconnection during operation
+  - Manual certificate changes
+  - Partial operation completion
+
+8. Loading State Management Best Practices
+
+A. Loading State Lifecycle
+1. Initial Trigger:
+   - Set loading state immediately on user action
+   - Don't wait for socket events to show loading UI
+   - Include initial progress details (total items, completed: 0)
+
+2. Progress Updates:
+   - Socket events update progress details
+   - Maintain loading state through updates
+   - Show detailed progress (completed items, current item, etc.)
+
+3. Completion/Cleanup:
+   - Socket events signal completion
+   - Brief display of success/failure state
+   - Clean up state after delay (e.g., 1000ms)
+
+B. Common Issues and Solutions
+1. Delayed Loading States:
+   Problem: Loading state appears late if waiting for socket
+   Solution: Set initial state on action trigger
+   Example:
+   ```javascript
+   const handleDelete = async () => {
+     // Immediate loading state
+     setOperationStatus({
+       operation: 'deletion_operation',
+       status: 'started',
+       message: 'Starting deletion',
+       details: {
+         total_certs: selectedItems.length,
+         completed_certs: 0
+       },
+       progress: 0
+     });
+
+     // Then make the request
+     await deleteRequest(...);
+   }
+   ```
+
+2. Race Conditions:
+   Problem: Socket updates may arrive after completion
+   Solution: 
+   - Clear states with timeouts
+   - Check operation type matches current operation
+   - Maintain single source of truth for status
+
+3. Error States:
+   Problem: Failed operations need proper error UI
+   Solution:
+   ```javascript
+   setOperationStatus({
+     operation: 'deletion_operation',
+     status: 'failed',
+     message: error.message,
+     details: {
+       total_certs: total,
+       completed_certs: completed
+     },
+     progress: 0
+   });
+   ```
+
+C. Implementation Guidelines
+1. Component State:
+   - Track operation type and status
+   - Store progress details
+   - Handle loading, success, and error states
+
+2. UI Feedback:
+   - Show immediate response to user actions
+   - Display detailed progress when available
+   - Clear feedback for success/failure
+   - Smooth transitions between states
+
+3. Socket Integration:
+   - Set initial state before socket events
+   - Update progress based on socket events
+   - Handle completion and cleanup
+   - Manage error states independently
+
+4. State Cleanup:
+   - Clear selection after success
+   - Reset operation status
+   - Use appropriate delays for UI feedback
+   - Handle interrupted operations
+
+This pattern ensures:
+- Responsive UI with immediate feedback
+- Accurate progress tracking
+- Proper error handling
+- Clean state management
+- Smooth user experience
+
+Form Validation Requirements:
+
+1. Certificate Name:
+   - Must not already exist in system
+   - Cannot contain spaces
+   - Only alphanumeric characters allowed
+   - Special characters limited to underscore and hyphen
+   - Example: "user-123_cert"
+
+2. Groups:
+   - Must be comma-separated values
+   - Each group name:
+     - No spaces allowed
+     - Only letters and numbers
+     - Underscores and hyphens permitted
+     - Example: "admin,users-group,test_group"
+
+3. Password Requirements:
+   - Minimum 15 characters
+   - Must contain:
+     - At least 1 uppercase letter
+     - At least 1 lowercase letter  
+     - At least 1 number
+     - At least 1 special character
+   - Example: "SecureP@ssw0rd123!"

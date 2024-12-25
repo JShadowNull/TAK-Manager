@@ -1,22 +1,38 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { io } from 'socket.io-client';
+import React, { useState, useEffect, useMemo } from 'react';
 import CustomScrollbar from '../shared/ui/layout/CustomScrollbar';
 import { Input } from '../shared/ui/shadcn/input';
 import { Chip, Tooltip } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
-import CircularProgress from '@mui/material/CircularProgress';
+import useFetch from '../shared/hooks/useFetch';
+import { Button } from '../shared/ui/shadcn/button';
+import LoadingButton from '../shared/ui/inputs/LoadingButton';
 
 function ExistingCertificates({
+  certificates,
   isLoading,
-  onCreateDataPackage
+  onCreateDataPackage,
+  onOperationProgress,
+  isConnected
 }) {
-  const [localCertificates, setLocalCertificates] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCerts, setSelectedCerts] = useState(new Set());
-  const [deletingCerts, setDeletingCerts] = useState(new Set());
-  const socketRef = useRef(null);
+  const [operationStatus, setOperationStatus] = useState(null);
+
+  const { delete: deleteRequest } = useFetch();
+
+  // Debug connection status
+  useEffect(() => {
+    console.log('Socket connection status:', isConnected);
+  }, [isConnected]);
+
+  // Filter certificates based on search term
+  const filteredCertificates = useMemo(() => {
+    return certificates.filter(cert =>
+      cert.identifier.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [certificates, searchTerm]);
 
   // Handle select/unselect all
   const handleSelectAll = () => {
@@ -38,34 +54,69 @@ function ExistingCertificates({
     setSelectedCerts(newSelected);
   };
 
+  // Handle operation status updates from WebSocket
+  useEffect(() => {
+    if (typeof onOperationProgress === 'function') {
+      // If it's a function, call it to get the data
+      const data = onOperationProgress();
+      console.log('🔄 Operation Progress Data:', data);
+      
+      if (data?.operation === 'deletion_operation') {
+        setOperationStatus(data);
+        if (data.status === 'complete') {
+          setTimeout(() => {
+            setSelectedCerts(new Set());
+            setOperationStatus(null);
+          }, 1000);
+        }
+      }
+    } else if (onOperationProgress?.operation === 'deletion_operation') {
+      // Handle direct object updates
+      setOperationStatus(onOperationProgress);
+      if (onOperationProgress.status === 'complete') {
+        setTimeout(() => {
+          setSelectedCerts(new Set());
+          setOperationStatus(null);
+        }, 1000);
+      }
+    }
+  }, [onOperationProgress]);
+
   // Handle certificate deletion
   const deleteCertificate = async (username) => {
     try {
-      setDeletingCerts(prev => new Set([...prev, username]));
-      setupSocket();
-
-      const response = await fetch('/certmanager/delete', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
+      // Set initial loading state immediately
+      setOperationStatus({
+        operation: 'deletion_operation',
+        status: 'started',
+        message: 'Starting deletion',
+        details: {
+          total_certs: 1,
+          completed_certs: 0,
+          current_cert: username
         },
-        body: JSON.stringify({
-          usernames: [username]
-        })
+        progress: 0
+      });
+
+      const result = await deleteRequest('/certmanager/certmanager/delete', {
+        usernames: [username]
       });
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Failed to delete certificate: ${response.statusText}`);
+      if (!result || result.error) {
+        throw new Error(result?.error || 'Failed to delete certificate');
       }
-      
-      const result = await response.json();
-      if (!result.success) {
-        throw new Error(result.message);
-      }
-      
     } catch (error) {
       console.error('Error deleting certificate:', error);
+      setOperationStatus({
+        operation: 'deletion_operation',
+        status: 'failed',
+        message: error.message || 'Failed to delete certificate',
+        details: {
+          total_certs: 1,
+          completed_certs: 0
+        },
+        progress: 0
+      });
     }
   };
 
@@ -73,169 +124,131 @@ function ExistingCertificates({
   const handleDeleteSelected = async () => {
     try {
       const selectedArray = Array.from(selectedCerts);
-      for (const username of selectedArray) {
-        setDeletingCerts(prev => new Set([...prev, username]));
-      }
-
-      setupSocket();
-      const response = await fetch('/certmanager/delete', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
+      
+      // Set initial loading state immediately
+      setOperationStatus({
+        operation: 'deletion_operation',
+        status: 'started',
+        message: `Starting deletion of ${selectedArray.length} certificate(s)`,
+        details: {
+          total_certs: selectedArray.length,
+          completed_certs: 0
         },
-        body: JSON.stringify({
-          usernames: selectedArray
-        })
+        progress: 0
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Failed to delete certificates: ${response.statusText}`);
-      }
+      const result = await deleteRequest('/certmanager/certmanager/delete', {
+        usernames: selectedArray
+      });
 
-      const result = await response.json();
-      if (!result.success) {
-        throw new Error(result.message);
+      if (!result || result.error) {
+        throw new Error(result?.error || 'Failed to delete certificates');
       }
-
     } catch (error) {
       console.error('Error deleting certificates:', error);
-    }
-  };
-
-  const setupSocket = () => {
-    if (!socketRef.current) {
-      socketRef.current = io('/cert-manager', {
-        transports: ['websocket'],
-        reconnection: false
-      });
-      
-      socketRef.current.on('cert_operation', (data) => {
-        if (data.type === 'delete') {
-          switch (data.status) {
-            case 'started':
-            case 'in_progress':
-              // Keep the loading state
-              break;
-              
-            case 'completed':
-              // Remove from deleting state
-              setDeletingCerts(prev => {
-                const newDeleting = new Set(prev);
-                newDeleting.delete(data.username);
-                return newDeleting;
-              });
-              // Remove from selected if it was selected
-              setSelectedCerts(prev => {
-                const newSelected = new Set(prev);
-                newSelected.delete(data.username);
-                return newSelected;
-              });
-              break;
-              
-            case 'failed':
-              // Remove from deleting state on failure
-              setDeletingCerts(prev => {
-                const newDeleting = new Set(prev);
-                newDeleting.delete(data.username);
-                return newDeleting;
-              });
-              break;
-          }
-        }
-      });
-
-      socketRef.current.on('certificates_data', (data) => {
-        if (data.certificates && Array.isArray(data.certificates)) {
-          setLocalCertificates(data.certificates);
-        }
-      });
-
-      socketRef.current.on('connect_error', (error) => {
-        setDeletingCerts(new Set());
-      });
-
-      socketRef.current.on('error', (error) => {
-        setDeletingCerts(new Set());
+      setOperationStatus({
+        operation: 'deletion_operation',
+        status: 'failed',
+        message: error.message || 'Failed to delete certificates',
+        details: {
+          total_certs: selectedCerts.size,
+          completed_certs: 0
+        },
+        progress: 0
       });
     }
   };
 
-  const cleanupSocket = () => {
-    if (socketRef.current) {
-      try {
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      } catch (error) {
-        console.error('Error cleaning up socket:', error);
-      }
-    }
-  };
+  // Determine if operation is in deleting state
+  const isDeleting = operationStatus?.operation === 'deletion_operation' && 
+                    ['started', 'in_progress'].includes(operationStatus?.status);
 
-  // Cleanup on unmount
+  // Debug operation status changes
   useEffect(() => {
-    setupSocket(); // Initial socket setup for certificates data
-    return () => {
-      cleanupSocket();
-    };
-  }, []);
+    console.log('🔄 Operation Status Changed:', {
+      operation: operationStatus?.operation,
+      status: operationStatus?.status,
+      isDeleting,
+      timestamp: new Date().toISOString()
+    });
+  }, [operationStatus, isDeleting]);
 
-  // Filter certificates based on search term
-  const filteredCertificates = localCertificates.filter(cert =>
-    cert.identifier.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Debug loading state changes
+  useEffect(() => {
+    console.log('🔍 Loading State Changed:', {
+      isDeleting,
+      operationStatus: {
+        operation: operationStatus?.operation,
+        status: operationStatus?.status,
+        message: operationStatus?.message,
+        progress: operationStatus?.progress
+      },
+      selectedCertsSize: selectedCerts.size,
+      timestamp: new Date().toISOString()
+    });
+  }, [isDeleting, operationStatus, selectedCerts]);
 
-  // Loading spinner component using MUI
-  const LoadingSpinner = () => (
-    <CircularProgress size={20} thickness={4} sx={{ color: 'inherit' }} />
-  );
+  // Debug render cycle
+  console.log('🔄 Component Render:', {
+    isDeleting,
+    operationStatus: operationStatus ? {
+      operation: operationStatus.operation,
+      status: operationStatus.status,
+      message: operationStatus.message
+    } : null,
+    selectedCertsSize: selectedCerts.size,
+    timestamp: new Date().toISOString()
+  });
 
   return (
-    <div className="border border-border bg-card p-4 rounded-lg">
-      <div className="flex items-center mb-4 gap-4">
-        <h3 className="text-base font-bold text-foreground">Existing Certificates</h3>
-        <div className="flex-1 mx-4">
+    <div className="border border-border bg-background p-4 rounded-lg">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base font-bold text-primary">Existing Certificates</h3>
+        <div className="w-full max-w-[30rem] p-2">
           <Input
             type="text"
             placeholder="Search certificates..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-background border-border"
+            className="w-full bg-sidebar border-border"
           />
         </div>
         <div className="flex gap-2 items-center">
-          <button
-            className="text-primary-foreground rounded-lg px-3 py-2 text-sm border border-border bg-primary hover:bg-buttonHoverColor transition-all duration-200"
+          <Button
+            variant="outline"
             onClick={handleSelectAll}
           >
             {selectedCerts.size === filteredCertificates.length && filteredCertificates.length > 0 
               ? 'Deselect All' 
               : 'Select All'}
-          </button>
+          </Button>
+          
           {selectedCerts.size > 0 && (
-            <button
-              className={`text-primary-foreground rounded-lg px-3 py-2 text-sm border border-border bg-primary 
-                ${selectedCerts.size === deletingCerts.size ? 'opacity-50 cursor-not-allowed' : 'hover:bg-buttonHoverColor'} 
-                transition-all duration-200`}
+            <LoadingButton
+              variant="primary"
+              operation="deletion_operation"
+              isLoading={isDeleting}
+              status={operationStatus?.status}
+              message={operationStatus?.message}
+              progress={operationStatus?.progress}
+              showProgress={true}
+              progressType="percentage"
               onClick={handleDeleteSelected}
-              disabled={selectedCerts.size === deletingCerts.size}
+              disabled={isDeleting}
+              loadingMessage={`Deleting (${operationStatus?.details?.completed_certs || 0}/${operationStatus?.details?.total_certs || 0})`}
+              successMessage="Deletion complete"
+              failedMessage="Deletion failed"
             >
-              {selectedCerts.size === deletingCerts.size ? (
-                <div className="flex items-center gap-2">
-                  <LoadingSpinner />
-                  <span>Deleting...</span>
-                </div>
-              ) : (
-                `Delete Selected (${selectedCerts.size})`
-              )}
-            </button>
+              Delete Selected ({selectedCerts.size})
+            </LoadingButton>
           )}
-          <button
-            className="text-primary-foreground rounded-lg px-3 py-2 text-sm border border-border bg-primary hover:bg-buttonHoverColor transition-all duration-200"
+          
+          <Button
+            variant="primary"
             onClick={onCreateDataPackage}
           >
             Create Data Packages
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -250,7 +263,7 @@ function ExistingCertificates({
               filteredCertificates.map((cert) => (
                 <div 
                   key={cert.identifier} 
-                  className="flex items-center justify-between p-3 border border-border rounded-lg bg-background hover:bg-primary transition-all duration-200"
+                  className="flex items-center justify-between p-3 border border-border rounded-lg bg-sidebar transition-all duration-200"
                 >
                   <div className="flex items-center gap-4 flex-1">
                     <input
@@ -258,12 +271,12 @@ function ExistingCertificates({
                       checked={selectedCerts.has(cert.identifier)}
                       onChange={() => handleSelectCert(cert.identifier)}
                       className="w-4 h-4 rounded border-border bg-background"
-                      disabled={deletingCerts.has(cert.identifier)}
+                      disabled={isDeleting && operationStatus?.details?.current_cert === cert.identifier}
                     />
                     <div className="flex items-center gap-2">
                       <span className="text-foreground font-medium">{cert.identifier}</span>
                       {cert.role === 'ROLE_ADMIN' && (
-                        <span className="text-sm text-accentBlue">(Admin)</span>
+                        <span className="text-sm text-primary">(Admin)</span>
                       )}
                       <Tooltip title={cert.passwordHashed ? "Password Protected" : "No Password Set"} arrow>
                         <div className="flex items-center gap-1">
@@ -271,17 +284,17 @@ function ExistingCertificates({
                             <>
                               <LockIcon sx={{ 
                                 fontSize: 16, 
-                                color: 'rgba(106, 167, 248, 1.000)', // accentBlue
+                                color: 'hsl(var(--muted-foreground))'
                               }} />
-                              <span className="text-xs text-accentBlue">Password Configured</span>
+                              <span className="text-xs text-muted-foreground">Password Configured</span>
                             </>
                           ) : (
                             <>
                               <LockOpenIcon sx={{ 
                                 fontSize: 16, 
-                                color: 'rgba(86, 119, 153, 1.000)', // textSecondary
+                                color: 'hsl(var(--muted-foreground))'
                               }} />
-                              <span className="text-xs text-textSecondary">No Password</span>
+                              <span className="text-xs text-muted-foreground">No Password</span>
                             </>
                           )}
                         </div>
@@ -304,18 +317,21 @@ function ExistingCertificates({
                       ))}
                     </div>
                   </div>
-                  <button
-                    className={`p-2 rounded-lg text-primary-foreground hover:text-foreground hover:bg-primary transition-all duration-200
-                      ${deletingCerts.has(cert.identifier) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  <LoadingButton
+                    variant="ghost"
+                    operation="deletion_operation"
+                    isLoading={isDeleting && operationStatus?.details?.current_cert === cert.identifier}
+                    status={operationStatus?.status}
+                    message={operationStatus?.message}
+                    showProgress={true}
+                    progressType="spinner"
                     onClick={() => deleteCertificate(cert.identifier)}
-                    disabled={deletingCerts.has(cert.identifier)}
-                    title={deletingCerts.has(cert.identifier) ? "Deleting..." : "Delete certificate"}
+                    disabled={isDeleting}
+                    tooltip={isDeleting ? operationStatus?.message : "Delete certificate"}
+                    iconOnly
                   >
-                    {deletingCerts.has(cert.identifier) ? 
-                      <LoadingSpinner /> : 
-                      <DeleteOutlineIcon sx={{ fontSize: 20 }} />
-                    }
-                  </button>
+                    <DeleteOutlineIcon className="h-5 w-5" />
+                  </LoadingButton>
                 </div>
               ))
             )}
