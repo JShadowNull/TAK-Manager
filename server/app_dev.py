@@ -1,4 +1,3 @@
-import webbrowser
 import logging
 import os
 import socket
@@ -10,7 +9,6 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import subprocess
 import threading
-import webview
 import signal
 import atexit
 
@@ -38,7 +36,6 @@ logging.getLogger('werkzeug').setLevel(logging.WARNING)
 logging.getLogger('engineio').setLevel(logging.WARNING)
 logging.getLogger('socketio').setLevel(logging.WARNING)
 logging.getLogger('watchdog').setLevel(logging.WARNING)
-logging.getLogger('webview').setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
@@ -50,11 +47,6 @@ current_os = os_detector.detect_os()
 server_process = None
 observer = None
 restart_event = threading.Event()
-window = None
-
-class API:
-    def open_url(self, url):
-        webbrowser.open(url)
 
 class BackendEventHandler(FileSystemEventHandler):
     def on_modified(self, event):
@@ -87,6 +79,9 @@ def wait_for_port(port, timeout=30):
 def start_flask():
     """Start the Flask server in development mode."""
     try:
+        # Get port from environment or use default
+        port = int(os.environ.get('PORT', 8989))
+        
         # Set development environment
         os.environ.update({
             'FLASK_ENV': 'development',
@@ -104,12 +99,11 @@ def start_flask():
         # Configure Socket.IO
         socketio.server.eio.ping_timeout = 120000
         socketio.server.eio.ping_interval = 25000
-        socketio.server.eio.cors_allowed_origins = ['http://localhost:5173']
         
         # Run server
         socketio.run(flask_app, 
-                    host='127.0.0.1', 
-                    port=5000, 
+                    host='0.0.0.0',  # Changed to 0.0.0.0 to allow external access
+                    port=port, 
                     debug=True, 
                     use_reloader=False,
                     log_output=True,
@@ -144,56 +138,6 @@ def setup_watchers():
     observer.start()
     logger.info("File watchers started")
 
-def start_vite():
-    """Start the Vite development server."""
-    try:
-        workspace_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        client_dir = os.path.join(workspace_root, 'client')
-        original_dir = os.getcwd()
-        
-        try:
-            os.chdir(client_dir)
-            process = subprocess.Popen(
-                'npm run dev',
-                shell=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                env={**os.environ, 'FORCE_COLOR': '1'}
-            )
-            return process
-        finally:
-            os.chdir(original_dir)
-    except Exception as e:
-        logger.error(f"Error starting Vite server: {e}")
-        raise
-
-def create_window():
-    """Create and configure the pywebview window."""
-    try:
-        # Configure GUI based on OS
-        gui = 'qt' if current_os == 'linux' else None
-        if current_os == 'linux':
-            os.environ['QTWEBENGINE_REMOTE_DEBUGGING'] = '8228'
-        elif current_os == 'macos':
-            os.environ['PYWEBVIEW_DARWIN_DISABLE_AUTORESIZE'] = '1'
-        
-        # Create window
-        window = webview.create_window(
-            'Tak Manager (Dev)',
-            'http://localhost:5173',
-            js_api=API(),
-            min_size=(800, 600),
-            width=1280,
-            height=720
-        )
-        
-        webview.start(debug=True, gui=gui)
-        return window
-    except Exception as e:
-        logger.error(f"Error creating window: {e}")
-        return None
-
 def cleanup():
     """Clean up all resources."""
     logger.info("Cleaning up resources...")
@@ -218,34 +162,25 @@ def main():
         atexit.register(cleanup)
         start_server()
 
-        if not wait_for_port(5000):
+        if not wait_for_port(int(os.environ.get('PORT', 8989))):
             logger.error("Flask server failed to start")
-            cleanup()
-            return
-
-        time.sleep(2)
-        vite_process = start_vite()
-
-        if not wait_for_port(5173):
-            logger.error("Vite server failed to start")
-            if vite_process:
-                vite_process.terminate()
             cleanup()
             return
 
         setup_watchers()
         
+        # Keep the main process running
         try:
-            window = create_window()
-            if not window:
-                raise Exception("Failed to create window")
-        except Exception as e:
-            logger.error(f"Failed to start PyWebview: {e}")
-            raise
-        finally:
-            if vite_process:
-                vite_process.terminate()
-                vite_process.wait()
+            while True:
+                time.sleep(1)
+                if restart_event.is_set():
+                    logger.info("Restarting server due to file changes...")
+                    cleanup()
+                    start_server()
+                    restart_event.clear()
+        except KeyboardInterrupt:
+            logger.info("Shutting down...")
+            cleanup()
 
     except Exception as e:
         logger.error(f"Error in main: {e}")

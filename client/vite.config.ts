@@ -43,13 +43,13 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000
   },
   server: {
-    port: 5173,
+    port: parseInt(process.env.VITE_PORT),
     strictPort: true,
     host: true,
     open: false,
     cors: true,
     hmr: {
-      port: 5173
+      port: parseInt(process.env.VITE_PORT)
     }
   }
 }); 

@@ -1,0 +1,74 @@
+x-common-config: &common-config
+  privileged: true
+  volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+  restart: ${DOCKER_RESTART_POLICY}
+
+services:
+  backend:
+    <<: *common-config
+    build:
+      context: ./server
+      target: ${BUILD_TARGET:-development}
+    container_name: tak-manager-backend-${MODE:-dev}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - backend_logs:/app/logs
+      - ./server:/app:rw
+    environment:
+      - FLASK_ENV=${MODE}
+      - PORT=${BACKEND_PORT}
+      - FRONTEND_PORT=${FRONTEND_PORT}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+      - CORS_ALLOW_CREDENTIALS=${CORS_ALLOW_CREDENTIALS}
+      - CORS_ALLOW_METHODS=${CORS_ALLOW_METHODS}
+      - CORS_ALLOW_HEADERS=${CORS_ALLOW_HEADERS}
+      - CORS_EXPOSE_HEADERS=${CORS_EXPOSE_HEADERS}
+      - SOCKET_ASYNC_MODE=${SOCKET_ASYNC_MODE}
+      - SOCKET_PING_TIMEOUT=${SOCKET_PING_TIMEOUT}
+      - SOCKET_PING_INTERVAL=${SOCKET_PING_INTERVAL}
+      - SOCKET_PATH=${SOCKET_PATH}
+      - SOCKET_MAX_HTTP_BUFFER_SIZE=${SOCKET_MAX_HTTP_BUFFER_SIZE}
+      - DEV_LOG_LEVEL=${DEV_LOG_LEVEL}
+      - PROD_LOG_LEVEL=${PROD_LOG_LEVEL}
+      - PYTHONUNBUFFERED=${PYTHONUNBUFFERED}
+      - WERKZEUG_DEBUG_PIN=${WERKZEUG_DEBUG_PIN}
+    ports:
+      - "${BACKEND_PORT}:${BACKEND_PORT}"
+    networks:
+      - tak-manager-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${BACKEND_PORT}/health"]
+      interval: ${HEALTHCHECK_INTERVAL}
+      timeout: ${HEALTHCHECK_TIMEOUT}
+      retries: ${HEALTHCHECK_RETRIES}
+
+  frontend:
+    <<: *common-config
+    build:
+      context: ./client
+      target: ${BUILD_TARGET:-development}
+    container_name: tak-manager-frontend-${MODE:-dev}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./client:/app:rw
+      - /app/node_modules
+    environment:
+      - NODE_ENV=${MODE:-development}
+      - VITE_API_PORT=${BACKEND_PORT}
+      - VITE_WS_URL=ws://backend:${BACKEND_PORT}
+      - VITE_PORT=${FRONTEND_PORT}
+      - VITE_CORS_ALLOW_CREDENTIALS=${CORS_ALLOW_CREDENTIALS}
+    ports:
+      - "${FRONTEND_PORT}:${FRONTEND_PORT}"
+    networks:
+      - tak-manager-network
+    depends_on:
+      - backend
+
+networks:
+  tak-manager-network:
+    driver: bridge
+
+volumes:
+  backend_logs: 

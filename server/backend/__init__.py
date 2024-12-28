@@ -10,11 +10,20 @@ def create_app():
     dist_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dist"))
     src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 
-    if os.environ.get('FLASK_ENV') == 'development':
-        # Use src directory for static files in development
+    # Get environment variables without defaults
+    flask_env = os.environ['FLASK_ENV']
+    frontend_port = os.environ['FRONTEND_PORT']
+    
+    # CORS settings from environment
+    allowed_origins = os.environ['CORS_ALLOWED_ORIGINS'].split(',')
+    allow_credentials = os.environ['CORS_ALLOW_CREDENTIALS'].lower() == 'true'
+    allow_methods = os.environ['CORS_ALLOW_METHODS'].split(',')
+    allow_headers = os.environ['CORS_ALLOW_HEADERS']
+    expose_headers = os.environ['CORS_EXPOSE_HEADERS']
+
+    if flask_env == 'development':
         static_folder = src_dir
     else:
-        # Use dist directory for static files in production
         static_folder = dist_dir
     
     # Configure the app with the appropriate static folder
@@ -22,44 +31,47 @@ def create_app():
                 static_folder=static_folder,
                 static_url_path='')
 
-    # Enable CORS with maximum permissiveness for development
+    # Enable CORS with environment-based configuration
     CORS(app, 
          resources={
              r"/*": {
-                 "origins": ["http://localhost:5173", "http://127.0.0.1:5173"],
-                 "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-                 "allow_headers": "*",
-                 "expose_headers": "*",
-                 "supports_credentials": False
+                 "origins": allowed_origins,
+                 "methods": allow_methods,
+                 "allow_headers": allow_headers,
+                 "expose_headers": expose_headers,
+                 "supports_credentials": allow_credentials
              }
          })
 
     # Initialize socketio with the app
     socketio.init_app(app, 
-                     async_mode='eventlet',
-                     ping_timeout=60,
-                     cors_allowed_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+                     async_mode=os.environ['SOCKET_ASYNC_MODE'],
+                     ping_timeout=int(os.environ['SOCKET_PING_TIMEOUT']),
+                     ping_interval=int(os.environ['SOCKET_PING_INTERVAL']),
+                     cors_allowed_origins=allowed_origins,
                      manage_session=False,
                      always_connect=True,
-                     logger=True,
-                     engineio_logger=True)
+                     logger=flask_env == 'development',
+                     engineio_logger=flask_env == 'development')
 
-    # Enable debug logging
-    app.logger.setLevel(logging.DEBUG)
+    # Set logging level based on environment
+    log_level = os.environ['DEV_LOG_LEVEL'] if flask_env == 'development' else os.environ['PROD_LOG_LEVEL']
+    app.logger.setLevel(getattr(logging, log_level))
 
     # Add CORS headers to all responses
     @app.after_request
     def after_request(response):
         origin = request.headers.get('Origin')
-        if origin in ["http://localhost:5173", "http://127.0.0.1:5173"]:
+        if origin in allowed_origins:
             response.headers['Access-Control-Allow-Origin'] = origin
-            response.headers['Access-Control-Allow-Headers'] = '*'
-            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+            response.headers['Access-Control-Allow-Headers'] = allow_headers
+            response.headers['Access-Control-Allow-Methods'] = ','.join(allow_methods)
             response.headers['Access-Control-Max-Age'] = '3600'
-            response.headers['Access-Control-Expose-Headers'] = '*'
+            response.headers['Access-Control-Expose-Headers'] = expose_headers
+            if allow_credentials:
+                response.headers['Access-Control-Allow-Credentials'] = str(allow_credentials).lower()
             response.headers['Vary'] = 'Origin'
             
-        # Add headers specifically for pywebview
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
@@ -71,12 +83,14 @@ def create_app():
     def options_handler(path):
         response = app.make_default_options_response()
         origin = request.headers.get('Origin')
-        if origin in ["http://localhost:5173", "http://127.0.0.1:5173"]:
+        if origin in allowed_origins:
             response.headers['Access-Control-Allow-Origin'] = origin
-            response.headers['Access-Control-Allow-Headers'] = '*'
-            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+            response.headers['Access-Control-Allow-Headers'] = allow_headers
+            response.headers['Access-Control-Allow-Methods'] = ','.join(allow_methods)
             response.headers['Access-Control-Max-Age'] = '3600'
-            response.headers['Access-Control-Expose-Headers'] = '*'
+            response.headers['Access-Control-Expose-Headers'] = expose_headers
+            if allow_credentials:
+                response.headers['Access-Control-Allow-Credentials'] = str(allow_credentials).lower()
             response.headers['Vary'] = 'Origin'
         return response
 
@@ -127,6 +141,11 @@ def create_app():
     def handle_error(error):
         app.logger.error(f'Error: {str(error)}')
         return str(error), 500
+
+    # Add health check endpoint
+    @app.route('/health')
+    def health_check():
+        return {'status': 'healthy'}, 200
 
     # Import and register blueprints after initializing socketio
     from backend.routes.dashboard_routes import dashboard_bp
