@@ -6,10 +6,18 @@ import logging
 from flask_cors import CORS
 
 def create_app():
-    # Get the absolute path to the dist directory
-    static_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dist"))
+    # Get the absolute path to the dist and src directories
+    dist_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dist"))
+    src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+
+    if os.environ.get('FLASK_ENV') == 'development':
+        # Use src directory for static files in development
+        static_folder = src_dir
+    else:
+        # Use dist directory for static files in production
+        static_folder = dist_dir
     
-    # Configure the app to use the dist directory for static files
+    # Configure the app with the appropriate static folder
     app = Flask(__name__,
                 static_folder=static_folder,
                 static_url_path='')
@@ -77,31 +85,43 @@ def create_app():
     def serve_static(filename):
         return send_from_directory(os.path.join(app.static_folder, 'assets'), filename)
 
-    # Serve the React frontend
+    # Serve the frontend
     @app.route('/', defaults={'path': ''})
     @app.route('/<path:path>')
     def serve(path):
         app.logger.debug(f"Serving path: {path}")
         try:
-            # Always serve index.html for the root path
-            if not path:
-                app.logger.debug("Serving index.html for root path")
-                return send_file(os.path.join(app.static_folder, 'index.html'))
-            
-            # Check if the requested file exists in the static folder
-            file_path = os.path.join(app.static_folder, path)
-            if os.path.isfile(file_path):
-                app.logger.debug(f"Serving file: {file_path}")
-                return send_file(file_path)
-            
-            # For all other paths, serve index.html (for client-side routing)
-            app.logger.debug(f"Path {path} not found, serving index.html")
-            return send_file(os.path.join(app.static_folder, 'index.html'))
-            
+            if os.environ.get('FLASK_ENV') == 'development':
+                # Serve from src in development
+                if not path:
+                    app.logger.debug("Serving index.html from src for root path")
+                    return send_file(os.path.join(src_dir, 'index.html'))
+                
+                file_path = os.path.join(src_dir, path)
+                if os.path.isfile(file_path):
+                    app.logger.debug(f"Serving file from src: {file_path}")
+                    return send_file(file_path)
+                
+                app.logger.debug(f"Path {path} not found in src, serving index.html")
+                return send_file(os.path.join(src_dir, 'index.html'))
+            else:
+                # Serve from dist in production (existing logic)
+                if not path:
+                    app.logger.debug("Serving index.html from dist for root path") 
+                    return send_file(os.path.join(dist_dir, 'index.html'))
+                
+                file_path = os.path.join(dist_dir, path)
+                if os.path.isfile(file_path):
+                    app.logger.debug(f"Serving file from dist: {file_path}")
+                    return send_file(file_path)
+                
+                app.logger.debug(f"Path {path} not found in dist, serving index.html")
+                return send_file(os.path.join(dist_dir, 'index.html'))
+
         except Exception as e:
             app.logger.error(f"Error serving file: {str(e)}")
             return str(e), 500
-
+            
     # Add error handler for debugging
     @app.errorhandler(Exception)
     def handle_error(error):
