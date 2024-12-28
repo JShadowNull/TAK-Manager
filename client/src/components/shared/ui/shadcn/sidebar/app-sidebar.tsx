@@ -2,7 +2,6 @@ import { useState } from "react"
 import { useLocation, Link } from "react-router-dom"
 import {
   Home,
-  Settings,
   Wrench,
   Key,
   Database,
@@ -29,13 +28,6 @@ const items = [
     url: "/",
     icon: Home,
     iconColor: "text-orange-500",
-    alwaysShow: true,
-  },
-  {
-    title: "Services",
-    url: "/services",
-    icon: Settings,
-    iconColor: "text-purple-500",
     alwaysShow: true,
   },
   {

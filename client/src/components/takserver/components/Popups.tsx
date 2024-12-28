@@ -1,6 +1,5 @@
 import React from 'react';
 import Popup from '../../shared/ui/popups/Popup';
-import DockerPopup from '../../shared/ui/popups/DockerPopup';
 import { Button } from '../../shared/ui/shadcn/button';
 import LoadingButton from '../../shared/ui/inputs/LoadingButton';
 import { InstallState, UninstallState } from '../types';
@@ -51,9 +50,6 @@ const Popups: React.FC<PopupsProps> = ({
 }) => {
   return (
     <>
-      {/* Docker Error Popup */}
-      <DockerPopup isVisible={true} />
-
       {/* Installation Progress Popup */}
       <Popup
         id="installation-popup"

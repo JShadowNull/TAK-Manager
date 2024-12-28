@@ -5,20 +5,17 @@ import os
 import shutil
 from backend.services.helpers.run_command import RunCommand
 import re
-from backend.services.helpers.docker_installer import DockerInstaller
 from backend.services.scripts.docker.docker_manager import DockerManager
 from backend.services.scripts.takserver.certconfig import CertConfig
 from backend.services.helpers.os_detector import OSDetector  # Import the OSDetector class
 from pathlib import Path
 from backend.routes.socketio import socketio
-from backend.services.scripts.docker.docker_checker import DockerChecker
 from backend.services.helpers.operation_status import OperationStatus
 
 class TakServerInstaller:
     def __init__(self, docker_zip_path, postgres_password, certificate_password, organization, state, city, organizational_unit, name):
         self.run_command = RunCommand()
         self.docker_manager = DockerManager()
-        self.docker_checker = DockerChecker()
         self.os_detector = OSDetector()
         self.working_dir = self.get_default_working_directory()
         self.docker_zip_path = docker_zip_path
@@ -42,19 +39,6 @@ class TakServerInstaller:
             name=self.name,
             tak_dir=None  # Will be set later in unzip_docker_release
         )
-
-    def check_docker_running(self):
-        """Check if Docker is running using DockerChecker."""
-        self.run_command.emit_log_output("Checking if Docker is running...", 'takserver-installer')
-
-        docker_status = self.docker_checker.get_status()
-        if not docker_status['isRunning']:
-            error_message = docker_status.get('error', 'Docker is not running')
-            self.run_command.emit_log_output(error_message, 'takserver-installer')
-            raise SystemExit(error_message)
-
-        self.run_command.emit_log_output("Docker is running.", 'takserver-installer')
-        return True
 
     def get_default_working_directory(self):
         """Determine the default working directory based on the OS."""
@@ -526,54 +510,12 @@ volumes:
                 details=initial_details
             )
 
-            # Check Docker status (0-5%)
-            details = initial_details.copy()
-            self.operation_status.update_progress(
-                'installation',
-                2,
-                "Checking Docker installation status",
-                details=details
-            )
-            
-            docker_status = self.docker_checker.get_status()
-            if not docker_status['isInstalled']:
-                error_details = {
-                    'isInstalling': False,
-                    'isStoppingInstallation': False,
-                    'installationComplete': True,
-                    'installationSuccess': False,
-                    'installationError': "Docker is not installed",
-                    'version': None
-                }
-                self.operation_status.fail_operation(
-                    'installation',
-                    "Docker is not installed",
-                    details=error_details
-                )
-                raise SystemExit("Docker is not installed")
-            
-            if not docker_status['isRunning']:
-                self.operation_status.update_progress(
-                    'installation',
-                    3,
-                    "Starting Docker service",
-                    details=details
-                )
-                self.start_docker()
-            
-            self.operation_status.update_progress(
-                'installation',
-                5,
-                "Docker environment verified",
-                details=details
-            )
-
             # Extract version from zip filename (5-10%)
             self.operation_status.update_progress(
                 'installation', 
                 7, 
                 "Validating TAK Server package",
-                details=details
+                details=initial_details
             )
             
             zip_filename = os.path.basename(self.docker_zip_path)
@@ -595,6 +537,7 @@ volumes:
                 raise ValueError("Invalid TAK Server ZIP filename format")
                 
             self.takserver_version = match.group(1)
+            details = initial_details.copy()
             details['version'] = self.takserver_version
             self.operation_status.update_progress(
                 'installation', 

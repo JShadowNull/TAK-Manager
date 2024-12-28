@@ -8,8 +8,6 @@ const TitleBar: React.FC = () => {
     switch (location.pathname) {
       case '/':
         return 'Dashboard';
-      case '/services':
-        return 'Services';
       case '/takserver':
         return 'TAK Server Manager';
       case '/installers':

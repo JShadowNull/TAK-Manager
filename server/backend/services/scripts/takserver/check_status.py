@@ -2,8 +2,6 @@ import os
 from pathlib import Path
 from backend.services.helpers.os_detector import OSDetector
 from backend.services.helpers.run_command import RunCommand
-from backend.services.scripts.docker.docker_manager import DockerManager
-from backend.services.scripts.docker.docker_checker import DockerChecker
 from backend.routes.socketio import socketio
 from backend.services.helpers.operation_status import OperationStatus
 import eventlet
@@ -11,8 +9,6 @@ import eventlet
 class TakServerStatus:
     def __init__(self):
         self.run_command = RunCommand()
-        self.docker_manager = DockerManager()
-        self.docker_checker = DockerChecker()
         self.os_detector = OSDetector()
         self.working_dir = self.get_default_working_directory()
         self.operation_status = OperationStatus('/takserver-status')
@@ -22,7 +18,6 @@ class TakServerStatus:
         status = {
             'isInstalled': True,
             'isRunning': is_running,
-            'dockerRunning': True,
             'version': self.get_takserver_version(),
             'error': error,
             'isUninstalling': False
@@ -104,21 +99,6 @@ class TakServerStatus:
 
     def get_status(self):
         """Get complete TAK Server status."""
-        # First check if Docker is running using DockerChecker
-        docker_status = self.docker_checker.get_status()
-        if not docker_status['isRunning']:
-            return {
-                'isInstalled': False,
-                'isRunning': False,
-                'dockerRunning': False,
-                'version': None,
-                'error': docker_status.get('error', 'Docker is not running'),
-                'isStarting': False,
-                'isStopping': False,
-                'isRestarting': False,
-                'isUninstalling': False
-            }
-
         is_installed = self.check_installation()
         is_running = self.check_containers_running() if is_installed else False
         version = self.get_takserver_version() if is_installed else None
@@ -126,7 +106,6 @@ class TakServerStatus:
         status = {
             'isInstalled': is_installed,
             'isRunning': is_running,
-            'dockerRunning': True,
             'version': version,
             'error': None,
             'isStarting': False,

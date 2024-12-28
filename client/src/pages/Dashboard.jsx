@@ -1,7 +1,9 @@
 import React from 'react';
-import CustomScrollbar from '../components/shared/ui/layout/CustomScrollbar';
-import useSocket from '../components/shared/hooks/useSocket';
+import useSocket, { BACKEND_EVENTS } from '../components/shared/hooks/useSocket';
+import useFetch from '../components/shared/hooks/useFetch';
 import { AnalyticsChart } from '../components/shared/ui/shadcn/charts/AnalyticsChart';
+import CustomScrollbar from '../components/shared/ui/layout/CustomScrollbar';
+import ContainerStateIcon from '../components/shared/ui/inputs/ContainerStateIcon';
 import {
   Card,
   CardContent,
@@ -10,7 +12,44 @@ import {
   CardTitle,
 } from "../components/shared/ui/shadcn/card/card"
 
+const INITIAL_DOCKER_STATE = {
+  containers: [],
+  error: null,
+  status: null
+};
+
 function Dashboard() {
+  const { post } = useFetch();
+  
+  // Docker Manager Socket
+  const {
+    state: dockerState = INITIAL_DOCKER_STATE,
+    isConnected: isDockerConnected,
+    error: dockerError,
+    emit
+  } = useSocket(BACKEND_EVENTS.DOCKER_MANAGER.namespace, {
+    initialState: INITIAL_DOCKER_STATE,
+    eventHandlers: {
+      'initial_state': (data, { updateState }) => {
+        console.info('Received initial state:', data);
+        const newState = {
+          containers: data.containers || [],
+          error: data.error || null
+        };
+        updateState(newState);
+      },
+      [BACKEND_EVENTS.DOCKER_MANAGER.events.CONTAINERS_LIST]: (data, { updateState }) => {
+        console.info('Received containers update:', data);
+        if (Array.isArray(data.containers)) {
+          updateState({
+            containers: data.containers,
+            error: null
+          });
+        }
+      }
+    }
+  });
+
   // Services Monitor Socket
   const {
     state: servicesState,
@@ -22,17 +61,16 @@ function Dashboard() {
       ramData: [],
       cpuUsage: 'Loading...',
       ramUsage: 'Loading...',
-      services: [],
       loading: true
     },
     eventHandlers: {
       cpu_usage: (data, { state, updateState }) => {
         if (data && typeof data.cpu_usage === 'number') {
-          const currentTime = new Date();
+          const timestamp = new Date().getTime();
           updateState({
             cpuUsage: `${data.cpu_usage}%`,
             cpuData: [...(state.cpuData || []), {
-              month: currentTime.toISOString(),
+              month: timestamp,
               desktop: data.cpu_usage
             }].slice(-30)
           });
@@ -40,21 +78,13 @@ function Dashboard() {
       },
       ram_usage: (data, { state, updateState }) => {
         if (data && typeof data.ram_usage === 'number') {
-          const currentTime = new Date();
+          const timestamp = new Date().getTime();
           updateState({
             ramUsage: `${data.ram_usage}%`,
             ramData: [...(state.ramData || []), {
-              month: currentTime.toISOString(),
+              month: timestamp,
               desktop: data.ram_usage
             }].slice(-30)
-          });
-        }
-      },
-      services: (data, { updateState }) => {
-        if (data && Array.isArray(data.services)) {
-          updateState({
-            services: data.services,
-            loading: false
           });
         }
       },
@@ -84,7 +114,7 @@ function Dashboard() {
       network_metrics: (data, { state, updateState }) => {
         if (data && data.network) {
           const { upload, download, total } = data.network;
-          const currentTime = new Date();
+          const timestamp = new Date().getTime();
           
           updateState({
             ipAddress: data.ip_address,
@@ -94,7 +124,7 @@ function Dashboard() {
               total: `${total.toFixed(2)} MB/s`
             },
             networkData: [...(state.networkData || []), {
-              month: currentTime.toISOString(),
+              month: timestamp,
               upload,
               download,
               desktop: total
@@ -105,8 +135,16 @@ function Dashboard() {
     }
   });
 
-  // Show loading state if either socket is not connected
-  if (!isServicesConnected || !isNetworkConnected) {
+  const isContainerRunning = (status) => {
+    const lowerStatus = status.toLowerCase();
+    return lowerStatus.includes('up') || 
+           lowerStatus.includes('running') ||
+           lowerStatus.includes('(healthy)') ||
+           lowerStatus.includes('(unhealthy)');
+  };
+
+  // Show loading state if any socket is not connected
+  if (!isServicesConnected || !isNetworkConnected || !isDockerConnected) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
@@ -117,13 +155,13 @@ function Dashboard() {
     );
   }
 
-  // Show error state if either socket has an error
-  if (servicesError || networkError) {
+  // Show error state if any socket has an error
+  if (servicesError || networkError || dockerError) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center text-red-500">
           <h2 className="text-xl font-semibold mb-2">Connection Error</h2>
-          <p>{servicesError?.message || networkError?.message}</p>
+          <p>{servicesError?.message || networkError?.message || dockerError?.message}</p>
         </div>
       </div>
     );
@@ -153,38 +191,6 @@ function Dashboard() {
           className="flex-1 min-w-[28rem]"
         />
 
-        {/* Running Services Section */}
-        <Card className="flex-1 min-w-[28rem]">
-          <CardHeader>
-            <CardTitle>Running Services</CardTitle>
-            <CardDescription>Active system processes</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[350px] overflow-hidden rounded-lg border">
-              <CustomScrollbar>
-                <div className="h-full">
-                  <ul className="list-none text-sm m-0 p-0">
-                    {servicesState.loading ? (
-                      <li className="p-4 text-muted-foreground">Loading services...</li>
-                    ) : servicesState.services.length > 0 ? (
-                      servicesState.services.map((service) => (
-                        <li
-                          key={service.pid}
-                          className="p-4 hover:bg-muted transition-colors duration-200 text-muted-foreground border-b last:border-b-0"
-                        >
-                          {service.name} (PID: {service.pid})
-                        </li>
-                      ))
-                    ) : (
-                      <li className="p-4 text-muted-foreground">No services found</li>
-                    )}
-                  </ul>
-                </div>
-              </CustomScrollbar>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Network & IP Section */}
         <AnalyticsChart
           data={networkState.networkData}
@@ -194,6 +200,55 @@ function Dashboard() {
           chartColor="yellow"
           className="flex-1 min-w-[28rem]"
         />
+
+        {/* Docker Containers Section */}
+        <Card className="flex-1 min-w-[28rem]">
+          <CardHeader>
+            <CardTitle>Docker Containers</CardTitle>
+            <CardDescription>Container Status & Controls</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[350px] overflow-hidden rounded-lg border">
+              <CustomScrollbar>
+                <ul className="list-none space-y-2 divide-y divide-border text-sm text-muted-foreground p-2">
+                  {dockerState.containers.length === 0 ? (
+                    <li className="border-1 border-border p-4 rounded">No containers found</li>
+                  ) : (
+                    dockerState.containers.map(container => {
+                      const running = isContainerRunning(container.status);
+                      return (
+                        <li key={container.name} className="p-4 rounded flex justify-between items-center space-x-4">
+                          <span className="flex-grow">
+                            Container: {container.name} (Status: {container.status})
+                          </span>
+                          <ContainerStateIcon
+                            containerName={container.name}
+                            isRunning={running}
+                            onOperation={async (containerName, action) => {
+                              console.debug('[Dashboard] Container operation:', {
+                                containerName,
+                                action
+                              });
+                              try {
+                                const response = await post(`/docker-manager/docker/containers/${containerName}/${action}`);
+                                console.debug('[Dashboard] Operation response:', response);
+                                return response;
+                              } catch (error) {
+                                console.error('[Dashboard] Operation failed:', error);
+                                throw error;
+                              }
+                            }}
+                            onOperationComplete={() => emit('check_status')}
+                          />
+                        </li>
+                      );
+                    })
+                  )}
+                </ul>
+              </CustomScrollbar>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

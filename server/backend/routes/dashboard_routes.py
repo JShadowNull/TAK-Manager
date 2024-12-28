@@ -28,15 +28,13 @@ class ServicesMonitorNamespace(Namespace):
             metrics = self.system_monitor.get_current_metrics()
             return {
                 'cpu_usage': metrics['cpu'],
-                'ram_usage': metrics['ram'],
-                'services': metrics['services']
+                'ram_usage': metrics['ram']
             }
         except Exception as e:
             print(f"Error getting initial status: {e}")
             return {
                 'cpu_usage': 0,
-                'ram_usage': 0,
-                'services': []
+                'ram_usage': 0
             }
 
     def cleanup_operation_threads(self):
@@ -59,16 +57,12 @@ class ServicesMonitorNamespace(Namespace):
             socketio.emit('initial_state', initial_status, namespace='/services-monitor')
             
             # Start monitoring after sending initial state
-            psutil.cpu_percent(interval=None)
             eventlet.sleep(0.1)
             
             socketio.emit('cpu_usage', {'cpu_usage': initial_status['cpu_usage']}, namespace='/services-monitor')
             eventlet.sleep(0.1)
             
             socketio.emit('ram_usage', {'ram_usage': initial_status['ram_usage']}, namespace='/services-monitor')
-            eventlet.sleep(0.1)
-            
-            socketio.emit('services', {'services': initial_status['services']}, namespace='/services-monitor')
             
             self.system_monitor.monitor_system()
         except Exception as e:
@@ -88,8 +82,6 @@ class ServicesMonitorNamespace(Namespace):
                 socketio.emit('cpu_usage', {'cpu_usage': initial_status['cpu_usage']}, namespace='/services-monitor')
                 eventlet.sleep(0.1)
                 socketio.emit('ram_usage', {'ram_usage': initial_status['ram_usage']}, namespace='/services-monitor')
-                eventlet.sleep(0.1)
-                socketio.emit('services', {'services': initial_status['services']}, namespace='/services-monitor')
         except Exception as e:
             print(f"Error in on_connect: {e}")
             socketio.emit('error', {'message': str(e)}, namespace='/services-monitor')
@@ -124,8 +116,6 @@ class ServicesMonitorNamespace(Namespace):
             socketio.emit('cpu_usage', {'cpu_usage': metrics['cpu']}, namespace='/services-monitor')
             eventlet.sleep(0.1)
             socketio.emit('ram_usage', {'ram_usage': metrics['ram']}, namespace='/services-monitor')
-            eventlet.sleep(0.1)
-            socketio.emit('services', {'services': metrics['services']}, namespace='/services-monitor')
         except Exception as e:
             print(f"Error in request_metrics: {e}")
             socketio.emit('error', {'message': str(e)}, namespace='/services-monitor')

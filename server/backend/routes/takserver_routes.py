@@ -6,7 +6,6 @@ from werkzeug.utils import secure_filename
 from backend.services.scripts.takserver.takserver_installer import TakServerInstaller
 from backend.services.scripts.takserver.check_status import TakServerStatus
 from backend.services.scripts.takserver.takserver_uninstaller import TakServerUninstaller
-from backend.services.helpers.docker_installer import DockerInstaller
 from backend.services.helpers.operation_status import OperationStatus
 from flask_socketio import Namespace
 import os
@@ -31,7 +30,6 @@ def create_error_status(error_msg=None):
     return {
         'isInstalled': False,
         'isRunning': False,
-        'dockerRunning': False,
         'version': None,
         'error': error_msg,
         'isStarting': False,
@@ -249,7 +247,6 @@ class TakServerUninstallNamespace(BaseNamespace):
 class TakServerInstallerNamespace(BaseNamespace):
     def __init__(self, namespace=None):
         super().__init__(namespace)
-        self.docker_installed = DockerInstaller()
         self.operation_status = OperationStatus(namespace='/takserver-installer')
 
     def on_connect(self):
