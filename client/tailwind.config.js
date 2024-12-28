@@ -4,8 +4,7 @@
 module.exports = {
   darkMode: ["class"],
   content: [
-    './src/**/*.{ts,tsx}',
-    "./.storybook/**/*.{js,jsx,ts,tsx}",
+    "./src/**/*.{ts,tsx}",
     "./src/**/*.{js,jsx,ts,tsx}",
     "./src/**/*.html",
 	],
@@ -111,7 +110,6 @@ module.exports = {
   	}
   },
   plugins: [
-    require('tailwindcss-filters'),
     require("tailwindcss-animate")
   ],
 }

@@ -18,6 +18,10 @@ node_modules/
 .env
 .env.local
 .env.*.local
+.env.development
+.env.production
+.env.test
+!.env.example
 
 # IDE files
 .vscode/
@@ -28,12 +32,8 @@ node_modules/
 # OS files
 .DS_Store
 Thumbs.db
-*storybook.log
-# Storybook
-storybook-static/
-.storybook/
-src/stories/
 
 # Server logs
 server/app_dev.log
 server/app.log
+*.log
