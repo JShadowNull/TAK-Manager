@@ -33,3 +33,7 @@ Thumbs.db
 storybook-static/
 .storybook/
 src/stories/
+
+# Server logs
+server/app_dev.log
+server/app.log
