@@ -1,4 +1,0 @@
-1|1|<FontAwesomeIcon 
-2|2|  icon={isRunning ? faStop : faPlay} 
-3|3|  data-testid="action-icon"
-4|4|/> 
