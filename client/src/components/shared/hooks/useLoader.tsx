@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import useSocket, { SocketNamespace } from './useSocket';
 
 export type OperationType = 
@@ -63,14 +63,20 @@ export function useLoader({
     return isTarget;
   }, [targetId]);
 
+  // Add memoization for subscription parameters
+  const subscriptionParams = React.useMemo(() => ({
+    namespace,
+    operationType,
+    targetId,
+    currentOperation: operationState?.operation
+  }), [namespace, operationType, targetId, operationState?.operation]);
+
   // Subscribe to operation status events
   useEffect(() => {
-    console.debug('[useLoader] Setting up operation status subscription:', {
-      namespace,
-      operationType,
-      targetId,
-      currentOperation: operationState?.operation
-    });
+    if (!socket || !operationType || !targetId) return;
+
+    // Only log when actually setting up a new subscription
+    console.debug('[useLoader] Setting up operation status subscription:', subscriptionParams);
     
     let mounted = true;
     let timeoutId: NodeJS.Timeout | null = null;
@@ -141,18 +147,21 @@ export function useLoader({
     const unsubscribe = on('operation_status', handleOperationStatus);
 
     return () => {
-      console.debug('[useLoader] Cleaning up operation status subscription:', {
-        namespace,
-        operationType,
-        targetId
-      });
+      // Only log cleanup when actually cleaning up
+      if (socket && operationType && targetId) {
+        console.debug('[useLoader] Cleaning up operation status subscription:', {
+          namespace,
+          operationType,
+          targetId
+        });
+      }
       mounted = false;
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
       unsubscribe();
     };
-  }, [on, operationType, isTargetOperation, onComplete, onError, onProgress]);
+  }, [socket, subscriptionParams]);
 
   // Execute operation with loading state
   const executeWithLoading = useCallback(async (

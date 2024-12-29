@@ -15,6 +15,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - backend_logs:/app/logs
       - ./server:/app:rw
+      - /proc:/host/proc:ro
+    cap_add:
+      - SYS_PTRACE
     environment:
       - FLASK_ENV=${MODE}
       - PORT=${BACKEND_PORT}

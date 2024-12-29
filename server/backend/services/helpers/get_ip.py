@@ -1,102 +1,98 @@
-from backend.services.helpers.os_detector import OSDetector
 from backend.routes.socketio import socketio
 from backend.services.helpers.run_command import RunCommand
 import eventlet
 import re
 import psutil
 import time
+import os
+import socket
 
 class IPFetcher:
     def __init__(self):
-        self.os_detector = OSDetector()
         self.run_command = RunCommand()
         self.monitoring = False
+        # Set psutil to use host proc
+        psutil.PROCFS_PATH = '/host/proc'
         self.last_io_counters = psutil.net_io_counters()
         self.last_check_time = time.time()
 
-    def get_network_usage(self):
-        """
-        Calculate current network usage in MB/s
-        """
+    def get_ip_address(self):
+        print("Getting IP address...")
         try:
+            # Get the host's IP address using the socket module
+            host_ip = socket.gethostbyname(socket.gethostname())
+            print(f"Host IP address: {host_ip}")
+            return host_ip
+        except Exception as e:
+            print(f"Error getting IP address: {str(e)}")
+            return None
+
+    def get_network_usage(self):
+        print("Getting network usage...")
+        try:
+            # Get current IO counters
+            io_counters = psutil.net_io_counters()
+            print(f"Current IO counters: {io_counters}")
+            
+            # Calculate time difference
             current_time = time.time()
-            current_io_counters = psutil.net_io_counters()
-            time_elapsed = current_time - self.last_check_time
-
-            # Calculate bytes per second
-            bytes_sent = (current_io_counters.bytes_sent - self.last_io_counters.bytes_sent) / time_elapsed
-            bytes_recv = (current_io_counters.bytes_recv - self.last_io_counters.bytes_recv) / time_elapsed
-
-            # Convert to MB/s
-            mb_sent = bytes_sent / (1024 * 1024)
-            mb_recv = bytes_recv / (1024 * 1024)
-
-            # Update last values
-            self.last_io_counters = current_io_counters
+            time_diff = current_time - self.last_check_time
+            print(f"Time difference: {time_diff} seconds")
+            
+            # Calculate network usage
+            upload = (io_counters.bytes_sent - self.last_io_counters.bytes_sent) / time_diff
+            download = (io_counters.bytes_recv - self.last_io_counters.bytes_recv) / time_diff
+            total = upload + download
+            print(f"Upload: {upload} bytes/sec")
+            print(f"Download: {download} bytes/sec")
+            print(f"Total: {total} bytes/sec")
+            
+            # Update last IO counters and check time
+            self.last_io_counters = io_counters
             self.last_check_time = current_time
-
+            
             return {
-                'upload': round(mb_sent, 2),
-                'download': round(mb_recv, 2),
-                'total': round(mb_sent + mb_recv, 2)
+                'upload': round(upload, 2),
+                'download': round(download, 2),
+                'total': round(total, 2)
             }
         except Exception as e:
-            print(f"Error getting network usage: {e}")
-            return {'upload': 0, 'download': 0, 'total': 0}
-
-    def get_ip_address(self):
-        """
-        Fetches the current active IP address of the machine, including VPN IP if connected.
-        """
-        os_type = self.os_detector.detect_os()
-        
-        if os_type == 'macos':
-            command = ['ifconfig']
-        elif os_type == 'windows':
-            command = ['ipconfig']
-        elif os_type == 'linux':
-            command = ['ip', 'addr', 'show']
-        else:
-            return 'Unsupported OS'
-
-        result = self.run_command.run_command(command, 'ip-fetcher', capture_output=True, emit_output=False)
-        
-        if result.returncode == 0:
-            if os_type == 'windows':
-                match = re.search(r'IPv4 Address[. ]*: ([\d.]+)', result.stdout)
-            elif os_type == 'macos':
-                match = re.search(r'utun\d:.*?inet (\d+\.\d+\.\d+\.\d+)', result.stdout, re.DOTALL)
-                if not match:
-                    match = re.search(r'en0:.*?inet (\d+\.\d+\.\d+\.\d+)', result.stdout, re.DOTALL)
-            else:
-                match = re.search(r'inet ([\d.]+)', result.stdout)
-            
-            ip_address = match.group(1) if match else 'Unavailable'
-            return ip_address if ip_address else 'Unavailable'
-        else:
-            return 'Unavailable'
+            print(f"Error getting network usage: {str(e)}")
+            return {
+                'upload': 0,
+                'download': 0,
+                'total': 0
+            }
 
     def get_metrics(self):
-        """
-        Get both IP and network metrics
-        """
+        print("Getting metrics...")
+        ip_address = self.get_ip_address()
+        network_usage = self.get_network_usage()
+        print(f"IP address: {ip_address}")
+        print(f"Network usage: {network_usage}")
         return {
-            'ip_address': self.get_ip_address(),
-            'network': self.get_network_usage()
+            'ip_address': ip_address,
+            'network': network_usage
         }
 
     def monitor_ip(self):
-        """Monitor and emit IP address and network usage updates"""
+        print("Starting IP monitoring...")
         self.monitoring = True
         while self.monitoring:
             try:
                 metrics = self.get_metrics()
+                print(f"Metrics: {metrics}")
                 socketio.emit('network_metrics', metrics, namespace='/ip-fetcher')
                 eventlet.sleep(2)
             except Exception as e:
-                print(f"Error in monitor_ip: {e}")
+                print(f"Error in IP monitoring: {str(e)}")
                 eventlet.sleep(2)
 
     def stop_monitoring(self):
-        """Stop the IP monitoring"""
+        print("Stopping IP monitoring...")
         self.monitoring = False
+
+if __name__ == '__main__':
+    ip_fetcher = IPFetcher()
+    metrics = ip_fetcher.get_metrics()
+    print(f"Final metrics: {metrics}")

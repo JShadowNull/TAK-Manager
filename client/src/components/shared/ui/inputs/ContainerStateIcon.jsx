@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useRef, useEffect } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlay, faStop, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import { cn } from '../../../../lib/utils';
@@ -84,15 +84,28 @@ const ContainerStateIcon = ({
     return isRunning ? 'Stop container' : 'Start container';
   };
 
-  const renderIcon = () => {
-    console.debug('[ContainerStateIcon] Rendering icon:', {
-      containerName,
-      isLoading,
-      isRunning,
-      operation,
-      hasError
-    });
+  const prevProps = useRef({ isRunning, isLoading, operation, hasError });
 
+  useEffect(() => {
+    const hasChanged = 
+      prevProps.current.isRunning !== isRunning ||
+      prevProps.current.isLoading !== isLoading ||
+      prevProps.current.operation !== operation ||
+      prevProps.current.hasError !== hasError;
+
+    if (hasChanged) {
+      console.debug('[ContainerStateIcon] State changed:', {
+        containerName,
+        isLoading,
+        isRunning,
+        operation,
+        hasError
+      });
+      prevProps.current = { isRunning, isLoading, operation, hasError };
+    }
+  }, [containerName, isRunning, isLoading, operation, hasError]);
+
+  const renderIcon = () => {
     if (isLoading) {
       return (
         <>

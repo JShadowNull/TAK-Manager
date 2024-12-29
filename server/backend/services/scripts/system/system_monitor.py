@@ -1,94 +1,90 @@
-# backend/services/scripts/system/system_monitor.py
+# server/backend/services/scripts/system/system_monitor.py
 
 import psutil
-from backend.routes.socketio import socketio
+from backend.routes.socketio import socketio, safe_emit
+from backend import create_app
 import eventlet
 import logging
 import docker
+import time
+
+# Configure logger
+logger = logging.getLogger(__name__)
 
 class SystemMonitor:
     def __init__(self):
         self.monitoring = False
         self.docker_client = docker.from_env()
+        logger.info("SystemMonitor initialized")
 
-    def get_cpu_usage(self):
-        """Get current CPU usage percentage of the host"""
+    def calculate_total_metrics(self) -> tuple:
+        """Calculate total CPU and RAM metrics from all running containers"""
         try:
-            stats = self.docker_client.api.get_info()
-            ncpu = stats['NCPU']
+            total_cpu = 0
+            total_ram = 0
             
-            # Get host CPU usage by reading from /proc/stat through privileged mode
-            with open('/host/proc/stat', 'r') as f:
-                cpu_stats = f.readline().split()
-                total = sum(float(x) for x in cpu_stats[1:])
-                idle = float(cpu_stats[4])
-                usage = 100 * (1 - idle / total)
+            for container in self.docker_client.containers.list():
+                stats = container.stats(stream=False)  # Get a single stats snapshot
                 
-            return usage
-        except Exception as e:
-            logging.error(f"Error getting CPU usage: {str(e)}")
-            return 0
+                # Calculate CPU
+                if all(key in stats for key in ['cpu_stats', 'precpu_stats']):
+                    cpu_stats = stats['cpu_stats']
+                    precpu_stats = stats['precpu_stats']
+                    
+                    if all(key in cpu_stats for key in ['cpu_usage', 'system_cpu_usage', 'online_cpus']) and \
+                       all(key in precpu_stats for key in ['cpu_usage', 'system_cpu_usage']):
+                        
+                        cpu_delta = cpu_stats['cpu_usage']['total_usage'] - precpu_stats['cpu_usage']['total_usage']
+                        system_delta = cpu_stats['system_cpu_usage'] - precpu_stats['system_cpu_usage']
+                        num_cpus = cpu_stats['online_cpus']
+                        
+                        if system_delta > 0:
+                            container_cpu = (cpu_delta / system_delta) * num_cpus * 100.0
+                            total_cpu += container_cpu
 
-    def get_ram_usage(self):
-        """Get current RAM usage percentage of the host"""
-        try:
-            with open('/host/proc/meminfo', 'r') as f:
-                lines = f.readlines()
-                mem_info = {}
-                for line in lines:
-                    key, value = line.split(':')
-                    value = value.strip().split()[0]  # Remove 'kB' and convert to int
-                    mem_info[key] = int(value)
-                
-                total = mem_info['MemTotal']
-                available = mem_info['MemAvailable']
-                used = total - available
-                usage = (used / total) * 100
-                return usage
-        except Exception as e:
-            logging.error(f"Error getting RAM usage: {str(e)}")
-            return 0
+                # Calculate RAM
+                if 'memory_stats' in stats:
+                    memory_stats = stats['memory_stats']
+                    if all(key in memory_stats for key in ['usage', 'limit']):
+                        mem_usage = memory_stats['usage']
+                        if 'cache' in memory_stats:
+                            mem_usage -= memory_stats['cache']
+                        mem_limit = memory_stats['limit']
+                        if mem_limit > 0:
+                            container_ram = (mem_usage / mem_limit) * 100.0
+                            total_ram += container_ram
 
-    def get_current_metrics(self):
-        """Get current system metrics"""
-        try:
-            # Get CPU usage first to ensure accuracy
-            cpu = self.get_cpu_usage()
-            
-            # Get RAM usage
-            ram = self.get_ram_usage()
-            
-            metrics = {
-                'cpu': cpu,
-                'ram': ram
-            }
-            return metrics
-        except Exception:
-            return {'cpu': 0, 'ram': 0}
+            return round(total_cpu, 2), round(total_ram, 2)
+        except Exception as e:
+            logger.error(f"Error calculating total metrics: {str(e)}")
+            return 0, 0
 
     def monitor_system(self):
-        """Monitor system metrics and emit updates"""
-        self.monitoring = True
-        
-        # Get initial CPU usage to establish baseline
-        self.get_cpu_usage()
-        eventlet.sleep(0.1)  # Short delay for accurate initial reading
-        
-        while self.monitoring:
-            try:
-                metrics = self.get_current_metrics()
+        """Monitor system metrics"""
+        try:
+            logger.info("Starting system monitoring")
+            self.monitoring = True
+            
+            while self.monitoring:
+                cpu, ram = self.calculate_total_metrics()
+                metrics = {
+                    'cpu': cpu,
+                    'ram': ram
+                }
+                safe_emit('system_metrics', metrics, namespace='/services-monitor')
+                eventlet.sleep(2)  # Update every 2 seconds
                 
-                # Emit CPU usage
-                socketio.emit('cpu_usage', {'cpu_usage': metrics['cpu']}, namespace='/services-monitor')
-                eventlet.sleep(0.1)
-                
-                # Emit RAM usage
-                socketio.emit('ram_usage', {'ram_usage': metrics['ram']}, namespace='/services-monitor')
-                
-                eventlet.sleep(1.8)  # Adjust remaining sleep time to maintain ~2 second total interval
-            except Exception:
-                eventlet.sleep(2)
+        except Exception as e:
+            logger.error(f"Error in system monitoring: {str(e)}")
+        finally:
+            logger.info("System monitoring stopped")
 
     def stop_monitoring(self):
-        """Stop the system monitoring"""
+        """Stop the monitoring system"""
+        logger.info("Stopping system monitoring")
         self.monitoring = False
+
+if __name__ == '__main__':
+    app = create_app()
+    monitor = SystemMonitor()
+    socketio.run(app)

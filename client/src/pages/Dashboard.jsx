@@ -64,29 +64,29 @@ function Dashboard() {
       loading: true
     },
     eventHandlers: {
-      cpu_usage: (data, { state, updateState }) => {
-        if (data && typeof data.cpu_usage === 'number') {
-          const timestamp = new Date().getTime();
-          updateState({
-            cpuUsage: `${data.cpu_usage}%`,
-            cpuData: [...(state.cpuData || []), {
-              month: timestamp,
-              desktop: data.cpu_usage
-            }].slice(-30)
-          });
-        }
+      initial_state: (data, { updateState }) => {
+        updateState({
+          ...data,
+          cpuUsage: `${data.cpu}%`,
+          ramUsage: `${data.ram}%`,
+          loading: false
+        });
       },
-      ram_usage: (data, { state, updateState }) => {
-        if (data && typeof data.ram_usage === 'number') {
-          const timestamp = new Date().getTime();
-          updateState({
-            ramUsage: `${data.ram_usage}%`,
-            ramData: [...(state.ramData || []), {
-              month: timestamp,
-              desktop: data.ram_usage
-            }].slice(-30)
-          });
-        }
+      system_metrics: (data, { state, updateState }) => {
+        const timestamp = new Date().getTime();
+        
+        updateState({
+          cpuUsage: `${data.cpu}%`,
+          ramUsage: `${data.ram}%`,
+          cpuData: [...(state.cpuData || []), {
+            month: timestamp,
+            desktop: data.cpu
+          }].slice(-30),
+          ramData: [...(state.ramData || []), {
+            month: timestamp,
+            desktop: data.ram
+          }].slice(-30)
+        });
       },
       error: (data, { updateState }) => {
         console.error('Services monitor error:', data.message);
@@ -208,7 +208,7 @@ function Dashboard() {
             <CardDescription>Container Status & Controls</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="h-[350px] overflow-hidden rounded-lg border">
+            <div className="h-[25rem] overflow-hidden rounded-lg border">
               <CustomScrollbar>
                 <ul className="list-none space-y-2 divide-y divide-border text-sm text-muted-foreground p-2">
                   {dockerState.containers.length === 0 ? (

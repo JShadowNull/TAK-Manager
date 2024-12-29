@@ -3,14 +3,18 @@
 FROM python:3.11-slim as base
 
 WORKDIR /app
-
-# Install curl for healthcheck
-RUN apt-get update && apt-get install -y curl \
+# Install build tools and dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    zip \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Create log directory
 RUN mkdir -p /app/logs
