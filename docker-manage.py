@@ -11,8 +11,8 @@ from pathlib import Path
 import platform
 import dotenv
 
-# Load environment variables from .env file
-dotenv.load_dotenv()
+# Do not auto-load any env file
+# We'll handle this explicitly in the manager class
 
 @dataclass
 class Colors:
@@ -77,6 +77,15 @@ class DockerManager:
     def start_dev(self, detach: bool = False):
         """Start in development mode"""
         self._print_colored("Starting in DEVELOPMENT mode...", Colors.YELLOW)
+        
+        # Check for .env file
+        if not os.path.exists('.env'):
+            self._print_colored("Error: .env file not found. Please create one using .env.example as a template.", Colors.RED)
+            return 1
+            
+        # Explicitly load only .env file
+        dotenv.load_dotenv(dotenv_path='.env', override=True)
+            
         os.environ['MODE'] = 'dev'
         os.environ['BUILD_TARGET'] = 'development'
         cmd = f"{self.compose_command} up --build"
@@ -87,6 +96,15 @@ class DockerManager:
     def start_prod(self, detach: bool = False):
         """Start in production mode"""
         self._print_colored("Starting in PRODUCTION mode...", Colors.YELLOW)
+        
+        # Check for .env file
+        if not os.path.exists('.env'):
+            self._print_colored("Error: .env file not found. Please create one using .env.example as a template.", Colors.RED)
+            return 1
+            
+        # Explicitly load only .env file
+        dotenv.load_dotenv(dotenv_path='.env', override=True)
+            
         os.environ['MODE'] = 'prod'
         os.environ['BUILD_TARGET'] = 'production'
         cmd = f"{self.compose_command} up --build"

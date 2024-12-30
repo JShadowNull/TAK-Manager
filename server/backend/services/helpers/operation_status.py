@@ -1,14 +1,30 @@
-from flask_socketio import emit
 from backend.routes.socketio import socketio  # Import the global socketio instance
+import time  # Add time import
 
 class OperationStatus:
     def __init__(self, socketio=None, namespace=None):
         self.socketio = socketio
         self.namespace = namespace
         self.current_operation = None
+        self.last_event_data = None
+        self.last_event_time = 0
+        self.debounce_interval = 0.5  # 500ms debounce
         print(f"[OperationStatus] Initialized with socketio: {bool(socketio)}, namespace: {namespace}")
 
-    # General Operation Methods (preserved for other services)
+    def _should_emit(self, event_data):
+        """Check if we should emit this event based on debouncing and data changes."""
+        current_time = time.time()  # Use time.time() instead of eventlet.time.time()
+        
+        # Always emit if it's been longer than debounce_interval
+        if current_time - self.last_event_time > self.debounce_interval:
+            return True
+            
+        # Don't emit if the data hasn't changed
+        if self.last_event_data == event_data:
+            return False
+            
+        return True
+
     def emit_status(self, operation, status, message, details=None, progress=None):
         """Emit operation status update (general method for all operations)"""
         event_data = {
@@ -22,20 +38,28 @@ class OperationStatus:
         if progress is not None:
             event_data['progress'] = progress
         
+        # Check if we should emit this event
+        if not self._should_emit(event_data):
+            return
+            
         print(f"[OperationStatus] Emitting operation status: {event_data}")
         
         try:
             socketio.emit('operation_status', event_data, namespace=self.namespace)
+            self.last_event_data = event_data
+            self.last_event_time = time.time()  # Use time.time() here too
         except Exception as e:
             print(f"[OperationStatus] Error emitting status: {str(e)}")
 
     def start_operation(self, operation, message=None, details=None):
         """Start a general operation"""
         print(f"[OperationStatus] Starting operation: {operation}")
+        if self.current_operation == operation:
+            return
         self.current_operation = operation
         self.emit_status(
             operation=operation,
-            status='started',
+            status='in_progress',
             message=message or f"{operation.capitalize()}ing...",
             details=details
         )
@@ -43,6 +67,8 @@ class OperationStatus:
     def complete_operation(self, operation, message=None, details=None):
         """Complete a general operation"""
         print(f"[OperationStatus] Completing operation: {operation}")
+        if self.current_operation != operation:
+            return
         self.emit_status(
             operation=operation,
             status='complete',
@@ -54,6 +80,8 @@ class OperationStatus:
     def fail_operation(self, operation, error_message, details=None):
         """Fail a general operation"""
         print(f"[OperationStatus] Failed operation: {operation} - {error_message}")
+        if self.current_operation != operation:
+            return
         self.emit_status(
             operation=operation,
             status='failed',
@@ -64,6 +92,8 @@ class OperationStatus:
 
     def update_progress(self, operation, progress, message=None, details=None):
         """Update general operation progress"""
+        if self.current_operation != operation:
+            return
         print(f"[OperationStatus] Updating progress for {operation}: {progress}%")
         self.emit_status(
             operation=operation,
@@ -101,7 +131,7 @@ class OperationStatus:
         self.current_operation = 'certificate_operation'
         self.emit_status(
             operation='certificate_operation',
-            status='started',
+            status='in_progress',
             message=f'Starting {mode} certificate creation',
             details={
                 'mode': mode,
@@ -166,7 +196,7 @@ class OperationStatus:
         self.current_operation = 'deletion_operation'
         self.emit_status(
             operation='deletion_operation',
-            status='started',
+            status='in_progress',
             message=f'Starting deletion of {total_certs} certificate(s)',
             details={
                 'total_certs': total_certs,

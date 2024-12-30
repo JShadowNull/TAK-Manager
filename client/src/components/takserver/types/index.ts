@@ -55,47 +55,14 @@ export const formSchema = z.object({
 // TypeScript types
 export type FormData = z.infer<typeof formSchema>;
 
-// Socket event types
-export interface SocketEventData {
-  isInstalled: boolean;
-  isRunning: boolean;
-  dockerRunning: boolean;
+export type OperationStatus = 'not_installed' | 'running' | 'stopped';
+
+export interface TakServerStatusEvent {
+  operation: 'status';
+  status: OperationStatus;
+  message: string;
   version?: string;
   error?: string;
-  status?: string;
-  operationInProgress: boolean;
-  isStarting?: boolean;
-  isStopping?: boolean;
-  isRestarting?: boolean;
-}
-
-export interface InstallState {
-  isInstalling: boolean;
-  installationComplete: boolean;
-  installationSuccess: boolean;
-  installationError: string | undefined;
-  error?: string | undefined;
-  isRollingBack: boolean;
-  isStoppingInstallation: boolean;
-  status: string | undefined;
-  operationInProgress: boolean;
-  dockerInstalled: boolean;
-  progress: number;
-}
-
-export interface UninstallState {
-  isUninstalling: boolean;
-  uninstallComplete: boolean;
-  uninstallSuccess: boolean;
-  uninstallError: string | undefined;
-  status: string | undefined;
-  operationInProgress: boolean;
-  progress: number;
-}
-
-export interface InstallationFormProps {
-  onSubmit: (data: FormData) => void;
-  onCancel: () => void;
 }
 
 export interface FormState {
@@ -112,4 +79,43 @@ export interface FormState {
 
 export interface TakServerStatusProps {
   socket: UseSocketReturn;
+}
+
+// HTTP Response Types
+export interface InstallationProgress {
+  success: boolean;
+  status: 'in_progress' | 'complete' | 'error';
+  progress: number;
+  message: string;
+  error?: string;
+}
+
+export interface OperationProgress {
+  success: boolean;
+  operation: 'start' | 'stop' | 'restart' | null;
+  progress: number;
+  status: 'idle' | 'in_progress' | 'complete';
+  error?: string;
+}
+
+export interface PopupsProps {
+  // Installation props
+  showInstallProgress: boolean;
+  showInstallComplete: boolean;
+  installProgress: number;
+  installError?: string;
+  onInstallProgressClose: () => void;
+  onInstallComplete: () => void;
+  terminalOutput: string[];
+
+  // Uninstallation props
+  showUninstallConfirm: boolean;
+  showUninstallProgress: boolean;
+  showUninstallComplete: boolean;
+  uninstallProgress: number;
+  uninstallError?: string;
+  onUninstallConfirmClose: () => void;
+  onUninstall: () => void;
+  onUninstallProgressClose: () => void;
+  onUninstallComplete: () => void;
 } 

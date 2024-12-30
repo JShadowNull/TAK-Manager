@@ -1,10 +1,12 @@
+import eventlet
+eventlet.monkey_patch()
+
 import logging
 import os
 import socket
 import time
 import multiprocessing
 import sys
-import eventlet
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import subprocess
@@ -77,37 +79,17 @@ def wait_for_port(port, timeout=30):
     return False
 
 def start_flask():
-    """Start the Flask server in development mode."""
     try:
-        # Get port from environment or use default
         port = int(os.environ.get('PORT', 8989))
-        
-        # Set development environment
-        os.environ.update({
-            'FLASK_ENV': 'development',
-            'FLASK_DEBUG': '1',
-            'PYTHONUNBUFFERED': '1',
-            'WERKZEUG_DEBUG_PIN': 'off',
-            'EVENTLET_DEBUG': 'true'
-        })
-        
-        # Create and configure Flask app
         flask_app = create_app()
         flask_app.debug = True
-        flask_app.config['PROPAGATE_EXCEPTIONS'] = True
         
-        # Configure Socket.IO
-        socketio.server.eio.ping_timeout = 120000
-        socketio.server.eio.ping_interval = 25000
-        
-        # Run server
         socketio.run(flask_app, 
-                    host='0.0.0.0',  # Changed to 0.0.0.0 to allow external access
+                    host='0.0.0.0',
                     port=port, 
                     debug=True, 
                     use_reloader=False,
-                    log_output=True,
-                    allow_unsafe_werkzeug=True)
+                    log_output=True)
     except Exception as e:
         logger.error(f"Error starting Flask server: {e}", exc_info=True)
         raise
@@ -148,6 +130,8 @@ def cleanup():
     
     if server_process:
         try:
+            # Properly close socket connections before terminating
+            socketio.stop()
             server_process.terminate()
             server_process.join(timeout=5)
             if server_process.is_alive():

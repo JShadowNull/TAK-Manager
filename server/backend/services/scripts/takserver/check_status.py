@@ -1,38 +1,23 @@
 import os
 from pathlib import Path
-from backend.services.helpers.os_detector import OSDetector
 from backend.services.helpers.run_command import RunCommand
-from backend.routes.socketio import socketio
 from backend.services.helpers.operation_status import OperationStatus
 import eventlet
 
 class TakServerStatus:
     def __init__(self):
         self.run_command = RunCommand()
-        self.os_detector = OSDetector()
         self.working_dir = self.get_default_working_directory()
         self.operation_status = OperationStatus('/takserver-status')
-
-    def _emit_status(self, is_running, error=None):
-        """Helper method to emit consistent status updates."""
-        status = {
-            'isInstalled': True,
-            'isRunning': is_running,
-            'version': self.get_takserver_version(),
-            'error': error,
-            'isUninstalling': False
-        }
-        socketio.emit('takserver_status', status, namespace='/takserver-status')
+        self.current_operation = None
+        self.operation_progress = 0
 
     def get_default_working_directory(self):
-        """Determine the default working directory based on the OS."""
-        os_type = self.os_detector.detect_os()
-        home_dir = str(Path.home())
-        if os_type == 'windows' or os_type == 'macos':
-            documents_dir = os.path.join(home_dir, 'Documents')
-            working_dir = os.path.join(documents_dir, 'takserver-docker')
-        else:
-            working_dir = os.path.join(home_dir, 'takserver-docker')
+        """Get the working directory from environment variable."""
+        base_dir = '/home/tak-manager'  # Use the container mount point directly
+        working_dir = os.path.join(base_dir, 'takserver-docker')
+        if not os.path.exists(working_dir):
+            os.makedirs(working_dir, exist_ok=True)
         return working_dir
 
     def get_takserver_version(self):
@@ -98,23 +83,19 @@ class TakServerStatus:
             return False
 
     def get_status(self):
-        """Get complete TAK Server status."""
+        """Get TAK Server status - first checks if installed, then running state if installed."""
         is_installed = self.check_installation()
-        is_running = self.check_containers_running() if is_installed else False
-        version = self.get_takserver_version() if is_installed else None
+        if not is_installed:
+            return {
+                'isInstalled': False,
+                'isRunning': False
+            }
 
-        status = {
-            'isInstalled': is_installed,
-            'isRunning': is_running,
-            'version': version,
-            'error': None,
-            'isStarting': False,
-            'isStopping': False,
-            'isRestarting': False,
-            'isUninstalling': False
+        is_running = self.check_containers_running()
+        return {
+            'isInstalled': True,
+            'isRunning': is_running
         }
-
-        return status
 
     def get_docker_compose_dir(self):
         """Get the docker compose directory based on version"""
@@ -123,49 +104,32 @@ class TakServerStatus:
             raise Exception("Could not determine TAK Server version")
         return os.path.join(self.working_dir, f"takserver-docker-{version}")
 
-    def wait_for_containers_state(self, desired_state, timeout=60, interval=2):
-        """
-        Wait for containers to reach desired state (running or stopped)
-        Args:
-            desired_state (bool): True for running, False for stopped
-            timeout (int): Maximum time to wait in seconds
-            interval (int): Time between checks in seconds
-        Returns:
-            bool: True if desired state reached, False if timeout
-        """
-        import time
-        
-        start_time = time.time()
-        
-        while time.time() - start_time < timeout:
-            current_state = self.check_containers_running()
-            if current_state == desired_state:
-                return True
-            
-            self.run_command.emit_log_output(
-                f"Waiting for containers to be {'running' if desired_state else 'stopped'}...", 
-                'takserver-status'
-            )
-            eventlet.sleep(interval)
-        
-        return False
+    def get_operation_progress(self):
+        """Get current operation progress"""
+        if not self.current_operation:
+            return {
+                'operation': None,
+                'progress': 0,
+                'status': 'idle'
+            }
+        return {
+            'operation': self.current_operation,
+            'progress': self.operation_progress,
+            'status': 'in_progress' if self.operation_progress < 100 else 'complete'
+        }
 
     def start_containers(self):
         """Start TAK Server containers using docker-compose"""
         try:
+            self.current_operation = 'start'
+            self.operation_progress = 0
+
             if not self.check_installation():
                 raise Exception("TAK Server is not installed")
 
             docker_compose_dir = self.get_docker_compose_dir()
             
-            self.operation_status.start_operation('start', "Starting TAK Server containers...")
-            self._emit_status(False)
-            
-            self.run_command.emit_log_output(
-                "Starting TAK Server containers...", 
-                'takserver-status'
-            )
-            
+            self.operation_progress = 20
             result = self.run_command.run_command(
                 ["docker-compose", "up", "-d"],
                 working_dir=docker_compose_dir,
@@ -173,44 +137,35 @@ class TakServerStatus:
                 capture_output=True
             )
 
-            if not self.wait_for_containers_state(True):
-                raise Exception("Timeout waiting for containers to start")
+            # Wait for containers to be running
+            for attempt in range(30):  # 30 attempts, 2 seconds each
+                self.operation_progress = 20 + int((attempt + 1) * 2.6)  # Progress from 20 to 98
+                if self.check_containers_running():
+                    self.operation_progress = 100
+                    return True
+                eventlet.sleep(2)
 
-            self.operation_status.complete_operation('start', "TAK Server containers started successfully")
-            self._emit_status(True)
-
-            self.run_command.emit_log_output(
-                "TAK Server containers started successfully", 
-                'takserver-status'
-            )
-            return True
+            raise Exception("Timeout waiting for containers to start")
 
         except Exception as e:
-            self.operation_status.fail_operation('start', str(e))
-            self._emit_status(False, str(e))
-            
-            self.run_command.emit_log_output(
-                f"Error starting TAK Server: {str(e)}", 
-                'takserver-status'
-            )
+            self.run_command.emit_log_output(str(e), 'takserver-status')
             return False
+        finally:
+            self.current_operation = None
+            self.operation_progress = 0
 
     def stop_containers(self):
         """Stop TAK Server containers using docker-compose"""
         try:
+            self.current_operation = 'stop'
+            self.operation_progress = 0
+
             if not self.check_installation():
                 raise Exception("TAK Server is not installed")
 
             docker_compose_dir = self.get_docker_compose_dir()
             
-            self.operation_status.start_operation('stop', "Stopping TAK Server containers...")
-            self._emit_status(True)
-            
-            self.run_command.emit_log_output(
-                "Stopping TAK Server containers...", 
-                'takserver-status'
-            )
-            
+            self.operation_progress = 20
             result = self.run_command.run_command(
                 ["docker-compose", "down"],
                 working_dir=docker_compose_dir,
@@ -218,44 +173,35 @@ class TakServerStatus:
                 capture_output=True
             )
 
-            if not self.wait_for_containers_state(False):
-                raise Exception("Timeout waiting for containers to stop")
+            # Wait for containers to be stopped
+            for attempt in range(30):  # 30 attempts, 2 seconds each
+                self.operation_progress = 20 + int((attempt + 1) * 2.6)  # Progress from 20 to 98
+                if not self.check_containers_running():
+                    self.operation_progress = 100
+                    return True
+                eventlet.sleep(2)
 
-            self.operation_status.complete_operation('stop', "TAK Server containers stopped successfully")
-            self._emit_status(False)
-
-            self.run_command.emit_log_output(
-                "TAK Server containers stopped successfully", 
-                'takserver-status'
-            )
-            return True
+            raise Exception("Timeout waiting for containers to stop")
 
         except Exception as e:
-            self.operation_status.fail_operation('stop', str(e))
-            self._emit_status(True, str(e))
-            
-            self.run_command.emit_log_output(
-                f"Error stopping TAK Server: {str(e)}", 
-                'takserver-status'
-            )
+            self.run_command.emit_log_output(str(e), 'takserver-status')
             return False
+        finally:
+            self.current_operation = None
+            self.operation_progress = 0
 
     def restart_containers(self):
         """Restart TAK Server containers using docker-compose"""
         try:
+            self.current_operation = 'restart'
+            self.operation_progress = 0
+
             if not self.check_installation():
                 raise Exception("TAK Server is not installed")
 
             docker_compose_dir = self.get_docker_compose_dir()
             
-            self.operation_status.start_operation('restart', "Restarting TAK Server containers...")
-            self._emit_status(True)
-            
-            self.run_command.emit_log_output(
-                "Restarting TAK Server containers...", 
-                'takserver-status'
-            )
-            
+            self.operation_progress = 20
             result = self.run_command.run_command(
                 ["docker-compose", "restart"],
                 working_dir=docker_compose_dir,
@@ -263,24 +209,19 @@ class TakServerStatus:
                 capture_output=True
             )
 
-            if not self.wait_for_containers_state(True):
-                raise Exception("Timeout waiting for containers to restart")
+            # Wait for containers to be running
+            for attempt in range(30):  # 30 attempts, 2 seconds each
+                self.operation_progress = 20 + int((attempt + 1) * 2.6)  # Progress from 20 to 98
+                if self.check_containers_running():
+                    self.operation_progress = 100
+                    return True
+                eventlet.sleep(2)
 
-            self.operation_status.complete_operation('restart', "TAK Server containers restarted successfully")
-            self._emit_status(True)
-
-            self.run_command.emit_log_output(
-                "TAK Server containers restarted successfully", 
-                'takserver-status'
-            )
-            return True
+            raise Exception("Timeout waiting for containers to restart")
 
         except Exception as e:
-            self.operation_status.fail_operation('restart', str(e))
-            self._emit_status(False, str(e))
-            
-            self.run_command.emit_log_output(
-                f"Error restarting TAK Server: {str(e)}", 
-                'takserver-status'
-            )
+            self.run_command.emit_log_output(str(e), 'takserver-status')
             return False
+        finally:
+            self.current_operation = None
+            self.operation_progress = 0

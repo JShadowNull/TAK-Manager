@@ -9,6 +9,10 @@ RUN apt-get update && apt-get install -y \
     curl \
     zip \
     unzip \
+    docker.io \
+    docker-compose \
+    libxml2-utils \
+    sed \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
@@ -16,8 +20,9 @@ COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Create log directory
-RUN mkdir -p /app/logs
+# Create required directories
+RUN mkdir -p /app/logs && \
+    chmod -R 755 /app/logs
 
 # Copy application code
 COPY . .

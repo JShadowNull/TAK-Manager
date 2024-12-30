@@ -43,16 +43,22 @@ def create_app():
              }
          })
 
-    # Initialize socketio with the app
-    socketio.init_app(app, 
-                     async_mode=os.environ['SOCKET_ASYNC_MODE'],
-                     ping_timeout=int(os.environ['SOCKET_PING_TIMEOUT']),
-                     ping_interval=int(os.environ['SOCKET_PING_INTERVAL']),
-                     cors_allowed_origins=allowed_origins,
-                     manage_session=False,
-                     always_connect=True,
-                     logger=flask_env == 'development',
-                     engineio_logger=flask_env == 'development')
+    # Single initialization with all settings
+    socketio.init_app(app,
+        async_mode='eventlet',
+        ping_timeout=int(os.environ['SOCKET_PING_TIMEOUT']),
+        ping_interval=int(os.environ['SOCKET_PING_INTERVAL']),
+        cors_allowed_origins=allowed_origins,
+        path=os.environ['SOCKET_PATH'],
+        manage_session=False,
+        always_connect=True,
+        max_http_buffer_size=int(os.environ['SOCKET_MAX_HTTP_BUFFER_SIZE']),
+        async_handlers=True,
+        logger=flask_env == 'development',
+        engineio_logger=flask_env == 'development',
+        allow_upgrades=True,
+        transports=['websocket']
+    )
 
     # Set logging level based on environment
     log_level = os.environ['DEV_LOG_LEVEL'] if flask_env == 'development' else os.environ['PROD_LOG_LEVEL']

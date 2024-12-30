@@ -3,10 +3,9 @@
 import eventlet
 from backend.services.helpers.run_command import RunCommand
 import os
-from backend.services.helpers.os_detector import OSDetector  # Import OSDetector class
 
 class CertConfig:
-    def __init__(self, certificate_password, organization, state, city, organizational_unit, name, tak_dir=None):
+    def __init__(self, certificate_password, organization, state, city, organizational_unit, name, tak_dir=None, working_dir=None):
         self.run_command = RunCommand()
         self.certificate_password = certificate_password
         self.organization = organization
@@ -15,13 +14,49 @@ class CertConfig:
         self.name = name
         self.organizational_unit = organizational_unit
         self.tak_dir = tak_dir
-        self.os_detector = OSDetector()  # Initialize OSDetector
+        self.working_dir = working_dir
 
     def update_tak_dir(self, tak_dir):
         """
         Update the TAK directory after initialization.
         """
         self.tak_dir = tak_dir
+
+    def update_working_dir(self, working_dir):
+        """
+        Update the working directory after initialization.
+        """
+        self.working_dir = working_dir
+
+    def copy_client_cert_to_webaccess(self, container_name):
+        """
+        Copy the client certificate (named with self.name) to a webaccess folder in the working directory.
+        """
+        if not self.working_dir:
+            raise ValueError("Working directory not set. Please set working_dir before proceeding.")
+
+        # Create webaccess directory if it doesn't exist
+        webaccess_dir = os.path.join(self.working_dir, "webaccess")
+        if not os.path.exists(webaccess_dir):
+            os.makedirs(webaccess_dir)
+            self.run_command.emit_log_output(f"Created webaccess directory at {webaccess_dir}", 'takserver-installer')
+
+        # Copy the client certificate from the container to webaccess directory
+        cert_name = f"{self.name}.p12"
+        self.run_command.emit_log_output(f"Copying {cert_name} to webaccess directory...", 'takserver-installer')
+        
+        copy_command = [
+            "docker", "cp", 
+            f"{container_name}:/opt/tak/certs/files/{cert_name}", 
+            os.path.join(webaccess_dir, cert_name)
+        ]
+        
+        success = self.run_command.run_command(copy_command, namespace='takserver-installer')
+        
+        if success:
+            self.run_command.emit_log_output(f"Successfully copied {cert_name} to webaccess directory", 'takserver-installer')
+        else:
+            raise Exception(f"Failed to copy {cert_name} to webaccess directory")
 
     def configure_cert_metadata(self, container_name):
         """
@@ -81,109 +116,3 @@ class CertConfig:
 
         # If all retries fail, log the failure
         self.run_command.emit_log_output(f"Failed to configure {self.name} user after multiple attempts.", 'takserver-installer')
-
-    def install_admin_cert_to_keychain(self):
-        """
-        Installs the {self.name}.p12 certificate to the OS certificate store (Windows, macOS, Linux).
-        """
-        # Ensure the tak_dir and certificate path exist
-        if not self.tak_dir:
-            raise ValueError("TAK directory not set. Please set the tak_dir before proceeding.")
-
-        admin_cert_path = os.path.join(self.tak_dir, "certs", "files", f"{self.name}.p12")
-
-        if not os.path.exists(admin_cert_path):
-            raise FileNotFoundError(f"Certificate file not found: {admin_cert_path}")
-
-        os_type = self.os_detector.detect_os()
-
-        self.run_command.emit_log_output(f"Installing {self.name} certificate on {os_type}...", 'takserver-installer')
-
-        if os_type == 'macos':
-            # Command to import the {self.name}.p12 certificate into the macOS Keychain
-            command = [
-                "security", "import", admin_cert_path,
-                "-k", "login.keychain",       # Importing into the default login keychain
-                "-P", self.certificate_password,  # The password for the P12 file
-                "-A"                          # Allow all applications to access the key (suitable for website authentication)
-            ]
-            # Execute the command
-            success = self.run_command.run_command(command, namespace='takserver-installer')
-            if success:
-                self.run_command.emit_log_output("Certificate imported into Keychain successfully.", 'takserver-installer')
-            else:
-                self.run_command.emit_log_output("Failed to import the certificate into the Keychain.", 'takserver-installer')
-        elif os_type == 'windows':
-            # Command to import the certificate into Windows Certificate Store
-            command = [
-                "certutil", "-f", "-p", self.certificate_password, "-importpfx", admin_cert_path
-            ]
-            # Execute the command
-            success = self.run_command.run_command(command, namespace='takserver-installer')
-            if success:
-                self.run_command.emit_log_output("Certificate imported into Windows Certificate Store successfully.", 'takserver-installer')
-            else:
-                self.run_command.emit_log_output("Failed to import the certificate into Windows Certificate Store.", 'takserver-installer')
-        elif os_type == 'linux':
-            # On Linux, certificates are handled differently depending on the distribution and desktop environment.
-            # For simplicity, we can copy the certificate to a standard location like /usr/local/share/ca-certificates and update the CA certificates.
-
-            # Install 'ca-certificates' if not installed (requires sudo)
-            self.run_command.emit_log_output("Installing required packages for certificate installation...", 'takserver-installer')
-            install_command = ["sudo", "apt-get", "install", "-y", "ca-certificates"]
-            self.run_command.run_command(install_command, namespace='takserver-installer')
-
-            # Convert P12 to PEM format
-            pem_cert_path = os.path.join(self.tak_dir, "certs", "files", f"{self.name}.crt")
-            convert_command = [
-                "openssl", "pkcs12", "-in", admin_cert_path, "-out", pem_cert_path, "-nodes", "-password", f"pass:{self.certificate_password}"
-            ]
-            self.run_command.run_command(convert_command, namespace='takserver-installer')
-
-            # Copy the certificate to the system certificates directory
-            copy_command = ["sudo", "cp", pem_cert_path, f"/usr/local/share/ca-certificates/{self.name}.crt"]
-            self.run_command.run_command(copy_command, namespace='takserver-installer')
-
-            # Update CA certificates
-            update_command = ["sudo", "update-ca-certificates"]
-            success = self.run_command.run_command(update_command, namespace='takserver-installer')
-
-            if success:
-                self.run_command.emit_log_output("Certificate installed to system CA certificates successfully.", 'takserver-installer')
-            else:
-                self.run_command.emit_log_output("Failed to install the certificate to system CA certificates.", 'takserver-installer')
-        else:
-            self.run_command.emit_log_output(f"Unsupported OS for installing {self.name} certificate.", 'takserver-installer')
-            raise SystemExit("Unsupported OS")
-
-    def remove_admin_cert_from_keychain(self):
-        """
-        Removes the {self.name} certificate from the OS certificate store (Windows, macOS, Linux).
-        """
-        self.run_command.emit_log_output(f"Removing {self.name} certificate from the certificate store...", 'takserver-installer')
-
-        os_type = self.os_detector.detect_os()
-
-        if os_type == 'macos':
-            # Remove the certificate from macOS Keychain
-            delete_command = ["security", "delete-certificate", "-c", f"{self.name}"]
-            self.run_command.run_command_no_output(delete_command, namespace='takserver-installer')
-            self.run_command.emit_log_output(f"{self.name} certificate removed from Keychain.", 'takserver-installer')
-        elif os_type == 'windows':
-            # Remove the certificate from Windows Certificate Store
-            delete_command = ["powershell", "-Command", f"(Get-ChildItem -Path Cert:\\CurrentUser\\My | where {{ $_.Subject -match 'CN={self.name}' }}) | Remove-Item"]
-            self.run_command.run_command_no_output(delete_command, namespace='takserver-installer')
-            self.run_command.emit_log_output(f"{self.name} certificate removed from Windows Certificate Store.", 'takserver-installer')
-        elif os_type == 'linux':
-            # Remove the certificate from system CA certificates
-            remove_command = ["sudo", "rm", f"/usr/local/share/ca-certificates/{self.name}.crt"]
-            self.run_command.run_command_no_output(remove_command, namespace='takserver-installer')
-
-            # Update CA certificates
-            update_command = ["sudo", "update-ca-certificates", "--fresh"]
-            self.run_command.run_command_no_output(update_command, namespace='takserver-installer')
-
-            self.run_command.emit_log_output(f"{self.name} certificate removed from system CA certificates.", 'takserver-installer')
-        else:
-            self.run_command.emit_log_output(f"Unsupported OS for removing {self.name} certificate.", 'takserver-installer')
-            raise SystemExit("Unsupported OS")

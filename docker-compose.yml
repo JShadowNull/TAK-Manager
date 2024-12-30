@@ -3,6 +3,7 @@ x-common-config: &common-config
   volumes:
     - /var/run/docker.sock:/var/run/docker.sock
   restart: ${DOCKER_RESTART_POLICY}
+  env_file: .env
 
 services:
   backend:
@@ -16,6 +17,7 @@ services:
       - backend_logs:/app/logs
       - ./server:/app:rw
       - /proc:/host/proc:ro
+      - ${TAK_SERVER_INSTALL_DIR}:/home/tak-manager:rw
     cap_add:
       - SYS_PTRACE
     environment:
@@ -36,6 +38,7 @@ services:
       - PROD_LOG_LEVEL=${PROD_LOG_LEVEL}
       - PYTHONUNBUFFERED=${PYTHONUNBUFFERED}
       - WERKZEUG_DEBUG_PIN=${WERKZEUG_DEBUG_PIN}
+      - TAK_SERVER_INSTALL_DIR=${TAK_SERVER_INSTALL_DIR}
     ports:
       - "${BACKEND_PORT}:${BACKEND_PORT}"
     networks:
@@ -74,4 +77,6 @@ networks:
     driver: bridge
 
 volumes:
-  backend_logs: 
+  backend_logs:
+  takserver_data:
+    driver: local 

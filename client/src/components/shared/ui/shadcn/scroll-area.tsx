@@ -53,7 +53,7 @@ const ScrollArea = React.forwardRef<
     >
       <ScrollAreaPrimitive.Viewport 
         ref={viewportRef}
-        className="h-full w-full rounded-[inherit] break-words"
+        className="max-h-[20rem] w-full rounded-[inherit] break-words"
         style={{ overflowWrap: 'break-word', wordBreak: 'break-all' }}
       >
         {children}

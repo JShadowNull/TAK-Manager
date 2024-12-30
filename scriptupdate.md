@@ -16,6 +16,7 @@
 - Container provides standardized environment, no need for OS-specific handling
 - Preserve all current functionality and API contracts
 - Focus on simple, non-breaking changes
+- Commands must be modified to run in container environment not on host machine
 
 ## Testing
 - Verify all existing functionality works in container

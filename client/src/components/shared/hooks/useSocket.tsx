@@ -27,20 +27,7 @@ export const BACKEND_EVENTS = {
   TAKSERVER_STATUS: {
     namespace: '/takserver-status',
     events: {
-      STATUS_UPDATE: 'takserver_status'
-    }
-  },
-  TAKSERVER_UNINSTALL: {
-    namespace: '/takserver-uninstall',
-    events: {
-      STATUS_UPDATE: 'uninstall_status',
-      COMPLETE: 'uninstall_complete'
-    }
-  },
-  TAKSERVER_INSTALLER: {
-    namespace: '/takserver-installer',
-    events: {
-      DOCKER_STATUS: 'docker_installed_status'
+      STATUS_UPDATE: 'operation_status'
     }
   }
 } as const;
@@ -123,7 +110,7 @@ const socketStore: SocketStore = {
   initialize() {
     if (this.isInitialized) return;
 
-    // Initialize all sockets immediately
+    // Initialize socket
     SOCKET_NAMESPACES.forEach(namespace => {
       const socket = io(`http://127.0.0.1:${import.meta.env.VITE_API_PORT}${namespace}`, {
         transports: ['websocket'],
