@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useLocation, Link } from "react-router-dom"
 import {
   Home,
@@ -65,18 +65,31 @@ const items = [
 export function AppSidebar() {
   const location = useLocation()
   const [takServerInstalled, setTakServerInstalled] = useState(false)
+  const [operationInProgress, setOperationInProgress] = useState(false)
 
-  const { isConnected } = useSocket('/takserver-status', {
+  const { socket } = useSocket('/takserver-status', {
     eventHandlers: {
-      takserver_status: (status: { isInstalled: boolean }) => {
-        setTakServerInstalled(status.isInstalled)
+      'operation_status': (data: { status: string; error?: string }) => {
+        if (data.status === 'not_installed') {
+          setTakServerInstalled(false)
+        } else if (data.status === 'running' || data.status === 'stopped') {
+          setTakServerInstalled(true)
+        }
+        setOperationInProgress(data.status === 'in_progress')
       },
       onConnect: (socket: any) => {
         console.log('Connected to TAK server status service')
-        socket.emit('check_status')
+        socket.emit('request_initial_state')
       }
     }
   })
+
+  // Effect to handle socket state updates
+  useEffect(() => {
+    if (!operationInProgress) {
+      socket?.emit('request_initial_state')
+    }
+  }, [operationInProgress, socket])
 
   return (
     <Sidebar variant="floating" collapsible="icon" className="!w-[16rem]">
