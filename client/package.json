@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "build:css": "tailwindcss -i ./src/styles/tailwind.css -o ./src/styles/styles.css",
-    "watch:css": "tailwindcss -i ./src/styles/tailwind.css -o ./src/styles/styles.css --watch"
+    "watch:css": "tailwindcss -i ./src/styles/tailwind.css -o ./src/styles/styles.css --watch",
+    "generate-pwa-assets": "pwa-assets-generator"
   },
   "keywords": [],
   "author": "",
@@ -60,13 +61,17 @@
     "@shadcn/ui": "^0.0.4",
     "@types/react": "^18.2.64",
     "@types/react-dom": "^18.2.21",
+    "@vite-pwa/assets-generator": "^0.2.6",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
     "postcss-import": "^16.1.0",
     "postcss-loader": "^8.1.1",
     "prop-types": "^15.8.1",
+    "sharp": "^0.33.5",
     "vite": "^5.1.6",
-    "vite-plugin-css": "^1.0.4"
+    "vite-plugin-css": "^1.0.4",
+    "vite-plugin-pwa": "^0.21.1",
+    "workbox-window": "^7.3.0"
   }
 }

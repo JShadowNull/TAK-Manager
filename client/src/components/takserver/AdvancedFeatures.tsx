@@ -154,7 +154,7 @@ const AdvancedFeatures: React.FC = () => {
 
   return (
     <>
-      <div className="w-full border border-border bg-card p-6 rounded-lg shadow-lg">
+      <div className="w-full border border-border bg-card p-4 xs:p-6 rounded-lg shadow-lg min-w-fit">
         <div className="flex flex-col h-full justify-between">
           <div>
             <h3 className="text-base font-bold mb-4 text-primary">Advanced Features</h3>
@@ -166,7 +166,7 @@ const AdvancedFeatures: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex gap-4">
+          <div className="flex flex-col lg:flex-row lg:justify-start gap-4">
             <Button
               variant="primary"
               onClick={() => setShowOtaForm(true)}
@@ -174,6 +174,7 @@ const AdvancedFeatures: React.FC = () => {
               tooltipStyle="shadcn"
               tooltipDelay={1000}
               showHelpIcon={false}
+              className="w-full lg:w-auto"
             >
               Configure OTA Updates
             </Button>
@@ -184,6 +185,7 @@ const AdvancedFeatures: React.FC = () => {
               tooltipStyle="shadcn"
               tooltipDelay={1000}
               showHelpIcon={false}
+              className="w-full lg:w-auto"
             >
               Update Plugins
             </Button>
@@ -193,12 +195,12 @@ const AdvancedFeatures: React.FC = () => {
 
       {/* OTA Configuration Form */}
       {showOtaForm && (
-        <div className="w-full border border-border bg-card p-6 rounded-lg shadow-lg">
+        <div className="w-full border border-border bg-card p-4 xs:p-6 rounded-lg shadow-lg min-w-fit">
           <h3 className="text-base font-bold mb-4 text-primary">OTA Updates Configuration</h3>
           
           <div className="flex flex-col gap-4">
             {/* Purpose Section */}
-            <div className="bg-background border border-border p-4 rounded-lg mb-4">
+            <div className="bg-sidebar border border-border p-4 rounded-lg mb-4">
               <h4 className="text-sm font-semibold text-selectedColor mb-2">Purpose</h4>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 OTA (Over-The-Air) updates enable ATAK users to easily discover and install available plugins and ATAK versions directly from their devices. 
@@ -207,9 +209,9 @@ const AdvancedFeatures: React.FC = () => {
             </div>
 
             {/* OTA Configuration Summary */}
-            <div className="bg-background border border-border p-4 rounded-lg mb-4">
+            <div className="bg-sidebar border border-border p-4 rounded-lg mb-4">
               <h4 className="text-sm font-semibold text-selectedColor mb-2">Configuration Summary</h4>
-              <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
+              <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1 break-words">
                 <li>This will configure OTA (Over-The-Air) updates for ATAK clients</li>
                 <li>The process will update the Dockerfile and docker-compose configuration</li>
                 <li>TAK Server containers will be rebuilt and restarted</li>
@@ -248,19 +250,19 @@ const AdvancedFeatures: React.FC = () => {
                 />
               </div>
 
-              <div className="flex justify-end gap-4 mt-4">
+              <div className="flex flex-col lg:flex-row justify-end gap-4 mt-4">
                 <Button
                   variant="secondary"
                   onClick={handleOtaClose}
                   type="button"
-                  className="hover:bg-red-500"
+                  className="hover:bg-red-500 w-full lg:w-auto"
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   variant="primary"
-                  className="hover:bg-green-500"
+                  className="hover:bg-green-500 w-full lg:w-auto"
                   loading={isInstalling}
                   loadingText="Configuring..."
                   disabled={!otaFormData.ota_zip_file}
@@ -279,12 +281,12 @@ const AdvancedFeatures: React.FC = () => {
 
       {/* Update Plugins Form */}
       {showUpdatePluginsForm && (
-        <div className="w-full border border-border bg-card p-6 rounded-lg shadow-lg">
+        <div className="w-full border border-border bg-card p-4 xs:p-6 rounded-lg shadow-lg min-w-fit">
           <h3 className="text-base font-bold mb-4 text-primary">Update TAK Server Plugins</h3>
           
           <div className="flex flex-col gap-4">
             {/* Purpose Section */}
-            <div className="bg-background border border-border p-4 rounded-lg mb-4">
+            <div className="bg-sidebar border border-border p-4 rounded-lg mb-4">
               <h4 className="text-sm font-semibold text-selectedColor mb-2">Purpose</h4>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 Update the plugins available through OTA updates on your TAK Server. This allows you to add new plugins or update existing ones
@@ -293,9 +295,9 @@ const AdvancedFeatures: React.FC = () => {
             </div>
 
             {/* Update Summary */}
-            <div className="bg-background border border-border p-4 rounded-lg mb-4">
+            <div className="bg-sidebar border border-border p-4 rounded-lg mb-4">
               <h4 className="text-sm font-semibold text-selectedColor mb-2">Update Summary</h4>
-              <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
+              <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1 break-words">
                 <li>This will update the available plugins for OTA updates</li>
                 <li>Existing plugins folder will be removed and replaced with the new content</li>
                 <li>TAK Server will be restarted to apply the changes</li>
@@ -333,19 +335,19 @@ const AdvancedFeatures: React.FC = () => {
                 />
               </div>
 
-              <div className="flex justify-end gap-4 mt-4">
+              <div className="flex flex-col lg:flex-row justify-end gap-4 mt-4">
                 <Button
                   variant="secondary"
                   onClick={handleUpdatePluginsClose}
                   type="button"
-                  className="hover:bg-red-500"
+                  className="hover:bg-red-500 w-full lg:w-auto"
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   variant="primary"
-                  className="hover:bg-green-500"
+                  className="hover:bg-green-500 w-full lg:w-auto"
                   loading={isInstalling}
                   loadingText="Updating..."
                   disabled={!updatePluginsFormData.ota_zip_file}

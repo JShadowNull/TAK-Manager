@@ -23,13 +23,14 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
   currentOperation
 }) => {
   return (
-    <div className="flex justify-start gap-4">
+    <div className="flex flex-col justify-center lg:flex-row lg:justify-start gap-4">
       {takState.isInstalled ? (
         <>
           <Button
             onClick={onUninstall}
             disabled={disabled}
             variant="danger"
+            className="w-full lg:w-auto"
           >
             Uninstall
           </Button>
@@ -41,7 +42,7 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
                 isLoading={currentOperation === 'restart'}
                 operation="restart"
                 variant="primary"
-                className="hover:bg-yellow-500 transition-colors"
+                className="hover:bg-yellow-500 transition-colors w-full lg:w-auto"
               >
                 Restart
               </LoadingButton>
@@ -51,7 +52,7 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
                 isLoading={currentOperation === 'stop'}
                 operation="stop"
                 variant="primary"
-                className="hover:bg-red-500 transition-colors"
+                className="hover:bg-red-500 transition-colors w-full lg:w-auto"
               >
                 Stop
               </LoadingButton>
@@ -64,7 +65,7 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
               isLoading={currentOperation === 'start'}
               operation="start"
               variant="primary"
-              className="hover:bg-green-500 transition-colors"
+              className="hover:bg-green-500 transition-colors w-full lg:w-auto"
             >
               Start
             </LoadingButton>
@@ -74,7 +75,7 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
         <Button
           onClick={onInstall}
           variant="primary"
-          className="hover:bg-green-500 transition-colors"
+          className="hover:bg-green-500 transition-colors w-full lg:w-auto"
         >
           Install TAK Server
         </Button>

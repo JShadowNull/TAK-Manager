@@ -79,4 +79,6 @@ networks:
 volumes:
   backend_logs:
   takserver_data:
+    driver: local
+  node_modules:
     driver: local 

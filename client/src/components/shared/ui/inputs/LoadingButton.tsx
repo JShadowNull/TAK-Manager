@@ -86,7 +86,7 @@ const LoadingButton: React.FC<LoadingButtonProps> = ({
   };
 
   return (
-    <div className="flex flex-col w-fit">
+    <div className={cn("w-full", progressType === 'bar' ? "flex flex-col" : "contents")}>
       <Button
         {...buttonProps}
         className={getButtonClassName()}

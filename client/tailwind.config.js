@@ -9,11 +9,26 @@ module.exports = {
     "./src/**/*.html",
 	],
   theme: {
+    screens: {
+      'xs': '320px',
+      'sm': '375px',
+      'md': '393px',
+      'lg': '430px',
+      'xl': '834px',
+      '2xl': '1024px',
+      '3xl': '1032px',
+    },
   	container: {
   		center: true,
   		padding: '2rem',
   		screens: {
-  			'2xl': '1400px'
+  			xs: '320px',
+  			sm: '375px',
+  			md: '393px',
+  			lg: '430px',
+  			xl: '834px',
+  			'2xl': '1024px',
+  			'3xl': '1032px'
   		}
   	},
   	extend: {

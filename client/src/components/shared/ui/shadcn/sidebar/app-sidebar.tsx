@@ -6,9 +6,11 @@ import {
   Key,
   Database,
   ArrowLeftRight,
+  Menu,
 } from "lucide-react"
 import useSocket from "@/components/shared/hooks/useSocket"
 import { ModeToggle } from "@/components/shared/ui/shadcn/mode-toggle"
+import { Sheet, SheetContent } from "@/components/shared/ui/shadcn/sheet"
 
 import {
   Sidebar,
@@ -20,6 +22,7 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarFooter,
+  SidebarHeader,
 } from "@/components/shared/ui/shadcn/sidebar/sidebar"
 
 const items = [
@@ -66,6 +69,12 @@ export function AppSidebar() {
   const location = useLocation()
   const [takServerInstalled, setTakServerInstalled] = useState(false)
   const [operationInProgress, setOperationInProgress] = useState(false)
+  const [isOpen, setIsOpen] = useState(false)
+
+  const getTitle = () => {
+    const currentItem = items.find(item => item.url === location.pathname)
+    return currentItem?.title || "Dashboard"
+  }
 
   const { socket } = useSocket('/takserver-status', {
     eventHandlers: {
@@ -84,7 +93,6 @@ export function AppSidebar() {
     }
   })
 
-  // Effect to handle socket state updates
   useEffect(() => {
     if (!operationInProgress) {
       socket?.emit('request_initial_state')
@@ -92,57 +100,145 @@ export function AppSidebar() {
   }, [operationInProgress, socket])
 
   return (
-    <Sidebar variant="floating" collapsible="icon" className="!w-[16rem]">
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>TAK Manager</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {items
-                .filter((item) => item.alwaysShow || item.showWhen?.(takServerInstalled))
-                .map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <Link
-                      to={item.url}
-                      onClick={(e) => {
-                        if (
-                          location.pathname === item.url &&
-                          item.url === "/data-package"
-                        ) {
-                          e.preventDefault()
-                          return
-                        }
-                      }}
-                      className="w-full"
-                    >
-                      <SidebarMenuButton
-                        className={
-                          location.pathname === item.url
-                            ? "bg-accent text-accent-foreground w-full"
-                            : "text-muted-foreground hover:text-foreground w-full"
-                        }
-                      >
-                        <item.icon
-                          className={`h-4 w-4 mr-2 ${
-                            location.pathname === item.url
-                              ? "text-accent-foreground"
-                              : item.iconColor
-                          }`}
-                        />
-                        <span>{item.title}</span>
-                      </SidebarMenuButton>
-                    </Link>
-                  </SidebarMenuItem>
-                ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-      <SidebarFooter className="flex items-center justify-center p-4">
-        <div className="flex items-center justify-center w-full">
-          <ModeToggle />
+    <>
+      {/* Mobile Header */}
+      <div className="xl:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-sm border-b border-border">
+        <div className="relative flex items-center h-14">
+          <div className="absolute left-4">
+            {!isOpen && (
+              <button 
+                onClick={() => setIsOpen(true)}
+                className="p-2 hover:bg-accent rounded-md"
+              >
+                <Menu className="h-6 w-6" />
+              </button>
+            )}
+          </div>
+          
+          <div className="flex-1 flex items-center justify-center">
+            <h1 className="text-lg font-bold text-foreground">{getTitle()}</h1>
+          </div>
         </div>
-      </SidebarFooter>
-    </Sidebar>
+      </div>
+
+      {/* Mobile Navigation */}
+      <Sheet open={isOpen} onOpenChange={setIsOpen}>
+        <SheetContent 
+          side="left" 
+          className="fixed inset-0 w-full p-0 border-0"
+        >
+          <div className="flex flex-col h-full bg-background">
+            <SidebarHeader className="relative flex items-center justify-center h-14 border-b border-border">
+              <h1 className="text-lg font-bold text-foreground">{getTitle()}</h1>
+            </SidebarHeader>
+            <SidebarContent className="px-2">
+              <SidebarGroup>
+                <SidebarGroupLabel className="px-2">TAK Manager</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {items
+                      .filter((item) => item.alwaysShow || item.showWhen?.(takServerInstalled))
+                      .map((item) => (
+                        <SidebarMenuItem key={item.title}>
+                          <Link
+                            to={item.url}
+                            onClick={() => setIsOpen(false)}
+                            className="w-full"
+                          >
+                            <SidebarMenuButton
+                              className={
+                                location.pathname === item.url
+                                  ? "bg-accent text-accent-foreground w-full h-12"
+                                  : "text-muted-foreground hover:text-foreground w-full h-12"
+                              }
+                            >
+                              <item.icon
+                                className={`h-5 w-5 mr-3 ${
+                                  location.pathname === item.url
+                                    ? "text-accent-foreground"
+                                    : item.iconColor
+                                }`}
+                              />
+                              <span className="text-base">{item.title}</span>
+                            </SidebarMenuButton>
+                          </Link>
+                        </SidebarMenuItem>
+                      ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            </SidebarContent>
+            <SidebarFooter className="mt-auto border-t border-border p-6">
+              <div className="flex items-center justify-center w-full">
+                <ModeToggle />
+              </div>
+            </SidebarFooter>
+          </div>
+        </SheetContent>
+      </Sheet>
+      
+      {/* Desktop Sidebar */}
+      <div className="hidden xl:block">
+        <Sidebar 
+          variant="floating" 
+          collapsible="icon"
+          className="!w-[16rem]"
+        >
+          <SidebarHeader className="flex items-center justify-between p-4 border-b border-border">
+            <h1 className="text-lg font-bold text-foreground">{getTitle()}</h1>
+          </SidebarHeader>
+          <SidebarContent>
+            <SidebarGroup>
+              <SidebarGroupLabel>TAK Manager</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {items
+                    .filter((item) => item.alwaysShow || item.showWhen?.(takServerInstalled))
+                    .map((item) => (
+                      <SidebarMenuItem key={item.title}>
+                        <Link
+                          to={item.url}
+                          onClick={(e) => {
+                            if (
+                              location.pathname === item.url &&
+                              item.url === "/data-package"
+                            ) {
+                              e.preventDefault()
+                              return
+                            }
+                          }}
+                          className="w-full"
+                        >
+                          <SidebarMenuButton
+                            className={
+                              location.pathname === item.url
+                                ? "bg-accent text-accent-foreground w-full"
+                                : "text-muted-foreground hover:text-foreground w-full"
+                            }
+                          >
+                            <item.icon
+                              className={`h-4 w-4 mr-2 ${
+                                location.pathname === item.url
+                                  ? "text-accent-foreground"
+                                  : item.iconColor
+                              }`}
+                            />
+                            <span>{item.title}</span>
+                          </SidebarMenuButton>
+                        </Link>
+                      </SidebarMenuItem>
+                    ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </SidebarContent>
+          <SidebarFooter className="flex items-center justify-center p-4 border-t border-border">
+            <div className="flex items-center justify-center w-full">
+              <ModeToggle />
+            </div>
+          </SidebarFooter>
+        </Sidebar>
+      </div>
+    </>
   )
 }

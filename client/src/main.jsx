@@ -5,6 +5,7 @@ import App from './App';
 import './styles/tailwind.css';
 import { library } from '@fortawesome/fontawesome-svg-core';
 import { faPlay, faStop, faSpinner } from '@fortawesome/free-solid-svg-icons';
+import './pwa';
 
 // Configure future flags for React Router
 const router = {

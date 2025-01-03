@@ -168,9 +168,9 @@ function Dashboard() {
   }
 
   return (
-    <div className="">
+    <div className="space-y-4">
       {/* Monitoring Section */}
-      <div className="flex flex-wrap gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         {/* CPU Usage Section */}
         <AnalyticsChart
           data={servicesState.cpuData}
@@ -178,7 +178,7 @@ function Dashboard() {
           description="Real-time CPU utilization"
           trendingValue={servicesState.cpuUsage}
           chartColor="blue"
-          className="flex-1 min-w-[28rem]"
+          className="w-full"
         />
 
         {/* RAM Usage Section */}
@@ -188,7 +188,7 @@ function Dashboard() {
           description="Real-time memory utilization"
           trendingValue={servicesState.ramUsage}
           chartColor="green"
-          className="flex-1 min-w-[28rem]"
+          className="w-full"
         />
 
         {/* Network & IP Section */}
@@ -198,54 +198,52 @@ function Dashboard() {
           description={`Current IP: ${networkState.ipAddress} | ${networkState.networkUsage.upload} | ${networkState.networkUsage.download}`}
           trendingValue={networkState.networkUsage.total}
           chartColor="yellow"
-          className="flex-1 min-w-[28rem]"
+          className="w-full"
         />
 
         {/* Docker Containers Section */}
-        <Card className="flex-1 min-w-[28rem]">
+        <Card className="w-full">
           <CardHeader>
             <CardTitle>Docker Containers</CardTitle>
             <CardDescription>Container Status & Controls</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="h-[25rem] overflow-hidden rounded-lg border">
-              <CustomScrollbar>
-                <ul className="list-none space-y-2 divide-y divide-border text-sm text-muted-foreground p-2">
-                  {dockerState.containers.length === 0 ? (
-                    <li className="border-1 border-border p-4 rounded">No containers found</li>
-                  ) : (
-                    dockerState.containers.map(container => {
-                      const running = isContainerRunning(container.status);
-                      return (
-                        <li key={container.name} className="p-4 rounded flex justify-between items-center space-x-4">
-                          <span className="flex-grow">
-                            Container: {container.name} (Status: {container.status})
-                          </span>
-                          <ContainerStateIcon
-                            containerName={container.name}
-                            isRunning={running}
-                            onOperation={async (containerName, action) => {
-                              console.debug('[Dashboard] Container operation:', {
-                                containerName,
-                                action
-                              });
-                              try {
-                                const response = await post(`/docker-manager/docker/containers/${containerName}/${action}`);
-                                console.debug('[Dashboard] Operation response:', response);
-                                return response;
-                              } catch (error) {
-                                console.error('[Dashboard] Operation failed:', error);
-                                throw error;
-                              }
-                            }}
-                            onOperationComplete={() => emit('check_status')}
-                          />
-                        </li>
-                      );
-                    })
-                  )}
-                </ul>
-              </CustomScrollbar>
+            <div className="h-[25rem] overflow-auto rounded-lg border">
+              <ul className="list-none space-y-2 divide-y divide-border text-sm text-muted-foreground p-2">
+                {dockerState.containers.length === 0 ? (
+                  <li className="border-1 border-border p-4 rounded">No containers found</li>
+                ) : (
+                  dockerState.containers.map(container => {
+                    const running = isContainerRunning(container.status);
+                    return (
+                      <li key={container.name} className="p-4 rounded flex justify-between items-center space-x-4">
+                        <span className="flex-grow truncate">
+                          Container: {container.name} (Status: {container.status})
+                        </span>
+                        <ContainerStateIcon
+                          containerName={container.name}
+                          isRunning={running}
+                          onOperation={async (containerName, action) => {
+                            console.debug('[Dashboard] Container operation:', {
+                              containerName,
+                              action
+                            });
+                            try {
+                              const response = await post(`/docker-manager/docker/containers/${containerName}/${action}`);
+                              console.debug('[Dashboard] Operation response:', response);
+                              return response;
+                            } catch (error) {
+                              console.error('[Dashboard] Operation failed:', error);
+                              throw error;
+                            }
+                          }}
+                          onOperationComplete={() => emit('check_status')}
+                        />
+                      </li>
+                    );
+                  })
+                )}
+              </ul>
             </div>
           </CardContent>
         </Card>

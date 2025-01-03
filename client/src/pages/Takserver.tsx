@@ -34,7 +34,7 @@ const Takserver: React.FC = () => {
   });
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="space-y-4 w-full">
       <TakServerStatus socket={takSocket} />
       {takSocket.state.isInstalled && (
         <>
