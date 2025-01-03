@@ -201,10 +201,10 @@ function ExistingCertificates({
   });
 
   return (
-    <div className="border border-border bg-background p-4 rounded-lg">
-      <div className="flex items-center justify-between mb-4">
+    <div className="border border-border bg-background p-2 md:p-4 rounded-lg">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-2 md:gap-4 mb-4">
         <h3 className="text-base font-bold text-primary">Existing Certificates</h3>
-        <div className="w-full max-w-[30rem] p-2">
+        <div className="w-full md:max-w-[30rem] p-0 md:p-2">
           <Input
             type="text"
             placeholder="Search certificates..."
@@ -213,7 +213,7 @@ function ExistingCertificates({
             className="w-full bg-sidebar border-border"
           />
         </div>
-        <div className="flex gap-2 items-center">
+        <div className="flex flex-wrap gap-2 items-center">
           <Button
             variant="outline"
             onClick={handleSelectAll}
@@ -263,9 +263,9 @@ function ExistingCertificates({
               filteredCertificates.map((cert) => (
                 <div 
                   key={cert.identifier} 
-                  className="flex items-center justify-between p-3 border border-border rounded-lg bg-sidebar transition-all duration-200"
+                  className="flex flex-col md:flex-row items-start md:items-center justify-between p-3 border border-border rounded-lg bg-sidebar transition-all duration-200 gap-2"
                 >
-                  <div className="flex items-center gap-4 flex-1">
+                  <div className="flex items-center gap-4 flex-1 w-full md:w-auto">
                     <input
                       type="checkbox"
                       checked={selectedCerts.has(cert.identifier)}
@@ -273,7 +273,7 @@ function ExistingCertificates({
                       className="w-4 h-4 rounded border-border bg-background"
                       disabled={isDeleting && operationStatus?.details?.current_cert === cert.identifier}
                     />
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="text-foreground font-medium">{cert.identifier}</span>
                       {cert.role === 'ROLE_ADMIN' && (
                         <span className="text-sm text-primary">(Admin)</span>
@@ -282,18 +282,12 @@ function ExistingCertificates({
                         <div className="flex items-center gap-1">
                           {cert.passwordHashed ? (
                             <>
-                              <LockIcon sx={{ 
-                                fontSize: 16, 
-                                color: 'hsl(var(--muted-foreground))'
-                              }} />
+                              <LockIcon sx={{ fontSize: 16, color: 'hsl(var(--muted-foreground))' }} />
                               <span className="text-xs text-muted-foreground">Password Configured</span>
                             </>
                           ) : (
                             <>
-                              <LockOpenIcon sx={{ 
-                                fontSize: 16, 
-                                color: 'hsl(var(--muted-foreground))'
-                              }} />
+                              <LockOpenIcon sx={{ fontSize: 16, color: 'hsl(var(--muted-foreground))' }} />
                               <span className="text-xs text-muted-foreground">No Password</span>
                             </>
                           )}

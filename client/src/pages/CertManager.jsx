@@ -45,7 +45,7 @@ function CertManager() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4 p-2 md:p-4 sm:p-6">
       {/* Certificate Creation Section */}
       <CreateCertificates 
         onOperationProgress={handleOperationProgress}

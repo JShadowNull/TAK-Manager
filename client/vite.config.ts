@@ -19,7 +19,7 @@ export default defineConfig({
         name: 'Tak Manager',
         short_name: 'TakManager',
         description: 'TAK Server Management Application',
-        theme_color: '#ffffff',
+        theme_color: 'hsl(var(--background))',
         icons: [
           {
             src: '/pwa-64x64.png',

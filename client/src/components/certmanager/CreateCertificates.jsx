@@ -305,8 +305,8 @@ function CreateCertificates({ onOperationProgress, isConnected }) {
   };
 
   return (
-    <div className="border border-border bg-card p-4 rounded-lg">
-      <div className="flex items-center gap-4 mb-4">
+    <div className="border border-border bg-card p-2 md:p-4 rounded-lg">
+      <div className="flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-4 mb-4">
         <h3 className="text-base font-bold">Create Certificates</h3>
         {!isBatchMode && (
           <Button
@@ -341,7 +341,7 @@ function CreateCertificates({ onOperationProgress, isConnected }) {
         {!isBatchMode && certFields.map((field, index) => {
           const validation = certFieldsValidation[index];
           return (
-            <div key={index} className="flex gap-4 items-end">
+            <div key={index} className="flex flex-col md:flex-row gap-4">
               <div className="flex-1">
                 <div className="mb-2">
                   <span className="text-sm text-primary font-medium flex items-center gap-1">
@@ -408,7 +408,7 @@ function CreateCertificates({ onOperationProgress, isConnected }) {
                   <p className="mt-1 text-sm text-red-500">{validation.errors.password}</p>
                 )}
               </div>
-              <div className="flex items-center gap-4 mt-8">
+              <div className="flex items-center gap-4">
                 <div className="flex items-center space-x-2">
                   <Switch
                     id={`admin-${index}`}
@@ -440,7 +440,7 @@ function CreateCertificates({ onOperationProgress, isConnected }) {
         {/* Batch Generation Mode - Create multiple certificates with standard naming */}
         {isBatchMode && (
           <div className="space-y-4">
-            <div className="flex gap-4">
+            <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1">
                 <div className="mb-2">
                   <span className="text-sm text-primary font-medium flex items-center gap-1">
@@ -526,7 +526,7 @@ function CreateCertificates({ onOperationProgress, isConnected }) {
             </div>
             
             {/* Certificate Name Preview */}
-            <div className="text-sm text-primary italic">
+            <div className="text-sm text-primary italic break-words">
               Preview: {getCertificatePreview()}
             </div>
           </div>
@@ -550,7 +550,7 @@ function CreateCertificates({ onOperationProgress, isConnected }) {
             failedMessage={operationProgress.message || "Failed to create certificates"}
             onClick={handleCreateCertificates}
             variant="primary"
-            className="hover:bg-green-500"
+            className="w-full md:w-auto hover:bg-green-500"
           >
             {`Create Certificate${(isBatchMode || certFields.length > 1) ? 's' : ''}`}
           </LoadingButton>
