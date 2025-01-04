@@ -1,41 +1,103 @@
-import React, { useState } from 'react';
-import Popup from '../shared/ui/popups/Popup';
+import React, { useState, useEffect } from 'react';
 import useFetch from '../shared/hooks/useFetch';
 import { Button } from '../shared/ui/shadcn/button';
 import { HelpIconTooltip } from '../shared/ui/shadcn/tooltip/HelpIconTooltip';
 import { useOtaSocket } from './hooks/useOtaSocket';
+import Popups from './components/Popups';
 
 interface OtaFormData {
   ota_zip_file: File | null;
 }
 
+interface ProgressResponse {
+  success: boolean;
+  status: 'idle' | 'in_progress' | 'complete' | 'error' | 'not_found';
+  progress: number;
+  message: string;
+  error?: string;
+}
+
+interface OtaOperationState {
+  showProgress: boolean;
+  showComplete: boolean;
+  progress: number;
+  error?: string;
+  terminalOutput: string[];
+}
+
 const AdvancedFeatures: React.FC = () => {
   const [showOtaForm, setShowOtaForm] = useState<boolean>(false);
   const [showUpdatePluginsForm, setShowUpdatePluginsForm] = useState<boolean>(false);
-  const [showOtaProgress, setShowOtaProgress] = useState<boolean>(false);
   const [otaFormData, setOtaFormData] = useState<OtaFormData>({
     ota_zip_file: null,
   });
   const [updatePluginsFormData, setUpdatePluginsFormData] = useState<OtaFormData>({
     ota_zip_file: null,
   });
-  const [showCompletionPopup, setShowCompletionPopup] = useState<boolean>(false);
   const [completedOperation, setCompletedOperation] = useState<'config' | 'update' | null>(null);
+  const [currentUpdateId, setCurrentUpdateId] = useState<string | null>(null);
+  const [progressData, setProgressData] = useState<ProgressResponse | null>(null);
+  const [otaOperation, setOtaOperation] = useState<OtaOperationState>({
+    showProgress: false,
+    showComplete: false,
+    progress: 0,
+    error: undefined,
+    terminalOutput: []
+  });
 
   // Initialize fetch hook
-  const { post } = useFetch();
+  const { post, get } = useFetch();
 
-  // Initialize socket with useOtaSocket hook
-  const {
-    state: {
-      isInstalling,
-      installationSuccess: installationSuccessful,
-      installationError,
-      showNextButton
-    },
-    emit,
-    updateState,
-  } = useOtaSocket();
+  // Initialize socket for terminal output only
+  const socket = useOtaSocket();
+  const { state: { isInstalling } } = socket;
+
+  // Progress polling
+  useEffect(() => {
+    let pollInterval: NodeJS.Timeout;
+
+    const pollProgress = async () => {
+      if (currentUpdateId && otaOperation.showProgress) {
+        try {
+          const response = await get<ProgressResponse>(`/api/ota/ota-update-progress/${currentUpdateId}`);
+          setProgressData(response);
+          setOtaOperation(prev => ({
+            ...prev,
+            progress: response.progress || 0,
+            error: response.error
+          }));
+
+          if (response.status === 'complete' || response.status === 'error' || response.status === 'not_found') {
+            clearInterval(pollInterval);
+            if (response.status === 'complete') {
+              setOtaOperation(prev => ({
+                ...prev,
+                showProgress: false,
+                showComplete: true
+              }));
+            }
+          }
+        } catch (error) {
+          console.error('Error polling progress:', error);
+          setOtaOperation(prev => ({
+            ...prev,
+            error: error instanceof Error ? error.message : 'Operation failed'
+          }));
+        }
+      }
+    };
+
+    if (currentUpdateId && otaOperation.showProgress) {
+      pollProgress();
+      pollInterval = setInterval(pollProgress, 2000);
+    }
+
+    return () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+    };
+  }, [currentUpdateId, otaOperation.showProgress, get]);
 
   const handleOtaInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, files } = e.target;
@@ -60,32 +122,37 @@ const AdvancedFeatures: React.FC = () => {
         throw new Error('Please select a valid OTA plugins ZIP file');
       }
 
-      setShowOtaProgress(true);
+      setOtaOperation({
+        showProgress: true,
+        showComplete: false,
+        progress: 0,
+        error: undefined,
+        terminalOutput: []
+      });
+      socket.clearTerminal();
       setShowOtaForm(false);
 
       const formDataToSend = new FormData();
       formDataToSend.append('ota_zip_file', otaFormData.ota_zip_file);
-      formDataToSend.append('operation_type', 'install');
 
-      // First send the file through the API
-      await post('/api/ota/ota-update', formDataToSend, {
+      const response = await post('/api/ota/ota-configure', formDataToSend, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
 
-      // Then notify the socket to start monitoring the operation
-      emit('start_operation', { operation_type: 'install' });
-      setCompletedOperation('config');
+      if (response.update_id) {
+        setCurrentUpdateId(response.update_id);
+        setCompletedOperation('config');
+      }
     } catch (error) {
       console.error('OTA configuration error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Configuration failed';
-      updateState({
-        installationError: errorMessage,
-        installationSuccess: false,
-        isInstalling: false,
-        operationInProgress: false
-      });
+      setOtaOperation(prev => ({
+        ...prev,
+        showProgress: false,
+        showComplete: true,
+        error: error instanceof Error ? error.message : 'Configuration failed'
+      }));
     }
   };
 
@@ -112,44 +179,53 @@ const AdvancedFeatures: React.FC = () => {
         throw new Error('Please select a valid plugins ZIP file');
       }
 
-      setShowOtaProgress(true);
+      setOtaOperation({
+        showProgress: true,
+        showComplete: false,
+        progress: 0,
+        error: undefined,
+        terminalOutput: []
+      });
+      socket.clearTerminal();
       setShowUpdatePluginsForm(false);
 
       const formDataToSend = new FormData();
       formDataToSend.append('ota_zip_file', updatePluginsFormData.ota_zip_file);
-      formDataToSend.append('operation_type', 'update');
 
-      // First send the file through the API
-      await post('/api/ota/ota-update', formDataToSend, {
+      const response = await post('/api/ota/ota-update', formDataToSend, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
 
-      // Then notify the socket to start monitoring the operation
-      emit('start_operation', { operation_type: 'update' });
-      setCompletedOperation('update');
+      if (response.update_id) {
+        setCurrentUpdateId(response.update_id);
+        setCompletedOperation('update');
+      }
     } catch (error) {
       console.error('Plugin update error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Update failed';
-      updateState({
-        installationError: errorMessage,
-        installationSuccess: false,
-        isInstalling: false,
-        operationInProgress: false
-      });
+      setOtaOperation(prev => ({
+        ...prev,
+        showProgress: false,
+        showComplete: true,
+        error: error instanceof Error ? error.message : 'Update failed'
+      }));
     }
   };
 
-  const handleNext = () => {
-    setShowOtaProgress(false);
-    setShowCompletionPopup(true);
-  };
-
   const handleComplete = () => {
-    setShowCompletionPopup(false);
-    setShowOtaProgress(false);
+    setOtaOperation({
+      showProgress: false,
+      showComplete: false,
+      progress: 0,
+      error: undefined,
+      terminalOutput: []
+    });
+    socket.clearTerminal();
+    setCurrentUpdateId(null);
+    setProgressData(null);
     handleOtaClose();
+    handleUpdatePluginsClose();
   };
 
   return (
@@ -364,87 +440,36 @@ const AdvancedFeatures: React.FC = () => {
         </div>
       )}
 
-      {/* Installation Progress Popup */}
-      <Popup
-        id="progress-popup"
-        isVisible={showOtaProgress}
-        title={
-          isInstalling 
-            ? completedOperation === 'config'
-              ? "OTA Plugins Configuration Progress"
-              : "Plugin Update Progress"
-            : installationSuccessful || installationError
-              ? completedOperation === 'config'
-                ? "Configuration Complete"
-                : "Update Complete"
-              : "Operation Progress"
-        }
-        variant="terminal"
-        namespace="/ota-update"
-        isInProgress={isInstalling}
-        isComplete={!isInstalling && (!!installationSuccessful || !!installationError)}
-        isSuccess={!!installationSuccessful}
-        errorMessage={installationError}
-        progressMessage={
-          isInstalling 
-            ? completedOperation === 'config'
-              ? 'Configuring OTA Plugins...'
-              : 'Updating Plugins...'
-            : 'Operation in Progress'
-        }
-        nextStepMessage={
-          installationSuccessful && showNextButton
-            ? "Click 'Next' to proceed"
-            : ''
-        }
-        failureMessage={
-          installationError
-            ? completedOperation === 'config'
-              ? 'OTA Plugins configuration failed'
-              : 'Plugin update failed'
-            : 'Operation failed'
-        }
-        onClose={handleComplete}
-        onNext={handleNext}
-        blurSidebar={true}
+      <Popups
+        // Progress popup
+        showInstallProgress={otaOperation.showProgress}
+        showInstallComplete={otaOperation.showComplete}
+        installProgress={otaOperation.progress}
+        installError={otaOperation.error}
+        onInstallProgressClose={() => setOtaOperation(prev => ({ ...prev, showProgress: false }))}
+        onInstallComplete={handleComplete}
+        onMoveToInstallComplete={() => {
+          setOtaOperation(prev => ({
+            ...prev,
+            showProgress: false,
+            showComplete: true
+          }));
+        }}
+        terminalOutput={socket.terminalOutput}
+        
+        // These props are required by the Popups component but not used for OTA
+        showUninstallConfirm={false}
+        showUninstallProgress={false}
+        showUninstallComplete={false}
+        uninstallProgress={0}
+        uninstallError={undefined}
+        onUninstallConfirmClose={() => {}}
+        onUninstall={() => {}}
+        onUninstallProgressClose={() => {}}
+        onUninstallComplete={() => {}}
+        onMoveToUninstallComplete={() => {}}
+        uninstallTerminalOutput={[]}
       />
-
-      {/* Configuration Completion Popup */}
-      <Popup
-        id="completion-popup"
-        title={completedOperation === 'config' ? "Configuration Complete" : "Update Complete"}
-        isVisible={showCompletionPopup && !showOtaProgress}
-        variant="standard"
-        onClose={handleComplete}
-        blurSidebar={true}
-        buttons={
-          <Button
-            variant="primary"
-            onClick={handleComplete}
-          >
-            Close
-          </Button>
-        }
-      >
-        <div className="text-center">
-          <p className="text-green-500 font-semibold">✓</p>
-          {completedOperation === 'config' ? (
-            <>
-              <p className="text-green-500 font-semibold">OTA Plugins Configuration Completed Successfully</p>
-              <p className="text-sm text-primary">
-                Your TAK Server is now configured to provide OTA updates to ATAK clients.
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="text-green-500 font-semibold">Plugin Update Completed Successfully</p>
-              <p className="text-sm text-primary">
-                Your TAK Server plugins have been updated and are now available in ATAK.
-              </p>
-            </>
-          )}
-        </div>
-      </Popup>
     </>
   );
 }

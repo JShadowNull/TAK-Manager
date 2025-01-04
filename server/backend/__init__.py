@@ -57,7 +57,7 @@ def create_app():
         logger=flask_env == 'development',
         engineio_logger=flask_env == 'development',
         allow_upgrades=True,
-        transports=['websocket']
+        transports=['websocket', 'polling']
     )
 
     # Set logging level based on environment
@@ -68,8 +68,8 @@ def create_app():
     @app.after_request
     def after_request(response):
         origin = request.headers.get('Origin')
-        if origin in allowed_origins:
-            response.headers['Access-Control-Allow-Origin'] = origin
+        if flask_env == 'development' or origin in allowed_origins:
+            response.headers['Access-Control-Allow-Origin'] = origin or '*'
             response.headers['Access-Control-Allow-Headers'] = allow_headers
             response.headers['Access-Control-Allow-Methods'] = ','.join(allow_methods)
             response.headers['Access-Control-Max-Age'] = '3600'

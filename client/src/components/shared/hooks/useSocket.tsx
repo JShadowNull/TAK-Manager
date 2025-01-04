@@ -112,7 +112,7 @@ const socketStore: SocketStore = {
 
     // Initialize socket
     SOCKET_NAMESPACES.forEach(namespace => {
-      const socket = io(`http://127.0.0.1:${import.meta.env.VITE_API_PORT}${namespace}`, {
+      const socket = io(`http://${import.meta.env.VITE_HMR_HOST}:${import.meta.env.VITE_API_PORT}${namespace}`, {
         transports: ['websocket'],
         path: '/socket.io',
         reconnection: true,
@@ -121,8 +121,7 @@ const socketStore: SocketStore = {
         reconnectionDelayMax: 2000,
         timeout: 5000,
         forceNew: false,
-        autoConnect: true,
-        withCredentials: import.meta.env.VITE_CORS_ALLOW_CREDENTIALS === 'true'
+        autoConnect: true
       });
 
       // Set up basic event handlers for each socket

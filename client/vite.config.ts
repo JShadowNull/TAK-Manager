@@ -19,7 +19,7 @@ export default defineConfig({
         name: 'Tak Manager',
         short_name: 'TakManager',
         description: 'TAK Server Management Application',
-        theme_color: 'hsl(var(--background))',
+        theme_color: '#000000',
         icons: [
           {
             src: '/pwa-64x64.png',
@@ -90,16 +90,17 @@ export default defineConfig({
   server: {
     port: parseInt(process.env.VITE_PORT),
     strictPort: true,
-    host: true,
+    host: '0.0.0.0',
     open: false,
     cors: true,
     hmr: {
       port: parseInt(process.env.VITE_PORT),
-      host: '0.0.0.0',
+      host: process.env.VITE_HMR_HOST,
+      protocol: 'ws',
       clientPort: parseInt(process.env.VITE_PORT)
     },
     watch: {
       usePolling: true
     }
   }
-}); 
+});

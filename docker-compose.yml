@@ -62,9 +62,10 @@ services:
     environment:
       - NODE_ENV=${MODE:-development}
       - VITE_API_PORT=${BACKEND_PORT}
-      - VITE_WS_URL=ws://backend:${BACKEND_PORT}
       - VITE_PORT=${FRONTEND_PORT}
       - VITE_CORS_ALLOW_CREDENTIALS=${CORS_ALLOW_CREDENTIALS}
+      - VITE_HMR_HOST=${IP}
+      - VITE_WS_URL=ws://${IP}:${BACKEND_PORT}
     ports:
       - "${FRONTEND_PORT}:${FRONTEND_PORT}"
     networks:
