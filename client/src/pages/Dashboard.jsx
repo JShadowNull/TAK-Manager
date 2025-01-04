@@ -184,7 +184,7 @@ function Dashboard() {
         {/* RAM Usage Section */}
         <AnalyticsChart
           data={servicesState.ramData}
-          title="RAM Usage"
+          title="RAM Usage test"
           description="Real-time memory utilization"
           trendingValue={servicesState.ramUsage}
           chartColor="green"
