@@ -155,7 +155,7 @@ services:
     restart: unless-stopped
     tty: true
     volumes:
-      - ./tak:/opt/tak:z
+      - ${TAK_DIR}:/opt/tak:z
       - db-data:/var/lib/postgresql/data:z
 
   takserver:
@@ -176,8 +176,8 @@ services:
     restart: unless-stopped
     tty: true
     volumes:
-      - ./tak:/opt/tak:z
-      - ./plugins:/opt/tak/webcontent:z
+      - ${TAK_DIR}:/opt/tak:z
+      - ${PLUGINS_DIR}:/opt/tak/webcontent:z
 
 networks:
   net:
