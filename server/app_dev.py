@@ -3,12 +3,30 @@ eventlet.monkey_patch()
 
 import logging
 import os
+import sys
+
+# Configure logging first
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'app_dev.log')),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+
+# Set log levels for specific loggers
+logging.getLogger('werkzeug').setLevel(logging.WARNING)
+logging.getLogger('engineio').setLevel(logging.WARNING)
+logging.getLogger('socketio').setLevel(logging.WARNING)
+logging.getLogger('watchdog').setLevel(logging.INFO)
+
+# Now import other modules
 import socket
 import time
 import multiprocessing
-import sys
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
+from watchdog.events import FileSystemEventHandler, FileModifiedEvent
 import subprocess
 import threading
 import signal
@@ -23,22 +41,6 @@ from backend.routes.socketio import socketio
 from backend.services.scripts.system.thread_manager import thread_manager
 from backend.services.helpers.os_detector import OSDetector
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(os.path.join(server_dir, 'app_dev.log')),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
-
-# Set log levels
-logging.getLogger('werkzeug').setLevel(logging.WARNING)
-logging.getLogger('engineio').setLevel(logging.WARNING)
-logging.getLogger('socketio').setLevel(logging.WARNING)
-logging.getLogger('watchdog').setLevel(logging.WARNING)
-
 logger = logging.getLogger(__name__)
 
 # Initialize OS detector
@@ -51,8 +53,29 @@ observer = None
 restart_event = threading.Event()
 
 class BackendEventHandler(FileSystemEventHandler):
+    def __init__(self):
+        self.last_restart_time = 0
+        self.restart_cooldown = 1  # Cooldown in seconds
+
+    def should_restart(self, event):
+        # Only restart for Python files
+        if not event.src_path.endswith('.py'):
+            return False
+            
+        # Skip __pycache__ and temporary files
+        if '__pycache__' in event.src_path or event.src_path.endswith('.pyc'):
+            return False
+            
+        # Check cooldown
+        current_time = time.time()
+        if current_time - self.last_restart_time < self.restart_cooldown:
+            return False
+            
+        self.last_restart_time = current_time
+        return True
+
     def on_modified(self, event):
-        if event.src_path.endswith('.py'):
+        if isinstance(event, FileModifiedEvent) and self.should_restart(event):
             logger.info(f"Backend file changed: {event.src_path}")
             restart_event.set()
 
@@ -97,9 +120,19 @@ def start_flask():
 def start_server():
     """Start the Flask server process."""
     global server_process
+    
+    # Kill existing process if it exists
+    if server_process and server_process.is_alive():
+        logger.info("Terminating existing server process")
+        server_process.terminate()
+        server_process.join(timeout=5)
+        if server_process.is_alive():
+            server_process.kill()
+            
     server_process = multiprocessing.Process(target=start_flask)
     server_process.daemon = True
     server_process.start()
+    logger.info(f"Started new server process with PID: {server_process.pid}")
 
 def setup_watchers():
     """Setup file watchers for auto-reloading."""
@@ -111,11 +144,13 @@ def setup_watchers():
     # Watch backend directory
     backend_dir = os.path.join(server_dir, 'backend')
     observer.schedule(BackendEventHandler(), backend_dir, recursive=True)
+    logger.info(f"Watching backend directory: {backend_dir}")
     
     # Watch frontend src directory
     frontend_dir = os.path.join(workspace_root, 'client', 'src')
     if os.path.exists(frontend_dir):
         observer.schedule(FrontendEventHandler(), frontend_dir, recursive=True)
+        logger.info(f"Watching frontend directory: {frontend_dir}")
     
     observer.start()
     logger.info("File watchers started")
@@ -156,12 +191,11 @@ def main():
         # Keep the main process running
         try:
             while True:
-                time.sleep(1)
                 if restart_event.is_set():
                     logger.info("Restarting server due to file changes...")
-                    cleanup()
-                    start_server()
+                    start_server()  # This will handle cleanup of old process
                     restart_event.clear()
+                time.sleep(1)
         except KeyboardInterrupt:
             logger.info("Shutting down...")
             cleanup()

@@ -98,7 +98,7 @@ class TakServerInstaller:
 
                 version_file_path = os.path.join(self.working_dir, "version.txt")
                 with open(version_file_path, "w") as version_file:
-                    version_file.write(self.takserver_version)
+                    version_file.write(f"{self.takserver_version}\n")
                 self.run_command.emit_log_output(f"Created version.txt with version {self.takserver_version} in {self.working_dir}", 'takserver-installer')
             else:
                 raise ValueError(f"TAK directory not found at expected path: {self.tak_dir}")

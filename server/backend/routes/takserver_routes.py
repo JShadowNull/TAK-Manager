@@ -13,6 +13,7 @@ import uuid
 from backend.services.scripts.system.thread_manager import ThreadManager
 from backend.routes.socketio import socketio
 import eventlet
+import logging
 
 # ============================================================================
 # Blueprint and Global Variables
@@ -379,100 +380,138 @@ def get_operation_progress():
     """Get progress of current TAK server operation (start/stop/restart)"""
     try:
         progress_info = tak_status_checker.get_operation_progress()
-        return jsonify({
+        response = {
             'success': True,
             'operation': progress_info['operation'],
             'progress': progress_info['progress'],
             'status': progress_info['status']
-        })
+        }
+        logger.debug(f"[TakServer] Operation progress response: {response}")
+        return jsonify(response)
     except Exception as e:
-        return jsonify({
+        error_response = {
             'success': False,
             'error': str(e),
             'status': 'error',
             'progress': 0
-        }), 500
+        }
+        logger.error(f"[TakServer] Operation progress error response: {error_response}")
+        return jsonify(error_response), 500
+
+# Configure logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.ERROR)
 
 @takserver_bp.route('/takserver-start', methods=['POST'])
 def start_takserver():
     try:
+        logger.debug("[TakServer] Received start request")
         if tak_status_checker.current_operation:
-            return jsonify({
+            error_response = {
                 'success': False,
                 'error': "Another operation is in progress",
                 'status': 'error'
-            }), 409
+            }
+            logger.warning(f"[TakServer] Start request rejected - Response: {error_response}")
+            return jsonify(error_response), 409
 
         def start_task():
-            return tak_status_checker.start_containers()
+            logger.debug("[TakServer] Starting containers")
+            result = tak_status_checker.start_containers()
+            logger.debug(f"[TakServer] Start operation completed with result: {result}")
+            return result
 
         thread = thread_manager.spawn(start_task)
-        return jsonify({
+        success_response = {
             'success': True,
             'message': 'Start operation initiated',
-            'status': 'pending'
-        })
+            'status': 'in_progress'
+        }
+        logger.debug(f"[TakServer] Start operation initiated - Response: {success_response}")
+        return jsonify(success_response)
 
     except Exception as e:
-        return jsonify({
+        error_response = {
             'success': False,
             'error': str(e),
             'status': 'error'
-        }), 500
+        }
+        logger.error(f"[TakServer] Start operation error - Response: {error_response}")
+        return jsonify(error_response), 500
 
 @takserver_bp.route('/takserver-stop', methods=['POST'])
 def stop_takserver():
     try:
+        logger.debug("[TakServer] Received stop request")
         if tak_status_checker.current_operation:
-            return jsonify({
+            error_response = {
                 'success': False,
                 'error': "Another operation is in progress",
                 'status': 'error'
-            }), 409
+            }
+            logger.warning(f"[TakServer] Stop request rejected - Response: {error_response}")
+            return jsonify(error_response), 409
 
         def stop_task():
-            return tak_status_checker.stop_containers()
+            logger.debug("[TakServer] Stopping containers")
+            result = tak_status_checker.stop_containers()
+            logger.debug(f"[TakServer] Stop operation completed with result: {result}")
+            return result
 
         thread = thread_manager.spawn(stop_task)
-        return jsonify({
+        success_response = {
             'success': True,
             'message': 'Stop operation initiated',
-            'status': 'pending'
-        })
+            'status': 'in_progress'
+        }
+        logger.debug(f"[TakServer] Stop operation initiated - Response: {success_response}")
+        return jsonify(success_response)
 
     except Exception as e:
-        return jsonify({
+        error_response = {
             'success': False,
             'error': str(e),
             'status': 'error'
-        }), 500
+        }
+        logger.error(f"[TakServer] Stop operation error - Response: {error_response}")
+        return jsonify(error_response), 500
 
 @takserver_bp.route('/takserver-restart', methods=['POST'])
 def restart_takserver():
     try:
+        logger.debug("[TakServer] Received restart request")
         if tak_status_checker.current_operation:
-            return jsonify({
+            error_response = {
                 'success': False,
                 'error': "Another operation is in progress",
                 'status': 'error'
-            }), 409
+            }
+            logger.warning(f"[TakServer] Restart request rejected - Response: {error_response}")
+            return jsonify(error_response), 409
 
         def restart_task():
-            return tak_status_checker.restart_containers()
+            logger.debug("[TakServer] Restarting containers")
+            result = tak_status_checker.restart_containers()
+            logger.debug(f"[TakServer] Restart operation completed with result: {result}")
+            return result
 
         thread = thread_manager.spawn(restart_task)
-        return jsonify({
+        success_response = {
             'success': True,
             'message': 'Restart operation initiated',
-            'status': 'pending'
-        })
+            'status': 'in_progress'
+        }
+        logger.debug(f"[TakServer] Restart operation initiated - Response: {success_response}")
+        return jsonify(success_response)
 
     except Exception as e:
-        return jsonify({
+        error_response = {
             'success': False,
             'error': str(e),
             'status': 'error'
-        }), 500
+        }
+        logger.error(f"[TakServer] Restart operation error - Response: {error_response}")
+        return jsonify(error_response), 500
 
 @takserver_bp.route('/rollback-takserver', methods=['POST'])
 def rollback_takserver():
