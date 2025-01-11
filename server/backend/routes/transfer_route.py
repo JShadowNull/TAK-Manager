@@ -3,11 +3,8 @@
 from flask import Blueprint, jsonify, request
 from werkzeug.utils import secure_filename
 from backend.services.scripts.transfer.transfer import RapidFileTransfer
-from flask_socketio import Namespace
 from backend.services.scripts.system.thread_manager import ThreadManager
-from backend.routes.socketio import socketio, safe_emit
 import os
-import eventlet
 import time
 
 # ============================================================================
@@ -23,21 +20,10 @@ rapid_file_transfer = RapidFileTransfer()
 # ============================================================================
 # Helper Functions
 # ============================================================================
-def get_transfer_namespace():
-    """Helper function to get the Transfer namespace instance"""
-    try:
-        return next(ns for ns in socketio.server.namespace_handlers.values() 
-                   if isinstance(ns, TransferNamespace))
-    except StopIteration:
-        raise RuntimeError("Transfer namespace not found")
-
 def execute_transfer_operation(operation_func):
     """Execute a transfer operation in a background thread"""
-    transfer_namespace = get_transfer_namespace()
-    
     def operation_thread():
         try:
-            transfer_namespace.start_operation()
             result = operation_func()
             if result and result.get('error'):
                 rapid_file_transfer.emit_transfer_update(
@@ -52,122 +38,101 @@ def execute_transfer_operation(operation_func):
                 error=str(e)
             )
             return {'success': False, 'message': str(e)}
-        finally:
-            transfer_namespace.end_operation()
-            transfer_namespace.cleanup_operation_threads()
-    
+
     # Spawn the operation in a background thread using thread_manager
-    thread = thread_manager.spawn(operation_thread)
-    transfer_namespace.operation_threads.append(thread)
+    thread_manager.spawn(operation_func=operation_thread)
     return {'message': 'Operation initiated successfully'}
-
-# ============================================================================
-# Socket.IO Namespace
-# ============================================================================
-class TransferNamespace(Namespace):
-    def __init__(self, namespace=None):
-        super().__init__(namespace)
-        self.rapid_file_transfer = RapidFileTransfer()
-        self.monitor_thread = None
-        self.operation_in_progress = False
-        self.operation_threads = []
-
-    def cleanup_operation_threads(self):
-        """Clean up completed operation threads"""
-        # Remove dead threads
-        self.operation_threads = [t for t in self.operation_threads if not t.dead]
-        # Kill any remaining threads that are still alive
-        for thread in self.operation_threads:
-            try:
-                if not thread.dead:
-                    thread.kill()
-            except Exception as e:
-                print(f"Error killing thread: {e}")
-        self.operation_threads = []
-
-    def on_connect(self):
-        print('Client connected to /transfer namespace')
-        if not self.monitor_thread:
-            self.start_monitoring()
-        # Get current state
-        self.on_get_connected_devices()
-        self.on_get_transfer_status()
-
-    def on_disconnect(self):
-        print('Client disconnected from /transfer namespace')
-        self.cleanup_operation_threads()
-        # Kill the monitor thread if it exists
-        if self.monitor_thread and not self.monitor_thread.dead:
-            try:
-                self.monitor_thread.kill()
-            except Exception as e:
-                print(f"Error killing monitor thread: {e}")
-        self.monitor_thread = None
-
-    def start_monitoring(self):
-        """Start the device monitoring thread"""
-        if not self.rapid_file_transfer.monitoring:
-            # Signal RapidFileTransfer that monitoring is starting
-            self.rapid_file_transfer.start_monitoring()
-            # Create and manage the monitoring thread
-            self.monitor_thread = thread_manager.spawn(
-                self.rapid_file_transfer.monitor_devices
-            )
-
-    def start_operation(self):
-        """Set the operation lock"""
-        self.operation_in_progress = True
-
-    def end_operation(self):
-        """Release the operation lock and update status"""
-        self.operation_in_progress = False
-        # Force a status update after operation completes
-        self.on_get_transfer_status()
-
-    def on_get_connected_devices(self):
-        """Handle request for current device list"""
-        if not self.operation_in_progress:
-            self.rapid_file_transfer.emit_connected_devices()
-
-    def on_start_transfer(self):
-        """Start transfer for all connected devices"""
-        if not self.operation_in_progress:
-            self.operation_in_progress = True
-            try:
-                # Get list of devices that need transfer
-                device_ids = self.rapid_file_transfer.start_transfer_all_devices()
-                
-                if device_ids:
-                    # Create transfer threads for each device
-                    for device_id in device_ids:
-                        transfer_thread = thread_manager.spawn(
-                            self.rapid_file_transfer.start_transfer,
-                            device_id
-                        )
-                        self.operation_threads.append(transfer_thread)
-            finally:
-                self.operation_in_progress = False
-
-    def on_stop_transfer(self):
-        """Stop all ongoing transfers"""
-        if not self.operation_in_progress:
-            self.operation_in_progress = True
-            try:
-                self.rapid_file_transfer.stop_transfer()
-            finally:
-                self.operation_in_progress = False
-
-    def on_get_transfer_status(self):
-        """Handle transfer status request"""
-        if not self.operation_in_progress:
-            self.rapid_file_transfer.get_transfer_status()
-
-# Register the transfer namespace
-socketio.on_namespace(TransferNamespace('/transfer'))
 
 # ============================================================================
 # HTTP Routes
 # ============================================================================
+@transfer_bp.route('/start_monitoring', methods=['POST'])
+def start_monitoring():
+    """Start device monitoring"""
+    try:
+        def monitor_operation():
+            if not rapid_file_transfer.monitoring:
+                rapid_file_transfer.start_monitoring()
+                # Create and manage the monitoring thread
+                thread_manager.spawn(
+                    operation_func=rapid_file_transfer.monitor_devices
+                )
+                return {'status': 'Device monitoring started'}
+            return {'status': 'Monitoring already active'}
+
+        return jsonify(execute_transfer_operation(monitor_operation))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@transfer_bp.route('/stop_monitoring', methods=['POST'])
+def stop_monitoring():
+    """Stop device monitoring"""
+    try:
+        def stop_operation():
+            rapid_file_transfer.stop_monitoring()
+            return {'status': 'Device monitoring stopped'}
+
+        return jsonify(execute_transfer_operation(stop_operation))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@transfer_bp.route('/start_transfer', methods=['POST'])
+def start_transfer():
+    """Start transfer for all connected devices"""
+    try:
+        def transfer_operation():
+            # Get list of devices that need transfer
+            device_ids = rapid_file_transfer.start_transfer_all_devices()
+            
+            if device_ids:
+                # Create transfer threads for each device
+                for device_id in device_ids:
+                    thread_manager.spawn(
+                        operation_func=lambda: rapid_file_transfer.start_transfer(device_id)
+                    )
+                return {'status': f'Transfer started for {len(device_ids)} device(s)'}
+            return {'error': 'No devices available for transfer'}
+
+        return jsonify(execute_transfer_operation(transfer_operation))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@transfer_bp.route('/stop_transfer', methods=['POST'])
+def stop_transfer():
+    """Stop all ongoing transfers"""
+    try:
+        def stop_operation():
+            rapid_file_transfer.stop_transfer()
+            return {'status': 'Transfer stopped'}
+
+        return jsonify(execute_transfer_operation(stop_operation))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@transfer_bp.route('/get_status', methods=['GET'])
+def get_status():
+    """Get current transfer status"""
+    try:
+        def status_operation():
+            rapid_file_transfer.get_transfer_status()
+            return {'status': 'Status updated'}
+
+        return jsonify(execute_transfer_operation(status_operation))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@transfer_bp.route('/get_devices', methods=['GET'])
+def get_devices():
+    """Get list of connected devices"""
+    try:
+        def devices_operation():
+            rapid_file_transfer.emit_connected_devices()
+            return {'status': 'Device list updated'}
+
+        return jsonify(execute_transfer_operation(devices_operation))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @transfer_bp.route('/check_adb', methods=['GET'])
 def check_adb():
     """Route to check if ADB is installed"""

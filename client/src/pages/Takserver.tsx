@@ -1,42 +1,73 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import TakServerStatus from '../components/takserver/TakServerStatus';
-import AdvancedFeatures from '../components/takserver/AdvancedFeatures';
 import Configuration from '../components/takserver/Configuration';
-import useSocket, { BACKEND_EVENTS } from '../components/shared/hooks/useSocket';
-import { TakServerStatusEvent } from '../components/takserver/types';
+import AdvancedFeatures from '../components/takserver/AdvancedFeatures';
 
-export interface TakServerState {
+interface ServerState {
   isInstalled: boolean;
   isRunning: boolean;
+  status: string;
   error: string | null;
-  status: string | undefined;
+  version: string;
 }
 
-const Takserver: React.FC = () => {
-  const takSocket = useSocket(BACKEND_EVENTS.TAKSERVER_STATUS.namespace, {
-    initialState: {
-      isInstalled: false,
-      isRunning: false,
-      error: null,
-      status: undefined
-    },
-    eventHandlers: {
-      'operation_status': (data: TakServerStatusEvent, { updateState }) => {
-        console.log('Received TAK Server operation status:', data);
-        updateState({
-          isInstalled: data.status !== 'not_installed',
-          isRunning: data.status === 'running',
-          error: data.error || null,
-          status: data.status
-        });
+const defaultState: ServerState = {
+  isInstalled: false,
+  isRunning: false,
+  status: 'idle',
+  error: null,
+  version: 'Not Installed'
+};
+
+export const Takserver: React.FC = () => {
+  const [serverState, setServerState] = useState<ServerState>(() => {
+    const savedState = localStorage.getItem('takServerState');
+    if (savedState) {
+      try {
+        const parsedState = JSON.parse(savedState);
+        return {
+          ...defaultState,
+          ...parsedState,
+          isInstalled: parsedState.isInstalled === true
+        };
+      } catch (error) {
+        console.error('Error parsing saved state:', error);
+        return defaultState;
       }
     }
+    return defaultState;
   });
 
+  // Listen for changes to localStorage and custom events
+  useEffect(() => {
+    const handleStateChange = () => {
+      const savedState = localStorage.getItem('takServerState');
+      if (savedState) {
+        try {
+          const parsedState = JSON.parse(savedState);
+          setServerState(state => ({
+            ...state,
+            ...parsedState,
+            isInstalled: parsedState.isInstalled === true
+          }));
+        } catch (error) {
+          console.error('Error parsing saved state:', error);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStateChange);
+    window.addEventListener('takServerStateChange', handleStateChange);
+    return () => {
+      window.removeEventListener('storage', handleStateChange);
+      window.removeEventListener('takServerStateChange', handleStateChange);
+    };
+  }, []);
+
   return (
-    <div className="space-y-4 w-full">
-      <TakServerStatus socket={takSocket} />
-      {takSocket.state.isInstalled && (
+    <div className="space-y-4">
+      <TakServerStatus initialState={serverState} />
+      {serverState.isInstalled && (
         <>
           <AdvancedFeatures />
           <Configuration />

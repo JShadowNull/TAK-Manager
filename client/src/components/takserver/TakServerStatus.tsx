@@ -1,33 +1,205 @@
 import React, { useState, useEffect } from 'react';
-import { TakServerState } from '../../pages/Takserver';
-import { FormState, TakServerStatusProps } from './types';
-import useFetch from '../shared/hooks/useFetch';
-import useSocket from '../shared/hooks/useSocket';
+import { TakServerState, FormState } from './types/index';
+import useFetch from '../../components/shared/hooks/useFetch';
 import StatusDisplay from './components/StatusDisplay';
 import ControlButtons from './components/ControlButtons';
 import InstallationForm from './components/InstallationForm';
 import Popups from './components/Popups';
-import { useUninstall } from './hooks/useUninstall';
-import { useUninstallProgress } from './hooks/useUninstallProgress';
 
-const TakServerStatus: React.FC<TakServerStatusProps> = ({ socket }) => {
-  // Track the actual server state separately from socket state during operations
-  const [serverState, setServerState] = useState<TakServerState>(socket.state);
+interface TerminalLine {
+  message: string;
+  isError: boolean;
+  timestamp: number | null;
+}
+
+interface StoredOperationState {
+  operationInProgress: boolean;
+  currentOperation: 'start' | 'stop' | 'restart' | 'uninstall' | 'install' | null;
+  showInstallProgress: boolean;
+  showInstallComplete: boolean;
+  installProgress: number;
+  installError?: string;
+  terminalOutput: TerminalLine[];
+  showUninstallProgress: boolean;
+  showUninstallComplete: boolean;
+  uninstallProgress: number;
+  uninstallError?: string;
+  uninstallTerminalOutput: TerminalLine[];
+}
+
+interface TakServerStatusProps {
+  initialState: TakServerState;
+}
+
+const TakServerStatus: React.FC<TakServerStatusProps> = ({ initialState }) => {
+  // Track the actual server state
+  const [serverState, setServerState] = useState<TakServerState>({
+    ...initialState,
+    version: initialState.version || undefined // Convert null to undefined to match type
+  });
+  const { get } = useFetch();
+
+  // Save state to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('takServerState', JSON.stringify(serverState));
+    // Dispatch custom event for other components
+    window.dispatchEvent(new Event('takServerStateChange'));
+  }, [serverState]);
 
   // Operation states
   const [operationInProgress, setOperationInProgress] = useState<boolean>(false);
   const [operationError, setOperationError] = useState<string | undefined>(undefined);
-  const [currentOperation, setCurrentOperation] = useState<'start' | 'stop' | 'restart' | 'uninstall' | null>(null);
+  const [currentOperation, setCurrentOperation] = useState<'start' | 'stop' | 'restart' | 'uninstall' | 'install' | null>(null);
 
   // Installation states
   const [showInstallForm, setShowInstallForm] = useState<boolean>(false);
   const [showInstallProgress, setShowInstallProgress] = useState<boolean>(false);
   const [showInstallComplete, setShowInstallComplete] = useState<boolean>(false);
-  const [installationId, setInstallationId] = useState<string | null>(null);
   const [installProgress, setInstallProgress] = useState<number>(0);
   const [installError, setInstallError] = useState<string | undefined>(undefined);
-  const [terminalOutput, setTerminalOutput] = useState<string[]>([]);
+  const [terminalOutput, setTerminalOutput] = useState<TerminalLine[]>([]);
 
+  // Uninstallation states
+  const [showUninstallConfirm, setShowUninstallConfirm] = useState<boolean>(false);
+  const [showUninstallProgress, setShowUninstallProgress] = useState<boolean>(false);
+  const [showUninstallComplete, setShowUninstallComplete] = useState<boolean>(false);
+  const [uninstallProgress, setUninstallProgress] = useState<number>(0);
+  const [uninstallError, setUninstallError] = useState<string | undefined>(undefined);
+  const [uninstallTerminalOutput, setUninstallTerminalOutput] = useState<TerminalLine[]>([]);
+
+  // Restore operation state from localStorage on mount
+  useEffect(() => {
+    const storedState = localStorage.getItem('takServerOperationState');
+    if (storedState) {
+      try {
+        const parsedState: StoredOperationState = JSON.parse(storedState);
+        setOperationInProgress(parsedState.operationInProgress);
+        setCurrentOperation(parsedState.currentOperation);
+        setShowInstallProgress(parsedState.showInstallProgress);
+        setShowInstallComplete(parsedState.showInstallComplete);
+        setInstallProgress(parsedState.installProgress);
+        setInstallError(parsedState.installError);
+        setTerminalOutput(parsedState.terminalOutput);
+        setShowUninstallProgress(parsedState.showUninstallProgress);
+        setShowUninstallComplete(parsedState.showUninstallComplete);
+        setUninstallProgress(parsedState.uninstallProgress);
+        setUninstallError(parsedState.uninstallError);
+        setUninstallTerminalOutput(parsedState.uninstallTerminalOutput);
+      } catch (error) {
+        console.error('Error restoring operation state:', error);
+      }
+    }
+  }, []);
+
+  // Save operation state to localStorage whenever it changes
+  useEffect(() => {
+    const stateToStore: StoredOperationState = {
+      operationInProgress,
+      currentOperation,
+      showInstallProgress,
+      showInstallComplete,
+      installProgress,
+      installError,
+      terminalOutput,
+      showUninstallProgress,
+      showUninstallComplete,
+      uninstallProgress,
+      uninstallError,
+      uninstallTerminalOutput
+    };
+    localStorage.setItem('takServerOperationState', JSON.stringify(stateToStore));
+  }, [
+    operationInProgress,
+    currentOperation,
+    showInstallProgress,
+    showInstallComplete,
+    installProgress,
+    installError,
+    terminalOutput,
+    showUninstallProgress,
+    showUninstallComplete,
+    uninstallProgress,
+    uninstallError,
+    uninstallTerminalOutput
+  ]);
+
+  // Clear all states when operations complete
+  const clearAllStates = () => {
+    // Clear operation states
+    localStorage.removeItem('takServerOperationState');
+    localStorage.removeItem('takServerButtonState');
+    localStorage.removeItem('takServerPopupState');
+    
+    // Clear button states
+    setOperationInProgress(false);
+    setCurrentOperation(null);
+    
+    // Clear install states
+    setShowInstallProgress(false);
+    setShowInstallComplete(false);
+    setInstallProgress(0);
+    setInstallError(undefined);
+    setTerminalOutput([]);
+    
+    // Clear uninstall states
+    setShowUninstallProgress(false);
+    setShowUninstallComplete(false);
+    setUninstallProgress(0);
+    setUninstallError(undefined);
+    setUninstallTerminalOutput([]);
+  };
+
+  // Save popup states whenever they change
+  useEffect(() => {
+    const popupState = {
+      showInstallProgress,
+      showInstallComplete,
+      installProgress,
+      installError,
+      terminalOutput,
+      showUninstallProgress,
+      showUninstallComplete,
+      uninstallProgress,
+      uninstallError,
+      uninstallTerminalOutput
+    };
+    localStorage.setItem('takServerPopupState', JSON.stringify(popupState));
+  }, [
+    showInstallProgress,
+    showInstallComplete,
+    installProgress,
+    installError,
+    terminalOutput,
+    showUninstallProgress,
+    showUninstallComplete,
+    uninstallProgress,
+    uninstallError,
+    uninstallTerminalOutput
+  ]);
+
+  // Restore popup states on mount
+  useEffect(() => {
+    const storedPopupState = localStorage.getItem('takServerPopupState');
+    if (storedPopupState) {
+      try {
+        const parsedState = JSON.parse(storedPopupState);
+        setShowInstallProgress(parsedState.showInstallProgress);
+        setShowInstallComplete(parsedState.showInstallComplete);
+        setInstallProgress(parsedState.installProgress);
+        setInstallError(parsedState.installError);
+        setTerminalOutput(parsedState.terminalOutput);
+        setShowUninstallProgress(parsedState.showUninstallProgress);
+        setShowUninstallComplete(parsedState.showUninstallComplete);
+        setUninstallProgress(parsedState.uninstallProgress);
+        setUninstallError(parsedState.uninstallError);
+        setUninstallTerminalOutput(parsedState.uninstallTerminalOutput);
+      } catch (error) {
+        console.error('Error restoring popup state:', error);
+      }
+    }
+  }, []);
+
+  // Form data state
   const [formData, setFormData] = useState<FormState>({
     docker_zip_file: null,
     postgres_password: '',
@@ -40,340 +212,41 @@ const TakServerStatus: React.FC<TakServerStatusProps> = ({ socket }) => {
     installation_id: null
   });
 
-  const { post, get } = useFetch();
-
-  // Initialize installer socket with event handlers
-  const installerSocket = useSocket('/takserver-installer', {
-    eventHandlers: {
-      handleTerminalOutput: true,
-      'terminal_output': (data: { data: string }, { appendToTerminal }) => {
-        console.log('Terminal output received:', data);
-        if (data.data) {
-          appendToTerminal(data.data);
-          setTerminalOutput(prev => [...prev, data.data]);
-        }
-      },
-      'operation_status': (data: { status: string; progress?: number; error?: string }, { updateState }) => {
-        console.log('Operation status update:', data);
-        if (data.progress !== undefined) {
-          setInstallProgress(data.progress);
-        }
-        if (data.error) {
-          setInstallError(data.error);
-        }
-      }
-    },
-    initialState: {
-      progress: 0,
-      status: 'idle',
-      error: null
-    }
-  });
-
-  // Initialize uninstaller socket with event handlers
-  const uninstallerSocket = useSocket('/takserver-uninstall', {
-    eventHandlers: {
-      handleTerminalOutput: true,
-      'terminal_output': (data: { data: string }, { appendToTerminal }) => {
-        console.log('Uninstall terminal output received:', data);
-        if (data.data) {
-          appendToTerminal(data.data);
-          setUninstallTerminalOutput(prev => [...prev, data.data]);
-        }
-      },
-      'operation_status': (data: { status: string; progress?: number; error?: string }, { updateState }) => {
-        console.log('Uninstall operation status update:', data);
-        if (data.progress !== undefined) {
-          setUninstallProgress(data.progress);
-        }
-        if (data.error) {
-          setUninstallError(data.error);
-        }
-      }
-    },
-    initialState: {
-      progress: 0,
-      status: 'idle',
-      error: null
-    }
-  });
-
-  // Add state for uninstall terminal output
-  const [uninstallTerminalOutput, setUninstallTerminalOutput] = useState<string[]>([]);
-
-  // Initialize uninstall hook
-  const {
-    showUninstallConfirm,
-    showUninstallProgress,
-    showUninstallComplete,
-    uninstallId,
-    uninstallProgress,
-    uninstallError,
-    setShowUninstallConfirm,
-    setShowUninstallProgress,
-    setShowUninstallComplete,
-    setUninstallId,
-    setUninstallProgress,
-    setUninstallError,
-    handleUninstall: originalHandleUninstall,
-    handleUninstallComplete: originalHandleUninstallComplete
-  } = useUninstall({
-    socket,
-    setOperationInProgress,
-    setCurrentOperation
-  });
-
-  // Initialize uninstall progress hook
-  useUninstallProgress({
-    socket,
-    uninstallId,
-    showUninstallProgress,
-    setUninstallProgress,
-    setUninstallError,
-    setShowUninstallProgress,
-    setShowUninstallComplete,
-    setUninstallId,
-    setOperationInProgress,
-    setCurrentOperation,
-    get
-  });
-
-  // Effect to handle socket state updates
-  useEffect(() => {
-    if (!operationInProgress) {
-      console.log('Updating server state from socket:', socket.state);
-      setServerState(socket.state);
-    } else {
-      console.log('Ignoring socket state update during operation:', socket.state);
-    }
-  }, [socket.state, operationInProgress]);
-
-  // Effect to poll operation progress
-  useEffect(() => {
-    let pollTimer: NodeJS.Timeout;
-    
-    const pollOperationProgress = async () => {
-      if (operationInProgress) {
-        try {
-          const response = await get('/api/takserver/takserver-operation-progress');
-          console.log('Operation progress response:', response);
-          
-          if (response.status === 'complete' || response.status === 'idle') {
-            console.log(`Operation ${response.status}, resetting states`);
-            setOperationInProgress(false);
-            setCurrentOperation(null);
-            // Update server state and request fresh state
-            socket.emit('request_initial_state');
-          } else if (response.status === 'error') {
-            console.log('Operation error:', response.error);
-            setOperationError(response.error);
-            setOperationInProgress(false);
-            setCurrentOperation(null);
-            // Update server state and request fresh state
-            socket.emit('request_initial_state');
-          } else if (response.status === 'in_progress') {
-            if (response.operation && response.operation !== currentOperation) {
-              console.log('Operation type changed:', { from: currentOperation, to: response.operation });
-              setCurrentOperation(response.operation);
-            }
-            // Continue polling only for in_progress state
-            pollTimer = setTimeout(pollOperationProgress, 1000);
-          }
-        } catch (error) {
-          console.error('Error polling operation progress:', error);
-          setOperationError(error instanceof Error ? error.message : 'Operation failed');
-          setOperationInProgress(false);
-          setCurrentOperation(null);
-          // Update server state and request fresh state
-          socket.emit('request_initial_state');
-        }
-      }
-    };
-
-    if (operationInProgress) {
-      console.log('Starting operation progress polling');
-      pollOperationProgress();
-    }
-
-    return () => {
-      if (pollTimer) {
-        console.log('Cleaning up operation progress polling');
-        clearTimeout(pollTimer);
-      }
-    };
-  }, [operationInProgress, get, socket, currentOperation]);
-
-  // Effect to poll installation progress
-  useEffect(() => {
-    let pollTimer: NodeJS.Timeout;
-    
-    const pollInstallProgress = async () => {
-      if (installationId && showInstallProgress) {
-        try {
-          const response = await get(`/api/takserver/installation-progress/${installationId}`);
-          console.log('Installation progress response:', response);
-          
-          setInstallProgress(response.progress);
-          
-          if (response.status === 'complete') {
-            // Clear the timer immediately
-            if (pollTimer) {
-              clearTimeout(pollTimer);
-            }
-            // Reset all installation states
-            resetInstallationStates();
-            // Update operation states
-            setOperationInProgress(false);
-            setCurrentOperation(null);
-            socket.emit('request_initial_state');
-            return;
-          } else if (response.status === 'error') {
-            // Clear the timer immediately
-            if (pollTimer) {
-              clearTimeout(pollTimer);
-            }
-            // Update states and show error
-            setInstallError(response.error);
-            setShowInstallProgress(false);
-            setShowInstallComplete(true);
-            resetInstallationStates();
-            setOperationInProgress(false);
-            setCurrentOperation(null);
-            socket.emit('request_initial_state');
-            return;
-          } else {
-            // Only set up next poll if not complete/error
-            pollTimer = setTimeout(pollInstallProgress, 1000);
-          }
-        } catch (error) {
-          console.error('Error polling installation progress:', error);
-          // Stop polling and show error
-          setInstallError(error instanceof Error ? error.message : 'Installation failed');
-          setShowInstallProgress(false);
-          setShowInstallComplete(true);
-          resetInstallationStates();
-          setOperationInProgress(false);
-          setCurrentOperation(null);
-          socket.emit('request_initial_state');
-        }
-      }
-    };
-
-    if (installationId && showInstallProgress) {
-      pollInstallProgress();
-    }
-
-    return () => {
-      if (pollTimer) {
-        clearTimeout(pollTimer);
-      }
-    };
-  }, [installationId, showInstallProgress, get, socket, setOperationInProgress, setCurrentOperation]);
-
-  // Installation handlers
-  const handleInstall = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  // Function to fetch status
+  const fetchStatus = async () => {
     try {
-      if (!formData.docker_zip_file || !formData.docker_zip_file.name.endsWith('.zip')) {
-        throw new Error('Please select a valid TAK Server ZIP file');
+      const response = await get('/api/takserver/takserver-status');
+      if (response.ok) {
+        const data = await response.json();
+        setServerState((prevState: TakServerState) => ({
+          ...prevState,
+          isInstalled: data.isInstalled,
+          isRunning: data.isRunning,
+          version: data.version || undefined,
+          status: data.status,
+          error: data.error || null
+        }));
       }
-
-      const formDataToSend = new FormData();
-      Object.entries(formData).forEach(([key, value]) => {
-        if (value !== null) {
-          formDataToSend.append(key, value);
-        }
-      });
-
-      setShowInstallForm(false);
-      setShowInstallProgress(true);
-      setInstallError(undefined);
-      setTerminalOutput([]); // Clear terminal output
-      installerSocket.clearTerminal();
-      
-      const response = await post('/api/takserver/install-takserver', formDataToSend);
-      
-      if (response.success && response.installation_id) {
-        setInstallationId(response.installation_id);
-        // Request initial state after setting installation ID
-        installerSocket.emit('request_initial_state', { installation_id: response.installation_id });
-      } else {
-        throw new Error(response.message || 'Installation failed to start');
-      }
-
     } catch (error) {
-      console.error('Installation error:', error);
-      setInstallError(error instanceof Error ? error.message : 'Installation failed');
-      setShowInstallProgress(false);
-      setShowInstallComplete(true);
+      console.error('Error fetching status:', error);
     }
   };
 
-  const handleInstallComplete = () => {
-    setShowInstallComplete(false);
-    setInstallProgress(0);
-    setInstallError(undefined);
-    setTerminalOutput([]);
-    installerSocket.clearTerminal();
-    handleClose();
-  };
+  // Initial status fetch and setup polling
+  useEffect(() => {
+    // Fetch initial status
+    fetchStatus();
 
-  // Add a new function to reset all installation states
-  const resetInstallationStates = () => {
-    setShowInstallProgress(false);
-    setShowInstallComplete(false);
-    setInstallationId(null);
-    setInstallProgress(0);
-    setInstallError(undefined);
-    setTerminalOutput([]);
-    installerSocket.clearTerminal();
-  };
+    // Set up polling every 20 seconds
+    const intervalId = setInterval(fetchStatus, 20000);
 
-  // Server operation handlers
-  const handleStartStopClick = async () => {
-    try {
-      setOperationError(undefined);
-      const isStarting = !serverState.isRunning;
-      const operation = isStarting ? 'start' : 'stop';
-      
-      console.log(`Initiating ${operation} operation`);
-      setCurrentOperation(operation);
-      setOperationInProgress(true);
-      
-      await post(`/api/takserver/takserver-${operation}`);
-      console.log(`${operation} request sent to backend`);
+    // Cleanup interval on component unmount
+    return () => clearInterval(intervalId);
+  }, []);
 
-    } catch (error) {
-      console.error(`Error during ${!serverState.isRunning ? 'start' : 'stop'} operation:`, error);
-      setOperationError(error instanceof Error ? error.message : String(error));
-      setOperationInProgress(false);
-      setCurrentOperation(null);
-    }
-  };
-
-  const handleRestartClick = async () => {
-    try {
-      setOperationError(undefined);
-      
-      console.log('Initiating restart operation');
-      setCurrentOperation('restart');
-      setOperationInProgress(true);
-      
-      await post('/api/takserver/takserver-restart');
-      console.log('Restart request sent to backend');
-
-    } catch (error) {
-      console.error('Error during restart operation:', error);
-      setOperationError(error instanceof Error ? error.message : String(error));
-      setOperationInProgress(false);
-      setCurrentOperation(null);
-    }
-  };
-
-  // Other handlers
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value, files, type } = e.target;
-    setFormData(prev => ({
+    setFormData((prev: FormState) => ({
       ...prev,
       [id]: type === 'file' ? files?.[0] || null : value
     }));
@@ -394,49 +267,333 @@ const TakServerStatus: React.FC<TakServerStatusProps> = ({ socket }) => {
     });
   };
 
-  // Add a new function to reset all uninstallation states
-  const resetUninstallationStates = () => {
-    setShowUninstallProgress(false);
-    setShowUninstallComplete(false);
-    setUninstallId(null);
-    setUninstallProgress(0);
-    setUninstallError(undefined);
-    setUninstallTerminalOutput([]);
-    uninstallerSocket.clearTerminal();
+  const handleStartStopClick = () => {
+    const operation = serverState.isRunning ? 'stop' : 'start';
+    setOperationInProgress(true);
+    setCurrentOperation(operation);
+    const stateToStore = {
+      operationInProgress: true,
+      currentOperation: operation
+    };
+    localStorage.setItem('takServerButtonState', JSON.stringify(stateToStore));
+  };
+
+  const handleRestartClick = () => {
+    setOperationInProgress(true);
+    setCurrentOperation('restart');
+    const stateToStore = {
+      operationInProgress: true,
+      currentOperation: 'restart'
+    };
+    localStorage.setItem('takServerButtonState', JSON.stringify(stateToStore));
   };
 
   const handleUninstall = async () => {
     try {
       setShowUninstallConfirm(false);
       setShowUninstallProgress(true);
-      setUninstallError(undefined);
+      setUninstallProgress(0);
       setUninstallTerminalOutput([]);
-      uninstallerSocket.clearTerminal();
-      
-      const response = await post('/api/takserver/uninstall-takserver');
-      
-      if (response.success && response.uninstall_id) {
-        setUninstallId(response.uninstall_id);
-        uninstallerSocket.emit('request_initial_state', { uninstall_id: response.uninstall_id });
-      } else {
-        throw new Error(response.message || 'Uninstallation failed to start');
+      setOperationInProgress(true);
+      setCurrentOperation('uninstall');
+
+      const response = await fetch('/api/takserver/uninstall-takserver', {
+        method: 'POST'
+      });
+
+      if (!response.ok) {
+        throw new Error(`Uninstallation failed: ${response.statusText}`);
       }
 
     } catch (error) {
       console.error('Uninstallation error:', error);
       setUninstallError(error instanceof Error ? error.message : 'Uninstallation failed');
-      setShowUninstallProgress(false);
-      setShowUninstallComplete(true);
+      // Don't automatically show completion dialog on error
+      setOperationInProgress(false);
+      setCurrentOperation(null);
     }
   };
 
   const handleUninstallComplete = () => {
-    setShowUninstallComplete(false);
-    resetUninstallationStates();
-    setOperationInProgress(false);
-    setCurrentOperation(null);
-    socket.emit('request_initial_state');
+    clearAllStates();
+    // Get actual server state
+    fetchStatus();
   };
+
+  const handleInstall = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    
+    try {
+      // Show installation progress dialog
+      setShowInstallProgress(true);
+      setInstallProgress(0);
+      setTerminalOutput([]);
+      setOperationInProgress(true);
+      setCurrentOperation('install');
+      
+      // Create form data
+      const formDataToSend = new FormData();
+      if (formData.docker_zip_file) {
+        formDataToSend.append('docker_zip_file', formData.docker_zip_file);
+      }
+      formDataToSend.append('postgres_password', formData.postgres_password);
+      formDataToSend.append('certificate_password', formData.certificate_password);
+      formDataToSend.append('organization', formData.organization);
+      formDataToSend.append('state', formData.state);
+      formDataToSend.append('city', formData.city);
+      formDataToSend.append('organizational_unit', formData.organizational_unit);
+      formDataToSend.append('name', formData.name);
+
+      // Start installation
+      const response = await fetch('/api/takserver/install-takserver', {
+        method: 'POST',
+        body: formDataToSend
+      });
+
+      if (!response.ok) {
+        throw new Error(`Installation failed: ${response.statusText}`);
+      }
+
+      // Close install form
+      setShowInstallForm(false);
+      
+      // Reset form data
+      setFormData({
+        docker_zip_file: null,
+        postgres_password: '',
+        certificate_password: '',
+        organization: '',
+        state: '',
+        city: '',
+        organizational_unit: '',
+        name: '',
+        installation_id: null
+      });
+
+    } catch (error) {
+      console.error('Installation error:', error);
+      setInstallError(error instanceof Error ? error.message : 'Installation failed');
+      // Don't automatically show completion dialog on error
+      setOperationInProgress(false);
+      setCurrentOperation(null);
+    }
+  };
+
+  const handleMoveToInstallComplete = () => {
+    setShowInstallProgress(false);
+    setShowInstallComplete(true);
+  };
+
+  const handleInstallComplete = () => {
+    clearAllStates();
+    // Trigger status refresh
+    fetchStatus();
+  };
+
+  const handleStopInstallation = async () => {
+    try {
+      // Set operation to rollback
+      setCurrentOperation('install'); // Keep as install but show rollback progress
+      setOperationInProgress(true);
+      
+      // Clear terminal output and reset progress for rollback
+      setTerminalOutput([]);
+      setInstallProgress(0);
+      
+      // Call the stop endpoint
+      const response = await fetch('/api/takserver/stop-installation', {
+        method: 'POST'
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to stop installation: ${response.statusText}`);
+      }
+
+    } catch (error) {
+      console.error('Stop installation error:', error);
+      setInstallError(error instanceof Error ? error.message : 'Failed to stop installation');
+    }
+  };
+
+  // Restore button states on mount
+  useEffect(() => {
+    const storedButtonState = localStorage.getItem('takServerButtonState');
+    if (storedButtonState) {
+      try {
+        const { operationInProgress, currentOperation } = JSON.parse(storedButtonState);
+        setOperationInProgress(operationInProgress);
+        setCurrentOperation(currentOperation);
+      } catch (error) {
+        console.error('Error restoring button state:', error);
+      }
+    }
+  }, []);
+
+  // Subscribe to SSE events
+  useEffect(() => {
+    const eventSource = new EventSource('/stream');
+
+    // Handle terminal output events
+    eventSource.addEventListener('takserver-terminal', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.message) {
+          const terminalLine = {
+            message: data.message,
+            isError: data.isError || false,
+            timestamp: data.timestamp || Date.now()
+          };
+
+          // Add to the appropriate terminal output based on the current operation
+          if (currentOperation === 'uninstall') {
+            setUninstallTerminalOutput(prev => {
+              const newOutput = [...prev, terminalLine];
+              // Save to localStorage immediately
+              const state = JSON.parse(localStorage.getItem('takServerOperationState') || '{}');
+              localStorage.setItem('takServerOperationState', JSON.stringify({
+                ...state,
+                uninstallTerminalOutput: newOutput
+              }));
+              return newOutput;
+            });
+            setShowUninstallProgress(true);
+          } else {
+            setTerminalOutput((prev: TerminalLine[]) => {
+              const newOutput = [...prev, terminalLine];
+              // Save to localStorage immediately
+              const state = JSON.parse(localStorage.getItem('takServerOperationState') || '{}');
+              localStorage.setItem('takServerOperationState', JSON.stringify({
+                ...state,
+                terminalOutput: newOutput
+              }));
+              return newOutput;
+            });
+            setShowInstallProgress(true);
+          }
+        }
+      } catch (error) {
+        console.error('Error parsing terminal event:', error);
+      }
+    });
+
+    // Handle installation events
+    eventSource.addEventListener('takserver-install', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        if (data.operation === 'install') {
+          setInstallProgress(data.progress);
+          setShowInstallProgress(true);
+          
+          if (data.status === 'error') {
+            setInstallError(data.error || data.message);
+          }
+        } else if (data.operation === 'rollback') {
+          // Clear existing terminal output when rollback starts
+          if (data.status === 'in_progress' && data.progress === 0) {
+            setTerminalOutput([]);
+            setInstallProgress(0);
+          }
+          
+          // Update progress for rollback
+          setInstallProgress(data.progress);
+          
+          if (data.status === 'error') {
+            setInstallError(data.error || data.message);
+            setShowInstallProgress(false);
+            setShowInstallComplete(true);
+          } else if (data.status === 'complete') {
+            // Rollback complete
+            setShowInstallProgress(false);
+            clearAllStates();
+            // Refresh server status
+            fetchStatus();
+          }
+        }
+      } catch (error) {
+        console.error('Error parsing installation event:', error);
+      }
+    });
+
+    // Handle uninstallation events
+    eventSource.addEventListener('takserver-uninstall', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        setUninstallProgress(data.progress || 0);
+        setShowUninstallProgress(true);
+        
+        if (data.status === 'error') {
+          setUninstallError(data.error || data.message);
+        }
+      } catch (error) {
+        console.error('Error parsing SSE event:', error);
+      }
+    });
+
+    // Handle status events
+    eventSource.addEventListener('takserver-status', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        // Handle status updates
+        if ('isInstalled' in data && 'isRunning' in data) {
+          setServerState((prevState: TakServerState) => ({
+            ...prevState,
+            isInstalled: data.isInstalled,
+            isRunning: data.isRunning,
+            version: data.version || undefined,
+            status: data.status,
+            error: data.error || null
+          }));
+        }
+        
+        // Handle operation status updates
+        if ('status' in data && 'operation' in data) {
+          if (data.status === 'in_progress') {
+            setOperationInProgress(true);
+            setCurrentOperation(data.operation);
+            setOperationError(undefined);
+            
+            // Ensure correct popup is shown
+            if (data.operation === 'uninstall') {
+              setShowUninstallProgress(true);
+            } else if (data.operation === 'install' || data.operation === 'rollback') {
+              setShowInstallProgress(true);
+            }
+          } else if (data.status === 'completed' || data.status === 'error') {
+            if (data.operation === 'rollback') {
+              // For rollback, just clear states and close dialogs
+              clearAllStates();
+            } else if (currentOperation === 'uninstall') {
+              setShowUninstallProgress(false);
+              setShowUninstallComplete(true);
+            } else if (currentOperation === 'install') {
+              setShowInstallProgress(false);
+              setShowInstallComplete(true);
+            } else {
+              clearAllStates();
+            }
+            
+            if (data.status === 'error') {
+              setOperationError(data.message || 'Operation failed');
+            } else {
+              setOperationError(undefined);
+            }
+            
+            // Get actual server state
+            fetchStatus();
+          }
+        }
+      } catch (error) {
+        console.error('Error parsing SSE event:', error);
+      }
+    });
+
+    // Cleanup on unmount
+    return () => {
+      eventSource.close();
+    };
+  }, [currentOperation]);
 
   return (
     <>
@@ -451,18 +608,19 @@ const TakServerStatus: React.FC<TakServerStatusProps> = ({ socket }) => {
           </div>
           <ControlButtons
             takState={serverState}
-            onUninstall={() => setShowUninstallConfirm(true)}
+            onUninstall={handleUninstall}
             onRestart={handleRestartClick}
             onStartStop={handleStartStopClick}
             onInstall={() => setShowInstallForm(true)}
             disabled={operationInProgress}
             currentOperation={currentOperation}
+            setShowUninstallConfirm={setShowUninstallConfirm}
           />
         </div>
       </div>
 
       {!serverState.isInstalled && showInstallForm && (
-        <div className="w-full border border-border bg-card p-4 xs:p-6 rounded-lg shadow-lg">
+        <div>
           <InstallationForm
             formData={formData}
             onInputChange={handleInputChange}
@@ -480,11 +638,9 @@ const TakServerStatus: React.FC<TakServerStatusProps> = ({ socket }) => {
         installError={installError}
         onInstallProgressClose={() => setShowInstallProgress(false)}
         onInstallComplete={handleInstallComplete}
-        onMoveToInstallComplete={() => {
-          setShowInstallProgress(false);
-          setShowInstallComplete(true);
-        }}
-        terminalOutput={installerSocket.terminalOutput}
+        onMoveToInstallComplete={handleMoveToInstallComplete}
+        terminalOutput={terminalOutput}
+        onStopInstallation={handleStopInstallation}
         
         // Uninstallation props
         showUninstallConfirm={showUninstallConfirm}
@@ -500,7 +656,7 @@ const TakServerStatus: React.FC<TakServerStatusProps> = ({ socket }) => {
           setShowUninstallProgress(false);
           setShowUninstallComplete(true);
         }}
-        uninstallTerminalOutput={uninstallerSocket.terminalOutput}
+        uninstallTerminalOutput={uninstallTerminalOutput}
       />
     </>
   );

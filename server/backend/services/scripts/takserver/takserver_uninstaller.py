@@ -1,6 +1,8 @@
 import os
 import shutil
 from backend.services.helpers.run_command import RunCommand
+from flask_sse import sse
+import time
 
 class TakServerUninstaller:
     def __init__(self):
@@ -12,6 +14,7 @@ class TakServerUninstaller:
             'message': '',
             'error': None
         }
+        self.event_type = 'takserver-uninstall'
 
     def get_default_working_directory(self):
         """Get the working directory from environment variable."""
@@ -36,16 +39,26 @@ class TakServerUninstaller:
             with open(version_file_path, "r") as version_file:
                 return version_file.read().strip()
         return None
+        
+    def _get_path_version(self, version):
+        """Convert version string for path use (with RELEASE in uppercase)."""
+        if not version:
+            return None
+        parts = version.split('-')
+        if len(parts) >= 3:
+            return f"{parts[0]}-RELEASE-{parts[2]}"
+        return version
 
     def get_docker_compose_dir(self):
         """Get the docker compose directory based on version"""
         version = self.get_takserver_version()
         if not version:
             raise Exception("Could not determine TAK Server version")
-        return os.path.join(self.working_dir, f"takserver-docker-{version}")
+        path_version = self._get_path_version(version)
+        return os.path.join(self.working_dir, f"takserver-docker-{path_version}")
 
     def update_status(self, progress=None, message=None, status=None, error=None):
-        """Update the uninstallation status"""
+        """Update the uninstallation status and emit SSE events for both progress and terminal output"""
         if progress is not None:
             self._status['progress'] = progress
         if message is not None:
@@ -54,6 +67,38 @@ class TakServerUninstaller:
             self._status['status'] = status
         if error is not None:
             self._status['error'] = error
+
+        # Emit progress update SSE event
+        sse.publish(
+            {
+                'status': self._status['status'],
+                'operation': 'uninstall',
+                'message': self._status['message'],
+                'progress': self._status['progress'],
+                'error': self._status['error']
+            },
+            type=self.event_type
+        )
+
+        # Emit terminal output SSE event if there's a message
+        if message is not None:
+            self.emit_terminal_output(message, error is not None)
+
+    def emit_terminal_output(self, message, is_error=False):
+        """Helper method to emit terminal output"""
+        # Add progress percentage to message if available
+        if self._status['progress'] > 0:
+            message = f"[{self._status['progress']}%] {message}"
+            
+        sse.publish(
+            {
+                'message': message,
+                'isError': is_error,
+                'timestamp': int(time.time() * 1000),  # milliseconds timestamp
+                'progress': self._status['progress']  # Include progress in terminal output
+            },
+            type='takserver-terminal'
+        )
 
     def get_status(self):
         """Get the current uninstallation status"""
@@ -72,43 +117,117 @@ class TakServerUninstaller:
                 status='in_progress'
             )
             
-            self.run_command.emit_log_output(
-                "→ Stopping and removing TAK Server containers and volumes...", 
-                'takserver-uninstall'
-            )
-            
             # Run docker-compose down with all cleanup flags
             self.update_status(
                 progress=20,
-                message="Removing TAK Server containers...",
-                status='in_progress'
+                message="Removing TAK Server containers..."
             )
             
-            self.run_command.run_command(
+            result = self.run_command.run_command(
                 ["docker-compose", "down", "--rmi", "all", "--volumes", "--remove-orphans"],
+                event_type=self.event_type,
                 working_dir=docker_compose_dir,
-                namespace='takserver-uninstall',
-                capture_output=False
+                emit_output=True
             )
+
+            if not result.success:
+                raise Exception(result.error_message)
 
             self.update_status(
                 progress=40,
-                message="TAK Server containers removed",
-                status='in_progress'
+                message="TAK Server containers removed successfully"
             )
 
             return True
 
         except Exception as e:
-            self.run_command.emit_log_output(
-                f"× Error stopping TAK Server containers: {str(e)}", 
-                'takserver-uninstall'
-            )
             self.update_status(
                 status='error',
+                message=str(e),
                 error=str(e)
             )
-            return False
+            raise
+
+    def clean_docker_build_cache(self):
+        """Clean Docker build cache and BuildKit resources."""
+        try:
+            # Update progress (40-70%)
+            self.update_status(
+                progress=45,
+                message="Cleaning up Docker build cache...",
+                status='in_progress'
+            )
+            
+            # Clean up BuildKit resources
+            # Get and remove BuildKit containers
+            self.update_status(
+                progress=50,
+                message="Removing BuildKit containers..."
+            )
+            
+            buildkit_containers = [container_id for container_id in self.run_command.run_command(
+                ["docker", "ps", "-aq", "--filter", "name=buildkit"],
+                event_type=self.event_type,
+                capture_output=True
+            ).stdout.strip().split('\n') if container_id]
+            
+            if buildkit_containers:
+                result = self.run_command.run_command(
+                    ["docker", "rm", "-f"] + buildkit_containers,
+                    event_type=self.event_type,
+                    emit_output=True
+                )
+                if not result.success:
+                    raise Exception(result.error_message)
+            
+            # Get and remove BuildKit volumes
+            self.update_status(
+                progress=60,
+                message="Removing BuildKit volumes..."
+            )
+            
+            buildkit_volumes = [volume_id for volume_id in self.run_command.run_command(
+                ["docker", "volume", "ls", "-q", "--filter", "name=buildkit"],
+                event_type=self.event_type,
+                capture_output=True
+            ).stdout.strip().split('\n') if volume_id]
+            
+            if buildkit_volumes:
+                result = self.run_command.run_command(
+                    ["docker", "volume", "rm", "-f"] + buildkit_volumes,
+                    event_type=self.event_type,
+                    emit_output=True
+                )
+                if not result.success:
+                    raise Exception(result.error_message)
+            
+            # Remove BuildKit image
+            self.update_status(
+                progress=65,
+                message="Removing BuildKit image..."
+            )
+            
+            result = self.run_command.run_command(
+                ["docker", "rmi", "-f", "moby/buildkit:buildx-stable-1"],
+                event_type=self.event_type,
+                emit_output=True
+            )
+            if not result.success:
+                raise Exception(result.error_message)
+
+            self.update_status(
+                progress=70,
+                message="Docker build cache cleaned successfully"
+            )
+
+            return True
+        except Exception as e:
+            self.update_status(
+                status='error',
+                message=str(e),
+                error=str(e)
+            )
+            raise
 
     def remove_installation_directory(self):
         """Remove the TAK Server installation directory and upload directory."""
@@ -122,17 +241,14 @@ class TakServerUninstaller:
                         status='in_progress'
                     )
                     
-                    self.run_command.emit_log_output(
-                        f"→ Removing TAK Server installation directory: {self.working_dir}", 
-                        'takserver-uninstall'
-                    )
-                    
                     # Force remove the directory using rm -rf
-                    self.run_command.run_command(
+                    result = self.run_command.run_command(
                         ["rm", "-rf", self.working_dir],
-                        namespace='takserver-uninstall',
-                        capture_output=False
+                        event_type=self.event_type,
+                        emit_output=True
                     )
+                    if not result.success:
+                        raise Exception(result.error_message)
                     
                     # Verify directory is gone
                     if os.path.exists(self.working_dir):
@@ -140,14 +256,9 @@ class TakServerUninstaller:
                     
                     self.update_status(
                         progress=75,
-                        message="Installation directory removed successfully",
-                        status='in_progress'
+                        message="Installation directory removed successfully"
                     )
                     
-                    self.run_command.emit_log_output(
-                        "✓ Installation directory removed successfully", 
-                        'takserver-uninstall'
-                    )
                 except Exception as e:
                     if os.path.exists(self.working_dir):
                         raise e
@@ -158,21 +269,17 @@ class TakServerUninstaller:
                 try:
                     self.update_status(
                         progress=77,
-                        message=f"Removing upload directory: {upload_dir}",
-                        status='in_progress'
-                    )
-
-                    self.run_command.emit_log_output(
-                        f"→ Removing upload directory: {upload_dir}",
-                        'takserver-uninstall'
+                        message=f"Removing upload directory: {upload_dir}"
                     )
 
                     # Force remove the directory using rm -rf
-                    self.run_command.run_command(
+                    result = self.run_command.run_command(
                         ["rm", "-rf", upload_dir],
-                        namespace='takserver-uninstall',
-                        capture_output=False
+                        event_type=self.event_type,
+                        emit_output=True
                     )
+                    if not result.success:
+                        raise Exception(result.error_message)
 
                     # Verify directory is gone
                     if os.path.exists(upload_dir):
@@ -180,128 +287,21 @@ class TakServerUninstaller:
 
                     self.update_status(
                         progress=80,
-                        message="Upload directory removed successfully",
-                        status='in_progress'
+                        message="Upload directory removed successfully"
                     )
 
-                    self.run_command.emit_log_output(
-                        "✓ Upload directory removed successfully",
-                        'takserver-uninstall'
-                    )
                 except Exception as e:
                     if os.path.exists(upload_dir):
                         raise e
 
             return True
         except Exception as e:
-            self.run_command.emit_log_output(
-                f"❌ Error removing directories: {str(e)}", 
-                'takserver-uninstall'
-            )
             self.update_status(
                 status='error',
+                message=str(e),
                 error=str(e)
             )
-            return False
-
-    def clean_docker_build_cache(self):
-        """Clean Docker build cache and BuildKit resources."""
-        try:
-            # Update progress (40-70%)
-            self.update_status(
-                progress=45,
-                message="Cleaning up Docker build cache...",
-                status='in_progress'
-            )
-            
-            # Clean up BuildKit resources
-            self.run_command.emit_log_output(
-                "→ Cleaning up BuildKit resources...", 
-                'takserver-uninstall'
-            )
-            
-            # Get and remove BuildKit containers
-            self.update_status(
-                progress=50,
-                message="Removing BuildKit containers...",
-                status='in_progress'
-            )
-            
-            buildkit_containers = [container_id for container_id in self.run_command.run_command(
-                ["docker", "ps", "-a", "--filter", "ancestor=moby/buildkit:buildx-stable-1", "--format", "{{.ID}}"],
-                namespace='takserver-uninstall',
-                capture_output=True
-            ).stdout.strip().split('\n') if container_id]
-            
-            if buildkit_containers:
-                self.run_command.run_command(
-                    ["docker", "rm", "-f"] + buildkit_containers,
-                    namespace='takserver-uninstall',
-                    capture_output=False
-                )
-                self.run_command.emit_log_output(
-                    "→ BuildKit containers cleaned up", 
-                    'takserver-uninstall'
-                )
-            
-            # Get and remove BuildKit volumes
-            self.update_status(
-                progress=60,
-                message="Removing BuildKit volumes...",
-                status='in_progress'
-            )
-            
-            buildkit_volumes = [volume_id for volume_id in self.run_command.run_command(
-                ["docker", "volume", "ls", "--filter", "name=buildkit", "--quiet"],
-                namespace='takserver-uninstall',
-                capture_output=True
-            ).stdout.strip().split('\n') if volume_id]
-            
-            if buildkit_volumes:
-                self.run_command.run_command(
-                    ["docker", "volume", "rm", "-f"] + buildkit_volumes,
-                    namespace='takserver-uninstall',
-                    capture_output=False
-                )
-                self.run_command.emit_log_output(
-                    "→ BuildKit volumes cleaned up", 
-                    'takserver-uninstall'
-                )
-            
-            # Remove BuildKit image
-            self.update_status(
-                progress=65,
-                message="Removing BuildKit image...",
-                status='in_progress'
-            )
-            
-            self.run_command.emit_log_output(
-                "→ Removing BuildKit image...", 
-                'takserver-uninstall'
-            )
-            self.run_command.run_command(
-                ["docker", "rmi", "-f", "moby/buildkit:buildx-stable-1"],
-                namespace='takserver-uninstall',
-                capture_output=False
-            )
-
-            self.update_status(
-                progress=70,
-                message="Docker build cache cleaned",
-                status='in_progress'
-            )
-
-            return True
-        except Exception as e:
-            self.run_command.emit_log_output(
-                f"× Error cleaning Docker build cache: {str(e)}", 
-                'takserver-uninstall'
-            )
-            self.update_status(
-                status='error',
-                error=str(e)
-            )
-            return False
+            raise
 
     def uninstall(self):
         """Main uninstallation method."""
@@ -313,43 +313,19 @@ class TakServerUninstaller:
                 status='in_progress'
             )
 
-            self.run_command.emit_log_output(
-                "→ Starting TAK Server uninstallation...", 
-                'takserver-uninstall'
-            )
-
             # Stop and remove containers and volumes (0-40%)
-            self.update_status(
-                progress=10,
-                message="Stopping TAK Server containers...",
-                status='in_progress'
-            )
-            if not self.stop_and_remove_containers():
-                raise Exception("Failed to stop and remove containers")
+            self.stop_and_remove_containers()
 
             # Clean Docker build cache (40-70%)
-            self.update_status(
-                progress=45,
-                message="Cleaning up Docker build cache...",
-                status='in_progress'
-            )
-            if not self.clean_docker_build_cache():
-                raise Exception("Failed to clean Docker build cache")
+            self.clean_docker_build_cache()
 
             # Remove installation directory (70-80%)
-            self.update_status(
-                progress=70,
-                message="Removing installation directory...",
-                status='in_progress'
-            )
-            if not self.remove_installation_directory():
-                raise Exception("Failed to remove installation directory")
+            self.remove_installation_directory()
 
             # Final cleanup and verification (80-100%)
             self.update_status(
                 progress=90,
-                message="Performing final cleanup...",
-                status='in_progress'
+                message="Performing final cleanup..."
             )
 
             self.update_status(
@@ -358,23 +334,13 @@ class TakServerUninstaller:
                 status='complete'
             )
 
-            self.run_command.emit_log_output(
-                "✓ TAK Server uninstallation completed successfully", 
-                'takserver-uninstall'
-            )
             return True
 
         except Exception as e:
-            error_message = f"Uninstallation failed: {str(e)}"
-            
+            # Send error status via SSE
             self.update_status(
                 status='error',
-                message=error_message,
+                message=str(e),
                 error=str(e)
-            )
-
-            self.run_command.emit_log_output(
-                f"× {error_message}", 
-                'takserver-uninstall'
             )
             return False 

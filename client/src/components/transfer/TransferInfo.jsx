@@ -6,7 +6,7 @@ import StepLabel from '@mui/material/StepLabel';
 import StepContent from '@mui/material/StepContent';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
-import CustomScrollbar from '../shared/ui/layout/CustomScrollbar';
+import { ScrollArea } from '@/components/shared/ui/shadcn/scroll-area';
 import { Button } from '../shared/ui/shadcn/button';
 
 const defaultSteps = [
@@ -71,7 +71,7 @@ export const TransferInfo = ({ steps = defaultSteps }) => {
     <div className="bg-card p-4 rounded-lg shadow-lg foreground border border-border">
       <h2 className="text-base font-bold">Setup Android Device for Rapid Transfer</h2>
       <div className="h-[400px] bg-backgroundPrimary rounded-lg">
-        <CustomScrollbar>
+        <ScrollArea>
           <div className="p-4">
             <Box>
               <Stepper activeStep={activeStep} orientation="vertical" sx={{
@@ -162,7 +162,7 @@ export const TransferInfo = ({ steps = defaultSteps }) => {
               )}
             </Box>
           </div>
-        </CustomScrollbar>
+        </ScrollArea>
       </div>
     </div>
   );

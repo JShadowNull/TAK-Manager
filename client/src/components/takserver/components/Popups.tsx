@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Button } from "../../shared/ui/shadcn/button";
 import {
   Dialog,
@@ -11,29 +11,36 @@ import {
 import { Progress } from "../../shared/ui/shadcn/progress";
 import { ScrollArea } from "../../shared/ui/shadcn/scroll-area";
 
+interface TerminalLine {
+  message: string;
+  isError: boolean;
+  timestamp: number | null;
+}
+
 interface PopupsProps {
   // Installation props
   showInstallProgress: boolean;
   showInstallComplete: boolean;
   installProgress: number;
-  installError: string | undefined;
+  installError?: string;
   onInstallProgressClose: () => void;
   onInstallComplete: () => void;
   onMoveToInstallComplete: () => void;
-  terminalOutput: string[];
+  terminalOutput: TerminalLine[];
+  onStopInstallation?: () => void;
 
   // Uninstallation props
   showUninstallConfirm: boolean;
   showUninstallProgress: boolean;
   showUninstallComplete: boolean;
   uninstallProgress: number;
-  uninstallError: string | undefined;
+  uninstallError?: string;
   onUninstallConfirmClose: () => void;
   onUninstall: () => void;
   onUninstallProgressClose: () => void;
   onUninstallComplete: () => void;
   onMoveToUninstallComplete: () => void;
-  uninstallTerminalOutput: string[];
+  uninstallTerminalOutput: TerminalLine[];
 }
 
 const Popups: React.FC<PopupsProps> = ({
@@ -42,10 +49,10 @@ const Popups: React.FC<PopupsProps> = ({
   showInstallComplete,
   installProgress,
   installError,
-  onInstallProgressClose,
   onInstallComplete,
   onMoveToInstallComplete,
   terminalOutput,
+  onStopInstallation,
 
   // Uninstallation props
   showUninstallConfirm,
@@ -55,19 +62,59 @@ const Popups: React.FC<PopupsProps> = ({
   uninstallError,
   onUninstallConfirmClose,
   onUninstall,
-  onUninstallProgressClose,
   onUninstallComplete,
   onMoveToUninstallComplete,
   uninstallTerminalOutput
 }) => {
+  // Refs for terminal output containers
+  const installTerminalRef = useRef<HTMLDivElement>(null);
+  const uninstallTerminalRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll terminal output
+  useEffect(() => {
+    if (installTerminalRef.current && showInstallProgress) {
+      installTerminalRef.current.scrollTop = installTerminalRef.current.scrollHeight;
+    }
+  }, [terminalOutput, showInstallProgress]);
+
+  useEffect(() => {
+    if (uninstallTerminalRef.current && showUninstallProgress) {
+      uninstallTerminalRef.current.scrollTop = uninstallTerminalRef.current.scrollHeight;
+    }
+  }, [uninstallTerminalOutput, showUninstallProgress]);
+
+  const renderTerminalLine = (line: TerminalLine) => (
+    <div 
+      className={`font-mono text-sm whitespace-pre-wrap ${line.isError ? 'text-destructive' : 'text-foreground'}`}
+    >
+      {line.timestamp && (
+        <span className="text-muted-foreground mr-2">
+          {new Date(line.timestamp).toLocaleTimeString()}
+        </span>
+      )}
+      {line.message}
+    </div>
+  );
+
   return (
     <>
       {/* Installation Progress Dialog */}
       <Dialog 
         open={showInstallProgress} 
-        onOpenChange={installProgress < 100 ? undefined : onInstallProgressClose}
+        onOpenChange={() => {}}
+        modal={true}
       >
-        <DialogContent>
+        <DialogContent 
+          onInteractOutside={(e) => {
+            // Always prevent closing if showing progress
+            e.preventDefault();
+          }}
+          onEscapeKeyDown={(e: KeyboardEvent) => {
+            // Always prevent closing if showing progress
+            e.preventDefault();
+          }}
+          className="xl:max-w-3xl"
+        >
           <DialogHeader>
             <DialogTitle>Installing TAK Server</DialogTitle>
             <DialogDescription>
@@ -77,44 +124,59 @@ const Popups: React.FC<PopupsProps> = ({
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <Progress value={installProgress} className="w-full" />
-            <div className="mt-2 text-sm text-muted-foreground">
-              Progress: {installProgress}%
-            </div>
-            <ScrollArea 
-              className="w-full rounded-md border p-4 mt-4"
-              autoScroll={true}
-              content={terminalOutput}
-            >
-              <div className="font-mono text-sm">
-                {terminalOutput.map((line, index) => (
-                  <div key={index} className="whitespace-pre-wrap">
-                    {line}
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
+            <Progress 
+              value={installProgress}
+              isIndeterminate={installProgress === 0}
+              text={installProgress === 0 
+                ? "Initializing..." 
+                : `Progress: ${installProgress}%`
+              }
+            />
+            {terminalOutput.length > 0 && (
+              <ScrollArea 
+                className="w-full rounded-md border p-4 mt-4 h-[300px] bg-background"
+                ref={installTerminalRef}
+                autoScroll={true}
+                content={terminalOutput}
+              >
+                <div className="space-y-1">
+                  {terminalOutput.map((line, index) => (
+                    <div key={index}>
+                      {renderTerminalLine(line)}
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            )}
           </div>
-          {installProgress === 100 && !installError && (
-            <DialogFooter>
+          <DialogFooter>
+            {installProgress < 100 && !installError && onStopInstallation && (
+              <Button 
+                variant="danger" 
+                onClick={onStopInstallation}
+              >
+                Stop Installation
+              </Button>
+            )}
+            {(installProgress === 100 || installError) && (
               <Button onClick={onMoveToInstallComplete}>
                 Next
               </Button>
-            </DialogFooter>
-          )}
-          {installError && (
-            <DialogFooter>
-              <Button onClick={onInstallProgressClose}>
-                Close
-              </Button>
-            </DialogFooter>
-          )}
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Installation Complete Dialog */}
-      <Dialog open={showInstallComplete} onOpenChange={onInstallComplete}>
-        <DialogContent>
+      <Dialog 
+        open={showInstallComplete} 
+        onOpenChange={() => {}}
+        modal={true}
+      >
+        <DialogContent 
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e: KeyboardEvent) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>
               {installError ? "Installation Failed" : "Installation Complete"}
@@ -130,8 +192,15 @@ const Popups: React.FC<PopupsProps> = ({
       </Dialog>
 
       {/* Uninstall Confirmation Dialog */}
-      <Dialog open={showUninstallConfirm} onOpenChange={onUninstallConfirmClose}>
-        <DialogContent>
+      <Dialog 
+        open={showUninstallConfirm} 
+        onOpenChange={() => {}}
+        modal={true}
+      >
+        <DialogContent 
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e: KeyboardEvent) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>Confirm Uninstall</DialogTitle>
             <DialogDescription>
@@ -152,9 +221,20 @@ const Popups: React.FC<PopupsProps> = ({
       {/* Uninstall Progress Dialog */}
       <Dialog 
         open={showUninstallProgress} 
-        onOpenChange={uninstallProgress < 100 ? undefined : onUninstallProgressClose}
+        onOpenChange={() => {}}
+        modal={true}
       >
-        <DialogContent>
+        <DialogContent 
+          onInteractOutside={(e) => {
+            // Always prevent closing if showing progress
+            e.preventDefault();
+          }}
+          onEscapeKeyDown={(e: KeyboardEvent) => {
+            // Always prevent closing if showing progress
+            e.preventDefault();
+          }}
+          className="xl:max-w-3xl"
+        >
           <DialogHeader>
             <DialogTitle>Uninstalling TAK Server</DialogTitle>
             <DialogDescription>
@@ -164,35 +244,35 @@ const Popups: React.FC<PopupsProps> = ({
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <Progress value={uninstallProgress} className="w-full" />
-            <div className="mt-2 text-sm text-muted-foreground">
-              Progress: {uninstallProgress}%
-            </div>
-            <ScrollArea 
-              className="w-full rounded-md border p-4 mt-4"
-              autoScroll={true}
-              content={uninstallTerminalOutput}
-            >
-              <div className="font-mono text-sm">
-                {uninstallTerminalOutput.map((line, index) => (
-                  <div key={index} className="whitespace-pre-wrap">
-                    {line}
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
+            <Progress 
+              value={uninstallProgress}
+              isIndeterminate={uninstallProgress === 0}
+              text={uninstallProgress === 0 
+                ? "Initializing..." 
+                : `Progress: ${uninstallProgress}%`
+              }
+            />
+            {uninstallTerminalOutput.length > 0 && (
+              <ScrollArea 
+                className="w-full rounded-md border p-4 mt-4 h-[300px] bg-background"
+                ref={uninstallTerminalRef}
+                autoScroll={true}
+                content={uninstallTerminalOutput}
+              >
+                <div className="space-y-1">
+                  {uninstallTerminalOutput.map((line, index) => (
+                    <div key={index}>
+                      {renderTerminalLine(line)}
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            )}
           </div>
-          {uninstallProgress === 100 && !uninstallError && (
+          {(uninstallProgress === 100 || uninstallError) && (
             <DialogFooter>
               <Button onClick={onMoveToUninstallComplete}>
                 Next
-              </Button>
-            </DialogFooter>
-          )}
-          {uninstallError && (
-            <DialogFooter>
-              <Button onClick={onUninstallProgressClose}>
-                Close
               </Button>
             </DialogFooter>
           )}
@@ -200,8 +280,15 @@ const Popups: React.FC<PopupsProps> = ({
       </Dialog>
 
       {/* Uninstall Complete Dialog */}
-      <Dialog open={showUninstallComplete} onOpenChange={onUninstallComplete}>
-        <DialogContent>
+      <Dialog 
+        open={showUninstallComplete} 
+        onOpenChange={() => {}}
+        modal={true}
+      >
+        <DialogContent 
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e: KeyboardEvent) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>
               {uninstallError ? "Uninstall Failed" : "Uninstall Complete"}

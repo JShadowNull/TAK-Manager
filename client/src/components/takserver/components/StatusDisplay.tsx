@@ -1,68 +1,46 @@
 import React from 'react';
-import { TakServerState } from '../../../pages/Takserver';
+import { TakServerState } from '../types';
 
 interface StatusDisplayProps {
   takState: TakServerState;
   operationError?: string;
 }
 
-const StatusDisplay: React.FC<StatusDisplayProps> = ({ takState, operationError }) => {
-  return (
-    <div className="flex flex-col gap-3 mb-4">
-      {takState.isInstalled ? (
-        <>
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-primary">Status:</span>
-            <div className="flex items-center gap-2">
-              {takState.isStarting || takState.isStopping || takState.isRestarting ? (
-                <span className={`text-sm ${
-                  takState.isStarting ? "text-green-500" :
-                  takState.isRestarting ? "text-yellow-500" :
-                  "text-red-500"
-                } font-semibold`}>
-                  {takState.isStarting ? "Starting..." :
-                   takState.isRestarting ? "Restarting..." :
-                   "Stopping..."}
-                </span>
+const StatusDisplay: React.FC<StatusDisplayProps> = ({ takState, operationError }) => (
+  <div className="mb-4">
+    <div className="flex flex-col gap-1">
+      <p className="text-sm flex items-center gap-2">
+        Status: 
+        <span className="flex items-center gap-2">
+          {takState.isInstalled && (
+            <span className="relative flex h-2 w-2">
+              {takState.isRunning ? (
+                <>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                </>
               ) : (
-                <div className="flex items-center gap-2">
-                  {takState.isRunning ? (
-                    <>
-                      <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></div>
-                      <span className="text-sm text-green-500 font-semibold">Running</span>
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-2.5 h-2.5 rounded-full bg-red-500"></div>
-                      <span className="text-sm text-red-500 font-semibold">Stopped</span>
-                    </>
-                  )}
-                </div>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
               )}
-            </div>
-          </div>
-          {takState.version && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-primary">Version:</span>
-              <span className="text-sm text-primary">{takState.version}</span>
-            </div>
+            </span>
           )}
-        </>
-      ) : (
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-primary">Installation:</span>
-          <span className="text-sm text-red-500 font-semibold">
-            Not Installed
+          <span className={takState.isInstalled ? (takState.isRunning ? "text-green-500" : "text-red-500") : "text-muted-foreground"}>
+            {takState.isInstalled ? (takState.isRunning ? 'Running' : 'Stopped') : 'Not Installed'}
           </span>
-        </div>
-      )}
-      {operationError && (
-        <div className="text-sm text-red-500 font-medium mt-2">
-          Error: {operationError}
-        </div>
+        </span>
+      </p>
+      {takState.isInstalled && takState.version && (
+        <p className="text-sm text-primary">
+          Version: {takState.version}
+        </p>
       )}
     </div>
-  );
-};
+    {operationError && (
+      <p className="text-sm text-destructive mt-2">
+        Error: {operationError}
+      </p>
+    )}
+  </div>
+);
 
 export default StatusDisplay; 

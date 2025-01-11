@@ -48,12 +48,12 @@ const ScrollArea = React.forwardRef<
   return (
     <ScrollAreaPrimitive.Root
       ref={ref}
-      className={cn("relative overflow-hidden", className)}
+      className={cn("relative overflow-hidden h-full", className)}
       {...props}
     >
       <ScrollAreaPrimitive.Viewport 
         ref={viewportRef}
-        className="max-h-[20rem] w-full rounded-[inherit] break-words"
+        className="h-full w-full rounded-[inherit] break-words"
         style={{ overflowWrap: 'break-word', wordBreak: 'break-all' }}
       >
         {children}

@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Button } from '../../shared/ui/shadcn/button';
-import LoadingButton from '../../shared/ui/inputs/LoadingButton';
-import { TakServerState } from '../../../pages/Takserver';
+import { TakServerState } from '../types';
+import { LoadingSpinner } from '../../shared/ui/icons/LoadingSpinner';
+import useFetch from '../../shared/hooks/useFetch';
 
 interface ControlButtonsProps {
   takState: TakServerState;
@@ -10,74 +11,115 @@ interface ControlButtonsProps {
   onStartStop: () => void;
   onInstall: () => void;
   disabled: boolean;
-  currentOperation: 'start' | 'stop' | 'restart' | 'uninstall' | null;
+  currentOperation: 'start' | 'stop' | 'restart' | 'uninstall' | 'install' | null;
+  setShowUninstallConfirm: (show: boolean) => void;
 }
 
 const ControlButtons: React.FC<ControlButtonsProps> = ({
   takState,
-  onUninstall,
   onRestart,
   onStartStop,
   onInstall,
   disabled,
-  currentOperation
+  currentOperation,
+  setShowUninstallConfirm
 }) => {
+  const { post } = useFetch();
+
+  // Start API call if there's a pending operation after refresh
+  useEffect(() => {
+    if (currentOperation === 'start') {
+      handleStart();
+    } else if (currentOperation === 'stop') {
+      handleStop();
+    } else if (currentOperation === 'restart') {
+      handleRestart();
+    }
+  }, []);
+
+  const handleStart = async () => {
+    try {
+      onStartStop();
+      await post('/api/takserver/takserver-start');
+    } catch (error) {
+      console.error('Failed to start TAK server:', error);
+      onStartStop();
+    }
+  };
+
+  const handleStop = async () => {
+    try {
+      onStartStop();
+      await post('/api/takserver/takserver-stop');
+    } catch (error) {
+      console.error('Failed to stop TAK server:', error);
+      onStartStop();
+    }
+  };
+
+  const handleRestart = async () => {
+    try {
+      onRestart();
+      await post('/api/takserver/takserver-restart');
+    } catch (error) {
+      console.error('Failed to restart TAK server:', error);
+      onRestart();
+    }
+  };
+
+  const handleUninstallClick = () => {
+    setShowUninstallConfirm(true);
+  };
+
   return (
-    <div className="flex flex-col justify-center lg:flex-row lg:justify-start gap-4">
+    <div className="flex gap-4">
       {takState.isInstalled ? (
         <>
+          {takState.isRunning ? (
+            <>
+              <Button
+                onClick={handleStop}
+                disabled={disabled}
+              >
+                {currentOperation === 'stop' && (
+                  <LoadingSpinner className="mr-2 h-4 w-4" />
+                )}
+                Stop
+              </Button>
+              <Button
+                onClick={handleRestart}
+                disabled={disabled}
+              >
+                {currentOperation === 'restart' && <LoadingSpinner className="mr-2 h-4 w-4" />}
+                Restart
+              </Button>
+            </>
+          ) : (
+            <Button
+              onClick={handleStart}
+              disabled={disabled}
+            >
+              {currentOperation === 'start' && (
+                <LoadingSpinner className="mr-2 h-4 w-4" />
+              )}
+              Start
+            </Button>
+          )}
           <Button
-            onClick={onUninstall}
+            onClick={handleUninstallClick}
             disabled={disabled}
             variant="danger"
-            className="w-full lg:w-auto"
           >
+            {currentOperation === 'uninstall' && <LoadingSpinner className="mr-2 h-4 w-4" />}
             Uninstall
           </Button>
-          {takState.isRunning && (
-            <>
-              <LoadingButton
-                onClick={onRestart}
-                disabled={disabled}
-                isLoading={currentOperation === 'restart'}
-                operation="restart"
-                variant="primary"
-                className="hover:bg-yellow-500 transition-colors w-full lg:w-auto"
-              >
-                Restart
-              </LoadingButton>
-              <LoadingButton
-                onClick={onStartStop}
-                disabled={disabled}
-                isLoading={currentOperation === 'stop'}
-                operation="stop"
-                variant="primary"
-                className="hover:bg-red-500 transition-colors w-full lg:w-auto"
-              >
-                Stop
-              </LoadingButton>
-            </>
-          )}
-          {!takState.isRunning && (
-            <LoadingButton
-              onClick={onStartStop}
-              disabled={disabled}
-              isLoading={currentOperation === 'start'}
-              operation="start"
-              variant="primary"
-              className="hover:bg-green-500 transition-colors w-full lg:w-auto"
-            >
-              Start
-            </LoadingButton>
-          )}
         </>
       ) : (
         <Button
           onClick={onInstall}
-          variant="primary"
-          className="hover:bg-green-500 transition-colors w-full lg:w-auto"
+          disabled={disabled}
         >
-          Install TAK Server
+          Install
         </Button>
       )}
     </div>

@@ -1,23 +1,21 @@
 import os
 from backend.services.helpers.run_command import RunCommand
-from backend.routes.socketio import socketio
-from backend.services.helpers.os_detector import OSDetector
-import eventlet
+from flask_sse import sse
+import time
 from pathlib import Path
 from backend.services.scripts.transfer.adb_controller import ADBController
-import time
 
 class RapidFileTransfer:
     def __init__(self):
         self.run_command = RunCommand()
         self.device_states = {}  # Single state tracking dictionary
         self.monitoring = False
-        self.os_detector = OSDetector()
         self.working_dir = self.get_default_working_directory()
         self.temp_dir = os.path.join(self.working_dir, '.temp', 'rapid_transfer')
         self.is_transfer_running = False
         self.transferred_files = {}  # Track transferred files per device
         self.device_progress = {}  # Add this to track progress per device
+        self.channel = 'transfer'  # Define a consistent channel for SSE events
         
         # File path mappings
         self.file_paths = {
@@ -34,7 +32,7 @@ class RapidFileTransfer:
         self.adb = ADBController()
 
     def emit_transfer_update(self, status_type="status", device_id=None, **data):
-        """Unified transfer status/progress emission"""
+        """Unified transfer status/progress emission using SSE"""
         base_status = {
             'timestamp': time.time(),
             'type': status_type,  # 'status', 'progress', or 'error'
@@ -45,47 +43,54 @@ class RapidFileTransfer:
             base_status['device_id'] = device_id
             
         status = {**base_status, **data}
-        socketio.emit('transfer_update', status, namespace='/transfer')
+        sse.publish(
+            {
+                'type': 'transfer_update',
+                'data': status
+            },
+            type='transfer_update',
+            channel=self.channel
+        )
 
     def emit_device_update(self, event_type, device_data):
-        """Unified device state emission"""
+        """Unified device state emission using SSE"""
         update = {
             'timestamp': time.time(),
             'type': event_type,  # 'connection', 'state_change'
             'devices': device_data if isinstance(device_data, list) else [device_data]
         }
-        socketio.emit('device_update', update, namespace='/transfer')
+        sse.publish(
+            {
+                'type': 'device_update',
+                'data': update
+            },
+            type='device_update',
+            channel=self.channel
+        )
 
     def emit_file_update(self, event_type, files_data):
-        """Unified file system update emission"""
+        """Unified file system update emission using SSE"""
         update = {
             'timestamp': time.time(),
             'type': event_type,  # 'list', 'change'
             'files': files_data
         }
-        socketio.emit('file_update', update, namespace='/transfer')
+        sse.publish(
+            {
+                'type': 'file_update',
+                'data': update
+            },
+            type='file_update',
+            channel=self.channel
+        )
 
     def get_default_working_directory(self):
-        """Determine the default working directory based on the OS."""
-        os_type = self.os_detector.detect_os()
-        home_dir = str(Path.home())
-        if os_type == 'windows' or os_type == 'macos':
-            documents_dir = os.path.join(home_dir, 'Documents')
-            # Ensure the Documents directory exists
-            if not os.path.exists(documents_dir):
-                os.makedirs(documents_dir)
-            # Set the working directory to Documents/takserver-docker
-            working_dir = os.path.join(documents_dir, 'takserver-docker')
-        else:
-            # For Linux, use the home directory directly
-            working_dir = os.path.join(home_dir, 'takserver-docker')
+        """Get the working directory from environment variable."""
+        base_dir = '/home/tak-manager'  # Use the container mount point directly
+        working_dir = os.path.join(base_dir, 'takserver-docker')
+        if not os.path.exists(working_dir):
+            os.makedirs(working_dir, exist_ok=True)
         return working_dir
-
-    def check_adb_installed(self):
-        return self.adb.check_adb_installed()
-
-    def install_adb(self):
-        return self.adb.install_adb(self.os_detector.detect_os())
 
     def get_device_name(self, device_id):
         try:
@@ -205,13 +210,13 @@ class RapidFileTransfer:
                                 last_device_states[device_id] = new_state
                                 self.handle_device_update(device_id, new_state)
                     
-                    eventlet.sleep(0.1)
+                    time.sleep(0.1)
                 except Exception as line_error:
                     self.emit_transfer_update(
                         status_type="error",
                         error=f"Error reading device update: {str(line_error)}"
                     )
-                    eventlet.sleep(1)
+                    time.sleep(1)
         except Exception as e:
             self.emit_transfer_update(
                 status_type="error",

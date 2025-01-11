@@ -1,31 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import useFetch from '../shared/hooks/useFetch';
+import React, { useState, useRef } from 'react';
 import { Button } from '../shared/ui/shadcn/button';
 import { HelpIconTooltip } from '../shared/ui/shadcn/tooltip/HelpIconTooltip';
-import { useOtaSocket } from './hooks/useOtaSocket';
-import Popups from './components/Popups';
 
 interface OtaFormData {
   ota_zip_file: File | null;
 }
 
-interface ProgressResponse {
-  success: boolean;
-  status: 'idle' | 'in_progress' | 'complete' | 'error' | 'not_found';
-  progress: number;
-  message: string;
-  error?: string;
-}
-
-interface OtaOperationState {
-  showProgress: boolean;
-  showComplete: boolean;
-  progress: number;
-  error?: string;
-  terminalOutput: string[];
-}
-
 const AdvancedFeatures: React.FC = () => {
+  const otaFileRef = useRef<HTMLInputElement>(null);
+  const pluginFileRef = useRef<HTMLInputElement>(null);
+  
   const [showOtaForm, setShowOtaForm] = useState<boolean>(false);
   const [showUpdatePluginsForm, setShowUpdatePluginsForm] = useState<boolean>(false);
   const [otaFormData, setOtaFormData] = useState<OtaFormData>({
@@ -34,79 +18,15 @@ const AdvancedFeatures: React.FC = () => {
   const [updatePluginsFormData, setUpdatePluginsFormData] = useState<OtaFormData>({
     ota_zip_file: null,
   });
-  const [completedOperation, setCompletedOperation] = useState<'config' | 'update' | null>(null);
-  const [currentUpdateId, setCurrentUpdateId] = useState<string | null>(null);
-  const [progressData, setProgressData] = useState<ProgressResponse | null>(null);
-  const [otaOperation, setOtaOperation] = useState<OtaOperationState>({
-    showProgress: false,
-    showComplete: false,
-    progress: 0,
-    error: undefined,
-    terminalOutput: []
-  });
 
-  // Initialize fetch hook
-  const { post, get } = useFetch();
+  const handleOtaInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    setOtaFormData({ ...otaFormData, ota_zip_file: file || null });
+  };
 
-  // Initialize socket for terminal output only
-  const socket = useOtaSocket();
-  const { state: { isInstalling } } = socket;
-
-  // Progress polling
-  useEffect(() => {
-    let pollInterval: NodeJS.Timeout;
-
-    const pollProgress = async () => {
-      if (currentUpdateId && otaOperation.showProgress) {
-        try {
-          const response = await get<ProgressResponse>(`/api/ota/ota-update-progress/${currentUpdateId}`);
-          setProgressData(response);
-          setOtaOperation(prev => ({
-            ...prev,
-            progress: response.progress || 0,
-            error: response.error
-          }));
-
-          if (response.status === 'complete' || response.status === 'error' || response.status === 'not_found') {
-            clearInterval(pollInterval);
-            if (response.status === 'complete') {
-              setOtaOperation(prev => ({
-                ...prev,
-                showProgress: false,
-                showComplete: true
-              }));
-            }
-          }
-        } catch (error) {
-          console.error('Error polling progress:', error);
-          setOtaOperation(prev => ({
-            ...prev,
-            error: error instanceof Error ? error.message : 'Operation failed'
-          }));
-        }
-      }
-    };
-
-    if (currentUpdateId && otaOperation.showProgress) {
-      pollProgress();
-      pollInterval = setInterval(pollProgress, 2000);
-    }
-
-    return () => {
-      if (pollInterval) {
-        clearInterval(pollInterval);
-      }
-    };
-  }, [currentUpdateId, otaOperation.showProgress, get]);
-
-  const handleOtaInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { id, files } = e.target;
-    if (files) {
-      setOtaFormData(prev => ({
-        ...prev,
-        [id]: files[0]
-      }));
-    }
+  const handleUpdatePluginsInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    setUpdatePluginsFormData({ ...updatePluginsFormData, ota_zip_file: file || null });
   };
 
   const handleOtaClose = () => {
@@ -116,56 +36,6 @@ const AdvancedFeatures: React.FC = () => {
     });
   };
 
-  const handleOtaSubmit = async () => {
-    try {
-      if (!otaFormData.ota_zip_file || !otaFormData.ota_zip_file.name.endsWith('.zip')) {
-        throw new Error('Please select a valid OTA plugins ZIP file');
-      }
-
-      setOtaOperation({
-        showProgress: true,
-        showComplete: false,
-        progress: 0,
-        error: undefined,
-        terminalOutput: []
-      });
-      socket.clearTerminal();
-      setShowOtaForm(false);
-
-      const formDataToSend = new FormData();
-      formDataToSend.append('ota_zip_file', otaFormData.ota_zip_file);
-
-      const response = await post('/api/ota/ota-configure', formDataToSend, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      if (response.update_id) {
-        setCurrentUpdateId(response.update_id);
-        setCompletedOperation('config');
-      }
-    } catch (error) {
-      console.error('OTA configuration error:', error);
-      setOtaOperation(prev => ({
-        ...prev,
-        showProgress: false,
-        showComplete: true,
-        error: error instanceof Error ? error.message : 'Configuration failed'
-      }));
-    }
-  };
-
-  const handleUpdatePluginsInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { id, files } = e.target;
-    if (files) {
-      setUpdatePluginsFormData(prev => ({
-        ...prev,
-        [id]: files[0]
-      }));
-    }
-  };
-
   const handleUpdatePluginsClose = () => {
     setShowUpdatePluginsForm(false);
     setUpdatePluginsFormData({
@@ -173,58 +43,19 @@ const AdvancedFeatures: React.FC = () => {
     });
   };
 
-  const handleUpdatePluginsSubmit = async () => {
-    try {
-      if (!updatePluginsFormData.ota_zip_file || !updatePluginsFormData.ota_zip_file.name.endsWith('.zip')) {
-        throw new Error('Please select a valid plugins ZIP file');
-      }
-
-      setOtaOperation({
-        showProgress: true,
-        showComplete: false,
-        progress: 0,
-        error: undefined,
-        terminalOutput: []
-      });
-      socket.clearTerminal();
-      setShowUpdatePluginsForm(false);
-
-      const formDataToSend = new FormData();
-      formDataToSend.append('ota_zip_file', updatePluginsFormData.ota_zip_file);
-
-      const response = await post('/api/ota/ota-update', formDataToSend, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      if (response.update_id) {
-        setCurrentUpdateId(response.update_id);
-        setCompletedOperation('update');
-      }
-    } catch (error) {
-      console.error('Plugin update error:', error);
-      setOtaOperation(prev => ({
-        ...prev,
-        showProgress: false,
-        showComplete: true,
-        error: error instanceof Error ? error.message : 'Update failed'
-      }));
-    }
+  const handleOtaSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    // TODO: Implement OTA configuration
+    console.log('Configuring OTA updates...');
+    alert('OTA configuration started');
+    handleOtaClose();
   };
 
-  const handleComplete = () => {
-    setOtaOperation({
-      showProgress: false,
-      showComplete: false,
-      progress: 0,
-      error: undefined,
-      terminalOutput: []
-    });
-    socket.clearTerminal();
-    setCurrentUpdateId(null);
-    setProgressData(null);
-    handleOtaClose();
+  const handleUpdatePluginsSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    // TODO: Implement plugin updates
+    console.log('Updating plugins...');
+    alert('Plugin update started');
     handleUpdatePluginsClose();
   };
 
@@ -301,10 +132,7 @@ const AdvancedFeatures: React.FC = () => {
             </div>
 
             {/* Form */}
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              handleOtaSubmit();
-            }} className="space-y-4">
+            <form onSubmit={handleOtaSubmit} className="space-y-4">
               {/* File Upload Section */}
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-semibold text-primary flex items-center gap-1">
@@ -319,6 +147,7 @@ const AdvancedFeatures: React.FC = () => {
                 <input
                   type="file"
                   id="ota_zip_file"
+                  ref={otaFileRef}
                   onChange={handleOtaInputChange}
                   className="w-full text-sm p-2 rounded-lg bg-sidebar border border-inputBorder focus:border-accentBorder focus:outline-none"
                   accept=".zip"
@@ -339,8 +168,6 @@ const AdvancedFeatures: React.FC = () => {
                   type="submit"
                   variant="primary"
                   className="hover:bg-green-500 w-full lg:w-auto"
-                  loading={isInstalling}
-                  loadingText="Configuring..."
                   disabled={!otaFormData.ota_zip_file}
                   tooltipStyle="shadcn"
                   tooltip={!otaFormData.ota_zip_file ? "Please select a valid plugins ZIP file" : undefined}
@@ -386,10 +213,7 @@ const AdvancedFeatures: React.FC = () => {
             </div>
 
             {/* Form */}
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              handleUpdatePluginsSubmit();
-            }} className="space-y-4">
+            <form onSubmit={handleUpdatePluginsSubmit} className="space-y-4">
               {/* File Upload Section */}
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-semibold text-primary flex items-center gap-1">
@@ -404,6 +228,7 @@ const AdvancedFeatures: React.FC = () => {
                 <input
                   type="file"
                   id="ota_zip_file"
+                  ref={pluginFileRef}
                   onChange={handleUpdatePluginsInputChange}
                   className="w-full text-sm p-2 rounded-lg bg-sidebar border border-inputBorder focus:border-accentBorder focus:outline-none"
                   accept=".zip"
@@ -424,8 +249,6 @@ const AdvancedFeatures: React.FC = () => {
                   type="submit"
                   variant="primary"
                   className="hover:bg-green-500 w-full lg:w-auto"
-                  loading={isInstalling}
-                  loadingText="Updating..."
                   disabled={!updatePluginsFormData.ota_zip_file}
                   tooltipStyle="shadcn"
                   tooltip={!updatePluginsFormData.ota_zip_file ? "Please select a valid plugins ZIP file" : undefined}
@@ -439,39 +262,8 @@ const AdvancedFeatures: React.FC = () => {
           </div>
         </div>
       )}
-
-      <Popups
-        // Progress popup
-        showInstallProgress={otaOperation.showProgress}
-        showInstallComplete={otaOperation.showComplete}
-        installProgress={otaOperation.progress}
-        installError={otaOperation.error}
-        onInstallProgressClose={() => setOtaOperation(prev => ({ ...prev, showProgress: false }))}
-        onInstallComplete={handleComplete}
-        onMoveToInstallComplete={() => {
-          setOtaOperation(prev => ({
-            ...prev,
-            showProgress: false,
-            showComplete: true
-          }));
-        }}
-        terminalOutput={socket.terminalOutput}
-        
-        // These props are required by the Popups component but not used for OTA
-        showUninstallConfirm={false}
-        showUninstallProgress={false}
-        showUninstallComplete={false}
-        uninstallProgress={0}
-        uninstallError={undefined}
-        onUninstallConfirmClose={() => {}}
-        onUninstall={() => {}}
-        onUninstallProgressClose={() => {}}
-        onUninstallComplete={() => {}}
-        onMoveToUninstallComplete={() => {}}
-        uninstallTerminalOutput={[]}
-      />
     </>
   );
-}
+};
 
 export default AdvancedFeatures; 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import CustomScrollbar from '../shared/ui/layout/CustomScrollbar';
+import { ScrollArea } from '@/components/shared/ui/shadcn/scroll-area';
 import { Input } from '../shared/ui/shadcn/input';
 import { Chip, Tooltip } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -253,7 +253,7 @@ function ExistingCertificates({
       </div>
 
       <div className="h-[400px]">
-        <CustomScrollbar>
+        <ScrollArea>
           <div className="space-y-2">
             {filteredCertificates.length === 0 ? (
               <div className="text-center text-textSecondary py-4">
@@ -330,7 +330,7 @@ function ExistingCertificates({
               ))
             )}
           </div>
-        </CustomScrollbar>
+        </ScrollArea>
       </div>
     </div>
   );

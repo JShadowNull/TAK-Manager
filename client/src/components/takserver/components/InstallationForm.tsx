@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Input } from '../../shared/ui/shadcn/input';
 import { Button } from '../../shared/ui/shadcn/button';
-import { FormState, formSchema } from '../types';
-import { z } from 'zod';
+import { FormState, formSchema } from '../types/index';
 import { HelpIconTooltip } from '../../shared/ui/shadcn/tooltip/HelpIconTooltip';
 import { Eye, EyeOff } from 'lucide-react';
 
@@ -19,45 +18,51 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
   onSubmit,
   onCancel
 }) => {
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isValid, setIsValid] = useState(false);
-  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
-  const [showPostgresPassword, setShowPostgresPassword] = useState(false);
-  const [showCertificatePassword, setShowCertificatePassword] = useState(false);
+  const [showDbPassword, setShowDbPassword] = useState(false);
+  const [showCertPassword, setShowCertPassword] = useState(false);
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
-  // Validate form data whenever it changes
-  useEffect(() => {
+  const validateField = (name: string, value: any) => {
     try {
-      const dataToValidate = {
-        ...formData,
-        docker_zip_file: formData.docker_zip_file || undefined
-      };
-      formSchema.parse(dataToValidate);
-      setErrors({});
-      setIsValid(true);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        const newErrors: Record<string, string> = {};
-        error.errors.forEach((err) => {
-          const field = err.path[0] as string;
-          newErrors[field] = err.message;
-        });
-        setErrors(newErrors);
-        setIsValid(false);
+      if (name === 'docker_zip_file' && value instanceof File) {
+        formSchema.shape.docker_zip_file.parse(value);
+      } else {
+        formSchema.shape[name as keyof typeof formSchema.shape].parse(value);
       }
-    }
-  }, [formData]);
-
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setHasAttemptedSubmit(true);
-    if (isValid) {
-      onSubmit(e);
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    } catch (error: any) {
+      setErrors(prev => ({ ...prev, [name]: error.errors?.[0]?.message || 'Invalid input' }));
     }
   };
 
-  // Helper to determine if we should show error for a field
-  const shouldShowError = (fieldId: string) => hasAttemptedSubmit && errors[fieldId];
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { id, value, files } = e.target;
+    if (id === 'docker_zip_file' && files?.length) {
+      validateField(id, files[0]);
+    } else {
+      validateField(id, value);
+    }
+    onInputChange(e);
+  };
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    try {
+      formSchema.parse({
+        ...formData,
+        docker_zip_file: formData.docker_zip_file || new File([], '')
+      });
+      onSubmit(e);
+    } catch (error: any) {
+      const newErrors: { [key: string]: string } = {};
+      error.errors?.forEach((err: any) => {
+        if (err.path?.[0]) {
+          newErrors[err.path[0]] = err.message;
+        }
+      });
+      setErrors(newErrors);
+    }
+  };
 
   return (
     <div className="w-full border border-border bg-card p-6 rounded-lg">
@@ -101,12 +106,12 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
             <input
               type="file"
               id="docker_zip_file"
-              onChange={onInputChange}
-              className={`w-full text-sm p-2 rounded-lg bg-sidebar border ${shouldShowError('docker_zip_file') ? 'border-red-500' : 'border-inputBorder'} focus:border-accentBorder focus:outline-none`}
+              onChange={handleInputChange}
+              className="w-full text-sm p-2 rounded-lg bg-sidebar border border-inputBorder focus:border-accentBorder focus:outline-none"
               accept=".zip"
               required
             />
-            {shouldShowError('docker_zip_file') && (
+            {errors.docker_zip_file && (
               <p className="text-sm text-red-500">{errors.docker_zip_file}</p>
             )}
           </div>
@@ -128,26 +133,22 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
               <div className="relative">
                 <Input
                   id="postgres_password"
-                  type={showPostgresPassword ? "text" : "password"}
+                  type={showDbPassword ? "text" : "password"}
                   value={formData.postgres_password}
-                  onChange={onInputChange}
+                  onChange={handleInputChange}
                   placeholder="Enter PostgreSQL password (min. 8 characters)"
-                  className={`w-full ${shouldShowError('postgres_password') ? 'border-red-500' : ''}`}
+                  className={`w-full pr-10 ${errors.postgres_password ? 'border-red-500' : ''}`}
                   required
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPostgresPassword(!showPostgresPassword)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowDbPassword(!showDbPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary"
                 >
-                  {showPostgresPassword ? (
-                    <EyeOff size={16} />
-                  ) : (
-                    <Eye size={16} />
-                  )}
+                  {showDbPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
-              {shouldShowError('postgres_password') && (
+              {errors.postgres_password && (
                 <p className="text-sm text-red-500">{errors.postgres_password}</p>
               )}
             </div>
@@ -166,26 +167,22 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
               <div className="relative">
                 <Input
                   id="certificate_password"
-                  type={showCertificatePassword ? "text" : "password"}
+                  type={showCertPassword ? "text" : "password"}
                   value={formData.certificate_password}
-                  onChange={onInputChange}
+                  onChange={handleInputChange}
                   placeholder="Enter certificate password (min. 8 characters)"
-                  className={`w-full ${shouldShowError('certificate_password') ? 'border-red-500' : ''}`}
+                  className={`w-full pr-10 ${errors.certificate_password ? 'border-red-500' : ''}`}
                   required
                 />
                 <button
                   type="button"
-                  onClick={() => setShowCertificatePassword(!showCertificatePassword)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowCertPassword(!showCertPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary"
                 >
-                  {showCertificatePassword ? (
-                    <EyeOff size={16} />
-                  ) : (
-                    <Eye size={16} />
-                  )}
+                  {showCertPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
-              {shouldShowError('certificate_password') && (
+              {errors.certificate_password && (
                 <p className="text-sm text-red-500">{errors.certificate_password}</p>
               )}
             </div>
@@ -206,16 +203,17 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
                 id="organization"
                 type="text"
                 value={formData.organization}
-                onChange={onInputChange}
+                onChange={handleInputChange}
                 placeholder="Enter organization name"
-                className={`w-full ${shouldShowError('organization') ? 'border-red-500' : ''}`}
+                className={`w-full ${errors.organization ? 'border-red-500' : ''}`}
                 required
               />
-              {shouldShowError('organization') && (
+              {errors.organization && (
                 <p className="text-sm text-red-500">{errors.organization}</p>
               )}
             </div>
 
+            {/* Organizational Unit */}
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
                 <label className="text-sm font-semibold text-primary flex items-center gap-1">
@@ -231,16 +229,17 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
                 id="organizational_unit"
                 type="text"
                 value={formData.organizational_unit}
-                onChange={onInputChange}
+                onChange={handleInputChange}
                 placeholder="Enter organizational unit"
-                className={`w-full ${shouldShowError('organizational_unit') ? 'border-red-500' : ''}`}
+                className={`w-full ${errors.organizational_unit ? 'border-red-500' : ''}`}
                 required
               />
-              {shouldShowError('organizational_unit') && (
+              {errors.organizational_unit && (
                 <p className="text-sm text-red-500">{errors.organizational_unit}</p>
               )}
             </div>
 
+            {/* State/Province */}
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
                 <label className="text-sm font-semibold text-primary flex items-center gap-1">
@@ -256,16 +255,17 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
                 id="state"
                 type="text"
                 value={formData.state}
-                onChange={onInputChange}
+                onChange={handleInputChange}
                 placeholder="Enter state or province"
-                className={`w-full ${shouldShowError('state') ? 'border-red-500' : ''}`}
+                className={`w-full ${errors.state ? 'border-red-500' : ''}`}
                 required
               />
-              {shouldShowError('state') && (
+              {errors.state && (
                 <p className="text-sm text-red-500">{errors.state}</p>
               )}
             </div>
 
+            {/* City */}
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
                 <label className="text-sm font-semibold text-primary flex items-center gap-1">
@@ -281,16 +281,17 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
                 id="city"
                 type="text"
                 value={formData.city}
-                onChange={onInputChange}
+                onChange={handleInputChange}
                 placeholder="Enter city"
-                className={`w-full ${shouldShowError('city') ? 'border-red-500' : ''}`}
+                className={`w-full ${errors.city ? 'border-red-500' : ''}`}
                 required
               />
-              {shouldShowError('city') && (
+              {errors.city && (
                 <p className="text-sm text-red-500">{errors.city}</p>
               )}
             </div>
 
+            {/* Name */}
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
                 <label className="text-sm font-semibold text-primary flex items-center gap-1">
@@ -306,12 +307,12 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
                 id="name"
                 type="text"
                 value={formData.name}
-                onChange={onInputChange}
+                onChange={handleInputChange}
                 placeholder="Enter administrator name"
-                className={`w-full ${shouldShowError('name') ? 'border-red-500' : ''}`}
+                className={`w-full ${errors.name ? 'border-red-500' : ''}`}
                 required
               />
-              {shouldShowError('name') && (
+              {errors.name && (
                 <p className="text-sm text-red-500">{errors.name}</p>
               )}
             </div>
@@ -330,10 +331,6 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
               type="submit"
               variant="primary"
               className="hover:bg-green-500"
-              tooltipStyle="shadcn"
-              tooltip={hasAttemptedSubmit && !isValid ? "Please fill out all fields correctly" : undefined}
-              tooltipPosition="top"
-              tooltipDelay={200}
             >
               Begin Installation
             </Button>

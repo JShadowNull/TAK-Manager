@@ -1,8 +1,15 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
-import useSocket from '../components/shared/hooks/useSocket';
-import Popup from '../components/shared/ui/popups/Popup';
-import CustomScrollbar from '../components/shared/ui/layout/CustomScrollbar';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/shared/ui/shadcn/dialog';
+import { Progress } from '../components/shared/ui/shadcn/progress';
+import { ScrollArea } from '@/components/shared/ui/shadcn/scroll-area';
 import ZipNameSection from '../components/datapackage/ZipNameSection/ZipNameSection';
 import CotStreamsSection from '../components/datapackage/CotStreamsSection/CotStreamsSection';
 import AtakPreferencesSection from '../components/datapackage/AtakPreferencesSection/AtakPreferencesSection';
@@ -11,9 +18,7 @@ import axios from 'axios';
 
 function DataPackage() {
   const location = useLocation();
-  const renderCount = useRef(0);
   const terminalRef = useRef(null);
-  const socketRef = useRef(null);
   
   // State management
   const [preferences, setPreferences] = useState({});
@@ -23,82 +28,13 @@ function DataPackage() {
   const [isConfiguring, setIsConfiguring] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
   const [showCompletionPopup, setShowCompletionPopup] = useState(false);
+  const [terminalOutput, setTerminalOutput] = useState([]);
   const [operationStatus, setOperationStatus] = useState({
     isInProgress: false,
     isComplete: false,
     isSuccess: false,
     errorMessage: null
   });
-
-  // Socket event handlers
-  const socketEventHandlers = {
-    handleTerminalOutput: true,
-    terminal_output: (data, { appendToTerminal }) => {
-      const outputText = typeof data === 'string' 
-        ? data 
-        : (data?.data || data?.message || JSON.stringify(data));
-      
-      if (outputText) {
-        appendToTerminal(outputText);
-      }
-    },
-    operation_started: () => {
-      setOperationStatus({
-        isInProgress: true,
-        isComplete: false,
-        isSuccess: false,
-        errorMessage: null
-      });
-    },
-    operation_complete: (data) => {
-      setOperationStatus({
-        isInProgress: false,
-        isComplete: true,
-        isSuccess: true,
-        errorMessage: null
-      });
-      setIsConfiguring(false);
-    },
-    operation_failed: (data) => {
-      setOperationStatus({
-        isInProgress: false,
-        isComplete: true,
-        isSuccess: false,
-        errorMessage: data.error || 'Operation failed'
-      });
-      setIsConfiguring(false);
-    }
-  };
-
-  // Initialize socket with useSocket hook
-  const {
-    isConnected: socketConnected,
-    error: socketError,
-    emit,
-    terminalOutput,
-    clearTerminal,
-    socket
-  } = useSocket('/data-package', {
-    eventHandlers: {
-      ...socketEventHandlers,
-      onConnect: (socket) => {
-        console.log('DataPackage: Socket connected');
-      }
-    },
-    socketRef
-  });
-
-  // Store socket reference and log connection status
-  useEffect(() => {
-    if (socket) {
-      console.log('Socket reference updated');
-      socketRef.current = socket;
-    }
-  }, [socket]);
-
-  useEffect(() => {
-    console.log('Socket connected status:', socketConnected);
-  }, [socketConnected]);
 
   // Common handlers for preferences - memoized to prevent unnecessary re-renders
   const handlePreferenceChange = useCallback((label, value) => {
@@ -162,20 +98,18 @@ function DataPackage() {
     });
   }, [zipFileName, isFormValid]);
 
+  // Clear terminal output
+  const clearTerminal = useCallback(() => {
+    setTerminalOutput([]);
+  }, []);
+
   // Generate data package
   const handleGenerateDataPackage = useCallback(async () => {
-    console.log('handleGenerateDataPackage called');
-    console.log('Form valid:', isFormValid);
-    
     if (!isFormValid) {
-      console.log('Form is not valid, returning early');
       return;
     }
 
-    // Clear terminal output before starting
     clearTerminal();
-    console.log('Terminal output cleared');
-
     setShowPopup(true);
     setIsConfiguring(true);
     setOperationStatus({
@@ -232,63 +166,16 @@ function DataPackage() {
         }
       });
 
-      console.log('Submitting preferences:', formattedPreferences);
-      
-      try {
-        // Make the HTTP request
-        console.log('Making HTTP request to /datapackage/submit-preferences');
-        console.log('Request config:', {
-          method: 'post',
-          url: '/datapackage/submit-preferences',
-          headers: { 'Content-Type': 'application/json' },
-          data: formattedPreferences
-        });
-
-        const response = await axios({
-          method: 'post',
-          url: '/datapackage/submit-preferences',
-          data: formattedPreferences,
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }).catch(error => {
-          console.error('Axios error:', {
-            message: error.message,
-            config: error.config,
-            response: error.response,
-            request: error.request
-          });
-          throw error;
-        });
-        
-        console.log('Received response:', response);
-
-        if (response.data.error) {
-          throw new Error(response.data.error);
+      await axios({
+        method: 'post',
+        url: '/datapackage/submit-preferences',
+        data: formattedPreferences,
+        headers: {
+          'Content-Type': 'application/json'
         }
-
-        // Update operation status on success
-        setOperationStatus({
-          isInProgress: false,
-          isComplete: true,
-          isSuccess: true,
-          errorMessage: null
-        });
-        
-      } catch (error) {
-        console.error('HTTP Error:', error);
-        console.error('Error details:', {
-          message: error.message,
-          response: error.response?.data,
-          status: error.response?.status,
-          config: error.config
-        });
-        
-        throw error;  // Re-throw to be caught by outer catch block
-      }
-
+      });
+      
     } catch (error) {
-      console.error('Error generating data package:', error);
       setOperationStatus({
         isInProgress: false,
         isComplete: true,
@@ -315,6 +202,21 @@ function DataPackage() {
       isSuccess: false,
       errorMessage: null
     });
+  };
+
+  // Handle stop operation
+  const handleStopOperation = async () => {
+    try {
+      await axios.post('/datapackage/stop');
+      setOperationStatus({
+        isInProgress: false,
+        isComplete: true,
+        isSuccess: false,
+        errorMessage: "Operation cancelled by user"
+      });
+    } catch (error) {
+      console.error('Error stopping operation:', error);
+    }
   };
 
   return (
@@ -357,16 +259,14 @@ function DataPackage() {
           </div>
         </div>
         <div className="h-full pt-16">
-          <CustomScrollbar>
+          <ScrollArea>
             <CotStreamsSection
               preferences={memoizedPreferences}
               onPreferenceChange={handlePreferenceChange}
               onEnableChange={handlePreferenceEnable}
               onValidationChange={handleValidationChange}
-              socket={socket}
-              isConnected={socketConnected}
             />
-          </CustomScrollbar>
+          </ScrollArea>
         </div>
       </div>
 
@@ -400,14 +300,14 @@ function DataPackage() {
           </div>
         </div>
         <div className="h-full pt-16">
-          <CustomScrollbar>
+          <ScrollArea>
             <AtakPreferencesSection
               preferences={memoizedPreferences}
               onPreferenceChange={handlePreferenceChange}
               onEnableChange={handlePreferenceEnable}
               onValidationChange={handleValidationChange}
             />
-          </CustomScrollbar>
+          </ScrollArea>
         </div>
       </div>
 
@@ -415,10 +315,7 @@ function DataPackage() {
       <div className="flex justify-center mt-4">
         <Button
           variant="primary"
-          onClick={() => {
-            console.log('Generate button clicked');
-            handleGenerateDataPackage();
-          }}
+          onClick={handleGenerateDataPackage}
           disabled={!isFormValid}
           tooltip={!isFormValid && validationMessages.length > 0 ? (
             <div>
@@ -443,101 +340,94 @@ function DataPackage() {
         </Button>
       </div>
 
-      {/* Configuration Popup with connection status */}
-      <Popup
-        id="data-package-popup"
-        isVisible={showPopup}
-        title={
-          isConfiguring 
-            ? "Generating Data Package"
-            : operationStatus.isComplete
-              ? operationStatus.isSuccess
-                ? "Data Package Complete"
-                : "Data Package Failed"
-              : "Operation Progress"
-        }
-        variant="terminal"
-        terminalOutput={terminalOutput}
-        terminalRef={terminalRef}
-        showTerminal={true}
-        isInProgress={operationStatus.isInProgress}
-        isComplete={!operationStatus.isInProgress && (operationStatus.isComplete)}
-        isSuccess={operationStatus.isSuccess}
-        errorMessage={operationStatus.errorMessage}
-        progressMessage={
-          operationStatus.isInProgress
-            ? "Generating data package configuration..."
-            : 'Operation in Progress'
-        }
-        successMessage={
-          operationStatus.isComplete && operationStatus.isSuccess
-            ? "Data package generated successfully"
-            : ""
-        }
-        nextStepMessage={
-          operationStatus.isComplete && operationStatus.isSuccess
-            ? "Your data package has been created successfully. Click 'Next' to continue."
-            : ""
-        }
-        failureMessage={
-          operationStatus.errorMessage
-            ? 'Data package generation failed'
-            : 'Operation failed'
-        }
-        onClose={() => {
-          if (!operationStatus.isInProgress) {
-            setShowPopup(false);
-            clearTerminal();
-            setOperationStatus({
-              isInProgress: false,
-              isComplete: false,
-              isSuccess: false,
-              errorMessage: null
-            });
-          }
+      {/* Progress Dialog */}
+      <Dialog 
+        open={showPopup} 
+        onOpenChange={operationStatus.isInProgress ? undefined : () => {
+          setShowPopup(false);
+          clearTerminal();
+          setOperationStatus({
+            isInProgress: false,
+            isComplete: false,
+            isSuccess: false,
+            errorMessage: null
+          });
         }}
-        onNext={handleNext}
-        onStop={
-          operationStatus.isInProgress
-            ? () => {
-                emit('stop_operation');
-                setOperationStatus({
-                  isInProgress: false,
-                  isComplete: true,
-                  isSuccess: false,
-                  errorMessage: "Operation cancelled by user"
-                });
-              }
-            : undefined
-        }
-        blurSidebar={true}
-      />
-
-      {/* Completion Popup */}
-      <Popup
-        id="completion-popup"
-        title="Data Package Complete"
-        isVisible={showCompletionPopup}
-        variant="standard"
-        onClose={handleComplete}
-        blurSidebar={true}
-        buttons={
-          <Button
-            variant="primary"
-            onClick={handleComplete}
-          >
-            Close
-          </Button>
-        }
       >
-        <div className="text-center">
-          <p className="text-green-500 font-semibold">✓</p>
-          <p className="text-green-500 font-semibold">Data Package Generated Successfully</p>
-          <p className="text-sm text-gray-300">
-            Your data package has been created and is ready to use in ATAK.
-          </p>
-        </div>
-      </Popup>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {isConfiguring 
+                ? "Generating Data Package"
+                : operationStatus.isComplete
+                  ? operationStatus.isSuccess
+                    ? "Data Package Complete"
+                    : "Data Package Failed"
+                  : "Operation Progress"}
+            </DialogTitle>
+            <DialogDescription>
+              {operationStatus.isInProgress
+                ? "Please wait while your data package is being generated..."
+                : operationStatus.isComplete && operationStatus.isSuccess
+                ? "Review the logs and click Next to continue."
+                : operationStatus.errorMessage || "Operation in progress"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <ScrollArea 
+              className="w-full rounded-md border p-4"
+              autoScroll={true}
+              content={terminalOutput}
+            >
+              <div className="font-mono text-sm">
+                {terminalOutput.map((line, index) => (
+                  <div key={index} className="whitespace-pre-wrap">
+                    {line}
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+          <DialogFooter>
+            {operationStatus.isComplete && operationStatus.isSuccess && (
+              <Button onClick={handleNext}>
+                Next
+              </Button>
+            )}
+            {operationStatus.isInProgress && (
+              <Button variant="destructive" onClick={handleStopOperation}>
+                Stop
+              </Button>
+            )}
+            {operationStatus.errorMessage && (
+              <Button onClick={() => setShowPopup(false)}>
+                Close
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Completion Dialog */}
+      <Dialog open={showCompletionPopup} onOpenChange={handleComplete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Data Package Complete</DialogTitle>
+            <DialogDescription>
+              Your data package has been created and is ready to use in ATAK.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="text-center py-4">
+            <p className="text-green-500 font-semibold text-xl">✓</p>
+            <p className="text-green-500 font-semibold">Data Package Generated Successfully</p>
+          </div>
+          <DialogFooter>
+            <Button onClick={handleComplete}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

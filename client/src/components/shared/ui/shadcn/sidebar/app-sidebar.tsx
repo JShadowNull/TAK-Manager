@@ -8,7 +8,6 @@ import {
   ArrowLeftRight,
   Menu,
 } from "lucide-react"
-import useSocket from "@/components/shared/hooks/useSocket"
 import { ModeToggle } from "@/components/shared/ui/shadcn/mode-toggle"
 import { Sheet, SheetContent } from "@/components/shared/ui/shadcn/sheet"
 
@@ -67,37 +66,44 @@ const items = [
 
 export function AppSidebar() {
   const location = useLocation()
-  const [takServerInstalled, setTakServerInstalled] = useState(false)
-  const [operationInProgress, setOperationInProgress] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
+  const [takServerInstalled, setTakServerInstalled] = useState(false)
+
+  // Listen for changes to TAK server state
+  useEffect(() => {
+    const updateTakServerState = () => {
+      const savedState = localStorage.getItem('takServerState')
+      if (savedState) {
+        try {
+          const state = JSON.parse(savedState)
+          setTakServerInstalled(state.isInstalled === true)
+        } catch (error) {
+          console.error('Error parsing TAK server state:', error)
+          setTakServerInstalled(false)
+        }
+      } else {
+        setTakServerInstalled(false)
+      }
+    }
+
+    // Initial state
+    updateTakServerState()
+
+    // Listen for storage changes and custom event
+    window.addEventListener('storage', updateTakServerState)
+    window.addEventListener('takServerStateChange', updateTakServerState)
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('storage', updateTakServerState)
+      window.removeEventListener('takServerStateChange', updateTakServerState)
+    }
+  }, [])
 
   const getTitle = () => {
     const currentItem = items.find(item => item.url === location.pathname)
     return currentItem?.title || "Dashboard"
   }
-
-  const { socket } = useSocket('/takserver-status', {
-    eventHandlers: {
-      'operation_status': (data: { status: string; error?: string }) => {
-        if (data.status === 'not_installed') {
-          setTakServerInstalled(false)
-        } else if (data.status === 'running' || data.status === 'stopped') {
-          setTakServerInstalled(true)
-        }
-        setOperationInProgress(data.status === 'in_progress')
-      },
-      onConnect: (socket: any) => {
-        console.log('Connected to TAK server status service')
-        socket.emit('request_initial_state')
-      }
-    }
-  })
-
-  useEffect(() => {
-    if (!operationInProgress) {
-      socket?.emit('request_initial_state')
-    }
-  }, [operationInProgress, socket])
 
   return (
     <>

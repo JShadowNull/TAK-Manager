@@ -1,6 +1,6 @@
 import { CloseIcon } from '../../shared/ui/icons/CloseIcon';
 import { LoadingSpinner } from '../../shared/ui/icons/LoadingSpinner';
-import CustomScrollbar from '../../shared/ui/layout/CustomScrollbar';
+import { ScrollArea } from '@/components/shared/ui/shadcn/scroll-area';
 
 export const FileList = ({ files, uploadingFiles, onDeleteFile, disabled }) => {
   const itemHeight = 36; // py-2 (8px top + 8px bottom) + line height (16px)
@@ -14,7 +14,7 @@ export const FileList = ({ files, uploadingFiles, onDeleteFile, disabled }) => {
     (files.length > 0 || uploadingFiles.size > 0) && (
       <div id="file-list" className="text-primary-foreground rounded-lg text-sm border-1 border-border bg-background">
         <div style={{ height: `${containerHeight}px` }} className="overflow-hidden">
-          <CustomScrollbar>
+          <ScrollArea>
             <div className="divide-y px-4 py-0 divide-border rounded-lg">
               {/* Show uploading files first */}
               {Array.from(uploadingFiles).map((filename) => (
@@ -52,7 +52,7 @@ export const FileList = ({ files, uploadingFiles, onDeleteFile, disabled }) => {
                 </div>
               ))}
             </div>
-          </CustomScrollbar>
+          </ScrollArea>
         </div>
       </div>
     )

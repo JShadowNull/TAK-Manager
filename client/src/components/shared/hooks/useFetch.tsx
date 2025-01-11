@@ -1,8 +1,25 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { AxiosResponse, AxiosRequestConfig } from 'axios';
 import axios from 'axios';
 
-const API_BASE_URL = `http://127.0.0.1:${import.meta.env.VITE_API_PORT}`;
+// Add retry logic and connection handling
+const axiosInstance = axios.create({
+  timeout: 5000,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
+
+// Add response interceptor for error handling
+axiosInstance.interceptors.response.use(
+  response => response,
+  error => Promise.reject(error)
+);
+
+// Ensure endpoint starts with a slash
+const getApiUrl = (endpoint: string): string => {
+  return endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+};
 
 interface ValidationResult {
   isValid: boolean;
@@ -34,6 +51,29 @@ function useFetch(): FetchHook {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
+  // Add reconnection logic
+  useEffect(() => {
+    const reconnect = () => {
+      // Clear any existing errors when we reconnect
+      setError(null);
+    };
+
+    window.addEventListener('focus', reconnect);
+    return () => window.removeEventListener('focus', reconnect);
+  }, []);
+
+  // Add retry logic to requests
+  const withRetry = async (request: () => Promise<any>, retries = 3) => {
+    for (let i = 0; i < retries; i++) {
+      try {
+        return await request();
+      } catch (err) {
+        if (i === retries - 1) throw err;
+        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); // Exponential backoff
+      }
+    }
+  };
+
   function handleResponse<T>(
     response: AxiosResponse,
     config: FetchConfig = {}
@@ -59,18 +99,18 @@ function useFetch(): FetchHook {
   ): Promise<T> => {
     setLoading(true);
     setError(null);
-    try {
-      const { rawResponse, validateResponse, ...axiosConfig } = config;
-      return axios
-        .get(`${API_BASE_URL}${endpoint}`, axiosConfig)
-        .then((response) => handleResponse<T>(response, { rawResponse, validateResponse }))
-        .finally(() => setLoading(false));
-    } catch (err) {
+    
+    return withRetry(() => 
+      axiosInstance
+        .get(getApiUrl(endpoint), config)
+        .then((response) => handleResponse<T>(response, config))
+        .finally(() => setLoading(false))
+    ).catch((err) => {
       const error = err as Error;
       setError(error);
       setLoading(false);
       throw error;
-    }
+    });
   }, []);
 
   const post = useCallback(<T = any>(
@@ -83,7 +123,7 @@ function useFetch(): FetchHook {
     try {
       const { rawResponse, validateResponse, ...axiosConfig } = config;
       return axios
-        .post(`${API_BASE_URL}${endpoint}`, data, axiosConfig)
+        .post(getApiUrl(endpoint), data, axiosConfig)
         .then((response) => handleResponse<T>(response, { rawResponse, validateResponse }))
         .finally(() => setLoading(false));
     } catch (err) {
@@ -104,7 +144,7 @@ function useFetch(): FetchHook {
     try {
       const { rawResponse, validateResponse, ...axiosConfig } = config;
       return axios
-        .put(`${API_BASE_URL}${endpoint}`, data, axiosConfig)
+        .put(getApiUrl(endpoint), data, axiosConfig)
         .then((response) => handleResponse<T>(response, { rawResponse, validateResponse }))
         .finally(() => setLoading(false));
     } catch (err) {
@@ -125,7 +165,7 @@ function useFetch(): FetchHook {
     try {
       const { rawResponse, validateResponse, ...axiosConfig } = config;
       return axios
-        .delete(`${API_BASE_URL}${endpoint}`, {
+        .delete(getApiUrl(endpoint), {
           ...axiosConfig,
           headers: {
             'Content-Type': 'application/json',

@@ -1,9 +1,10 @@
 # syntax=docker/dockerfile:1
 
-FROM python:3.11-slim as base
+FROM python:3.11-slim
 
 WORKDIR /app
-# Install build tools and dependencies
+
+# Install Node.js and npm
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
@@ -13,12 +14,19 @@ RUN apt-get update && apt-get install -y \
     docker-compose \
     libxml2-utils \
     sed \
+    adb \
+    nodejs \
+    npm \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-COPY requirements.txt .
+COPY server/requirements.txt .
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
+
+# Install Node dependencies
+COPY client/package*.json ./client/
+RUN cd client && npm install
 
 # Create required directories
 RUN mkdir -p /app/logs && \
@@ -27,20 +35,9 @@ RUN mkdir -p /app/logs && \
 # Copy application code
 COPY . .
 
-# Development stage
-FROM base as development
-ENV FLASK_ENV=development
-ENV FLASK_DEBUG=1
-ENV PYTHONUNBUFFERED=1
-ENV WERKZEUG_DEBUG_PIN=off
-ENV EVENTLET_DEBUG=true
 EXPOSE 8989
-CMD ["python", "app_dev.py"]
 
-# Production stage
-FROM base as production
-ENV FLASK_ENV=production
-ENV FLASK_DEBUG=0
-ENV PYTHONUNBUFFERED=1
-EXPOSE 8989
-CMD ["python", "app.py"] 
+# Start script that runs npm and Flask based on MODE
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
+CMD ["/start.sh"] 

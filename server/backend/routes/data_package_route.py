@@ -1,53 +1,51 @@
 # backend/routes/data_package_route.py
 
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, request, jsonify
 from backend.services.scripts.data_package_config.data_package import DataPackage
-from backend.services.scripts.system.thread_manager import ThreadManager
-from flask_socketio import Namespace
-from backend.routes.socketio import socketio
-import eventlet
+from backend.services.scripts.system.thread_manager import thread_manager
 import uuid
 import json
 import os
 from pathlib import Path
+import logging
+
+# Configure logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.ERROR)
 
 # ============================================================================
 # Blueprint and Global Variables
 # ============================================================================
 data_package_bp = Blueprint('data_package', __name__)
-thread_manager = ThreadManager()
 configurations = {}
 
 # ============================================================================
 # Helper Functions
 # ============================================================================
-def get_data_package_namespace():
-    """Helper function to get the data package namespace instance"""
-    try:
-        return next(ns for ns in socketio.server.namespace_handlers.values() 
-                   if isinstance(ns, DataPackageNamespace))
-    except StopIteration:
-        raise RuntimeError("Data package namespace not found")
-
-def execute_data_package_operation(operation_func):
+def execute_data_package_operation(operation_func, operation_type: str, channel: str = None):
     """Execute a data package operation in a background thread"""
-    namespace = get_data_package_namespace()
-    
     def operation_thread():
         try:
-            namespace.start_operation()
             result = operation_func()
             if result and result.get('error'):
                 return {'success': False, 'message': result['error']}
             return {'success': True, 'message': result.get('status', 'Operation completed successfully')}
         except Exception as e:
-            return {'success': False, 'message': str(e)}
-        finally:
-            namespace.end_operation()
-            namespace.cleanup_operation_threads()
+            error_message = str(e)
+            logger.error(f"Error in {operation_type} operation: {error_message}")
+            return {
+                'success': False,
+                'message': error_message
+            }
+
+    # Start the operation in a background thread
+    thread_id = f"data_package_{operation_type}_{channel}" if channel else f"data_package_{operation_type}"
+    thread = thread_manager.spawn(
+        func=operation_thread,
+        thread_id=thread_id,
+        channel=channel or 'data-package'
+    )
     
-    thread = thread_manager.spawn(operation_thread)
-    namespace.operation_threads.append(thread)
     return {'message': 'Operation initiated successfully'}
 
 def normalize_preferences(preferences):
@@ -98,74 +96,6 @@ def normalize_preferences(preferences):
     return normalized
 
 # ============================================================================
-# Socket.IO Namespace
-# ============================================================================
-class DataPackageNamespace(Namespace):
-    def __init__(self, namespace=None):
-        super().__init__(namespace)
-        self.data_package = DataPackage()
-        self.monitor_thread = None
-        self.operation_in_progress = False
-        self.operation_threads = []
-
-    def cleanup_operation_threads(self):
-        """Clean up completed operation threads"""
-        self.operation_threads = [t for t in self.operation_threads if not t.dead]
-        for thread in self.operation_threads:
-            try:
-                if not thread.dead:
-                    thread.kill()
-            except Exception as e:
-                print(f"Error killing thread: {e}")
-        self.operation_threads = []
-
-    def on_connect(self):
-        print('Client connected to /data-package namespace')
-        if not self.monitor_thread:
-            self.monitor_thread = thread_manager.spawn(self.monitor_status)
-            thread_manager.add_thread(self.monitor_thread)
-
-    def on_disconnect(self):
-        print('Client disconnected from /data-package namespace')
-        self.cleanup_operation_threads()
-        if self.monitor_thread and not self.monitor_thread.dead:
-            try:
-                self.monitor_thread.kill()
-            except Exception as e:
-                print(f"Error killing monitor thread: {e}")
-        self.monitor_thread = None
-
-    def monitor_status(self):
-        """Monitor data package configuration status"""
-        while True:
-            try:
-                if self.operation_in_progress:
-                    # No need to emit status as frontend doesn't use it
-                    pass
-            except Exception as e:
-                print(f"Monitor status error: {e}")  # Just log the error
-            eventlet.sleep(2)
-            
-    def on_get_certificate_files(self):
-        """Handle request for certificate files"""
-        try:
-            self.data_package.get_certificate_files()
-        except Exception as e:
-            # Let data_package.py handle the error emission
-            raise  # Re-raise to let data_package.py handle it
-
-    def start_operation(self):
-        """Set the operation lock"""
-        self.operation_in_progress = True
-
-    def end_operation(self):
-        """Release the operation lock"""
-        self.operation_in_progress = False
-
-# Register the namespace
-socketio.on_namespace(DataPackageNamespace('/data-package'))
-
-# ============================================================================
 # Operation Handler
 # ============================================================================
 class DataPackageOperationHandler:
@@ -173,17 +103,17 @@ class DataPackageOperationHandler:
         self.data_package = data_package_instance or DataPackage()
         self.operation_in_progress = False
 
-    def handle_configuration(self, preferences_data):
+    def handle_configuration(self, preferences_data, channel: str = 'data-package'):
         """Handle data package configuration process"""
         try:
             self.operation_in_progress = True
-            return self.data_package.main(preferences_data)
+            return self.data_package.main(preferences_data, channel=channel)
         except Exception as e:
             return {'error': str(e)}
         finally:
             self.operation_in_progress = False
 
-    def handle_stop(self):
+    def handle_stop(self, channel: str = 'data-package'):
         """Handle stopping the data package configuration"""
         try:
             self.data_package.stop()
@@ -199,14 +129,20 @@ def submit_preferences():
     """Submit preferences for data package configuration"""
     try:
         configuration_id = str(uuid.uuid4())
+        channel = request.args.get('channel', 'data-package')
         data_package = DataPackage()
         handler = DataPackageOperationHandler(data_package)
         configurations[configuration_id] = handler
 
         def configuration_operation():
-            return handler.handle_configuration(request.json)
+            return handler.handle_configuration(request.json, channel=channel)
 
-        operation_result = execute_data_package_operation(configuration_operation)
+        operation_result = execute_data_package_operation(
+            configuration_operation,
+            'config',
+            channel
+        )
+        
         return jsonify({
             'configuration_id': configuration_id,
             'message': operation_result.get('message', 'Configuration initiated'),
@@ -214,13 +150,17 @@ def submit_preferences():
         }), 200
 
     except Exception as e:
-        return jsonify({"error": f"Error processing request: {str(e)}"}), 500
+        error_message = str(e)
+        logger.error(f"Error processing request: {error_message}")
+        return jsonify({"error": error_message}), 500
 
 @data_package_bp.route('/stop', methods=['POST'])
 def stop_data_package():
     """Stop data package configuration"""
     try:
         configuration_id = request.json.get('configuration_id')
+        channel = request.args.get('channel', 'data-package')
+        
         if not configuration_id:
             return jsonify({"error": "No configuration ID provided"}), 400
 
@@ -230,18 +170,25 @@ def stop_data_package():
         handler = configurations[configuration_id]
 
         def stop_operation():
-            result = handler.handle_stop()
+            result = handler.handle_stop(channel=channel)
             del configurations[configuration_id]
             return result
 
-        operation_result = execute_data_package_operation(stop_operation)
+        operation_result = execute_data_package_operation(
+            stop_operation,
+            'stop',
+            channel
+        )
         return jsonify(operation_result), 200
 
     except Exception as e:
-        return jsonify({"error": f"Error stopping configuration: {str(e)}"}), 500
+        error_message = str(e)
+        logger.error(f"Error stopping configuration: {error_message}")
+        return jsonify({"error": error_message}), 500
 
 @data_package_bp.route('/save-preferences', methods=['POST'])
 def save_preferences():
+    """Save preferences to a temporary file"""
     try:
         data = request.get_json()
         if not data or 'preferences' not in data:
@@ -261,10 +208,13 @@ def save_preferences():
         
         return jsonify({"message": "Preferences saved successfully"}), 200
     except Exception as e:
-        return jsonify({"error": f"Failed to save preferences: {str(e)}"}), 500
+        error_message = str(e)
+        logger.error(f"Failed to save preferences: {error_message}")
+        return jsonify({"error": error_message}), 500
 
 @data_package_bp.route('/load-preferences', methods=['GET'])
 def load_preferences():
+    """Load preferences from the temporary file"""
     try:
         data_package = DataPackage()
         working_dir = Path(data_package.get_default_working_directory())
@@ -279,12 +229,33 @@ def load_preferences():
                     preferences = json.load(f)
                     normalized_preferences = normalize_preferences(preferences)
                 return jsonify({"preferences": normalized_preferences}), 200
-            except json.JSONDecodeError as e:
+            except json.JSONDecodeError:
                 default_preferences = normalize_preferences({'count': {'value': 1}})
                 return jsonify({"preferences": default_preferences}), 200
         
         default_preferences = normalize_preferences({'count': {'value': 1}})
         return jsonify({"preferences": default_preferences}), 200
     except Exception as e:
-        return jsonify({"error": f"Failed to load preferences: {str(e)}"}), 500
+        error_message = str(e)
+        logger.error(f"Failed to load preferences: {error_message}")
+        return jsonify({"error": error_message}), 500
+
+@data_package_bp.route('/certificate-files', methods=['GET'])
+def get_certificate_files():
+    """Get available certificate files"""
+    try:
+        channel = request.args.get('channel', 'data-package')
+        data_package = DataPackage()
+        cert_files = data_package.get_certificate_files(channel=channel)
+        return jsonify({
+            'success': True,
+            'files': cert_files
+        })
+    except Exception as e:
+        error_message = str(e)
+        logger.error(f"Error getting certificate files: {error_message}")
+        return jsonify({
+            'success': False,
+            'message': error_message
+        }), 500
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import Layout from './components/shared/ui/layout/Layout';
 import Dashboard from './pages/Dashboard';
@@ -8,7 +8,29 @@ import Transfer from './pages/Transfer';
 import CertManager from './pages/CertManager';
 import { ThemeProvider } from './components/shared/ui/shadcn/theme-provider';
 
-function App() {
+const App: React.FC = () => {
+  useEffect(() => {
+    let reconnectTimeout: NodeJS.Timeout;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Clear any existing timeout
+        if (reconnectTimeout) clearTimeout(reconnectTimeout);
+
+        // You can perform other actions here if needed, but avoid reloading the page
+        // reconnectTimeout = setTimeout(() => {
+        //   window.location.reload();
+        // }, 2000);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+    };
+  }, []);
+
   return (
     <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
       <Routes>

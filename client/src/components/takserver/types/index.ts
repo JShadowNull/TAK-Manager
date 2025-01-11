@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { UseSocketReturn } from "../../shared/hooks/useSocket";
 
 // Form schema for TAK Server installation
 export const formSchema = z.object({
@@ -58,10 +57,7 @@ export type FormData = z.infer<typeof formSchema>;
 export type OperationStatus = 'not_installed' | 'running' | 'stopped';
 
 export interface TakServerStatusEvent {
-  operation: 'status';
-  status: OperationStatus;
-  message: string;
-  version?: string;
+  status: string;
   error?: string;
 }
 
@@ -77,8 +73,12 @@ export interface FormState {
   installation_id: string | null;
 }
 
-export interface TakServerStatusProps {
-  socket: UseSocketReturn;
+export interface TakServerState {
+  isInstalled: boolean;
+  isRunning: boolean;
+  version?: string;
+  status?: string;
+  error?: string | null;
 }
 
 // HTTP Response Types
@@ -118,4 +118,12 @@ export interface PopupsProps {
   onUninstall: () => void;
   onUninstallProgressClose: () => void;
   onUninstallComplete: () => void;
-} 
+}
+
+export interface UninstallOptions {
+  taskId: string;
+  onComplete?: () => void;
+  onError?: (error: string) => void;
+}
+
+export type UpdateState = (state: any) => void; 

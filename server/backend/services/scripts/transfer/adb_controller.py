@@ -3,95 +3,37 @@ import subprocess
 import re
 import pexpect
 from backend.services.helpers.run_command import RunCommand
-from backend.routes.socketio import socketio
+from flask_sse import sse
 import time
 
 class ADBController:
     def __init__(self):
         self.run_command = RunCommand()
         self.active_push_processes = {}  # Dictionary to track active push processes by device_id
+        self.channel = 'transfer'  # Define a consistent channel for SSE events
 
     def emit_adb_update(self, status_type="status", **data):
-        """Unified ADB status emission"""
+        """Unified ADB status emission using SSE"""
         update = {
             'timestamp': time.time(),
             'type': status_type,  # 'status', 'progress', or 'error'
             **data
         }
-        socketio.emit('adb_update', update, namespace='/transfer')
-
-    def check_adb_installed(self):
-        """Check if ADB is installed on the system"""
-        try:
-            self.emit_adb_update(
-                status_type="status",
-                state="checking",
-                message="Checking if ADB is installed..."
-            )
-            result = self.run_command.run_command(['adb', 'version'], 'transfer', capture_output=True, check=False)
-            return result.returncode == 0
-        except Exception as e:
-            self.emit_adb_update(
-                status_type="error",
-                error=f"Error checking ADB installation: {str(e)}"
-            )
-            return False
-
-    def install_adb(self, os_type):
-        """Install ADB based on OS type"""
-        try:
-            self.emit_adb_update(
-                status_type="status",
-                state="installing",
-                message="Starting ADB installation..."
-            )
-            
-            if os_type == 'linux':
-                result = self.run_command.run_command(['apt-get', 'install', 'adb', '-y'], 'transfer')
-            elif os_type == 'macos':
-                result = self.run_command.run_command(['brew', 'install', 'android-platform-tools'], 'transfer')
-            elif os_type == 'windows':
-                result = self.run_command.run_command(['choco', 'install', 'adb', '-y'], 'transfer')
-            else:
-                error_message = "Unsupported OS for ADB installation"
-                self.emit_adb_update(
-                    status_type="error",
-                    error=error_message
-                )
-                raise EnvironmentError(error_message)
-
-            # Verify installation was successful
-            verify_result = self.run_command.run_command(['adb', 'version'], 'transfer', check=False)
-            
-            if verify_result.returncode == 0:
-                self.emit_adb_update(
-                    status_type="status",
-                    state="completed",
-                    message="ADB installation completed successfully"
-                )
-                return True
-            else:
-                error_message = "ADB installation failed - unable to verify ADB installation"
-                self.emit_adb_update(
-                    status_type="error",
-                    error=error_message
-                )
-                return False
-            
-        except Exception as e:
-            error_message = f'Error during ADB installation: {str(e)}'
-            self.emit_adb_update(
-                status_type="error",
-                error=error_message
-            )
-            return False
+        sse.publish(
+            {
+                'type': 'adb_update',
+                'data': update
+            },
+            type='adb_update',
+            channel=self.channel
+        )
 
     def get_device_name(self, device_id):
         """Get device name using ADB"""
         try:
             result = self.run_command.run_command(
                 ['adb', '-s', device_id, 'shell', 'getprop', 'ro.product.model'],
-                'transfer',
+                self.channel,
                 capture_output=True,
                 emit_output=False
             )
@@ -107,8 +49,12 @@ class ADBController:
     def create_device_directory(self, device_id, directory):
         """Create directory on device"""
         try:
-            result = subprocess.run(['adb', '-s', device_id, 'shell', f'mkdir -p {directory}'])
-            if result.returncode != 0:
+            result = self.run_command.run_command(
+                ['adb', '-s', device_id, 'shell', f'mkdir -p {directory}'],
+                self.channel,
+                capture_output=True
+            )
+            if not result.success:
                 self.emit_adb_update(
                     status_type="error",
                     device_id=device_id,
@@ -149,6 +95,13 @@ class ADBController:
                             if progress != last_progress:
                                 last_progress = progress
                                 callback(progress)
+                                # Emit progress via SSE
+                                self.emit_adb_update(
+                                    status_type="progress",
+                                    device_id=device_id,
+                                    progress=progress,
+                                    file=os.path.basename(src_file)
+                                )
                     else:
                         break
                 except pexpect.TIMEOUT:
@@ -180,7 +133,7 @@ class ADBController:
             )
             return self.run_command.stream_output(
                 ['adb', 'track-devices'],
-                'transfer',
+                self.channel,
                 capture_output=True,
                 check=False,
                 stream_output=True

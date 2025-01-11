@@ -1,1 +1,0 @@
-export type UpdateState = (state: any) => void; 

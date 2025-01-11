@@ -5,7 +5,6 @@ import App from './App';
 import './styles/tailwind.css';
 import { library } from '@fortawesome/fontawesome-svg-core';
 import { faPlay, faStop, faSpinner } from '@fortawesome/free-solid-svg-icons';
-import './pwa';
 
 // Configure future flags for React Router
 const router = {
@@ -18,7 +17,10 @@ const router = {
 // Add icons to the library
 library.add(faPlay, faStop, faSpinner);
 
-ReactDOM.createRoot(document.getElementById('root')).render(
+const rootElement = document.getElementById('root');
+if (!rootElement) throw new Error('Failed to find the root element');
+
+ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
     <BrowserRouter {...router}>
       <App />

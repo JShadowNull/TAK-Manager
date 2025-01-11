@@ -1,7 +1,49 @@
 # The following file path is commented out for reference
 # backend/services/scripts/ota_helpers/generate_content.py
 
+import os
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
 class GenerateOTAContent():
+    def __init__(self):
+        self.working_dir = self.get_default_working_directory()
+        self.takserver_version = self.get_takserver_version()
+
+    def get_default_working_directory(self):
+        """Get the working directory from environment variable."""
+        base_dir = '/home/tak-manager'  # Use the container mount point directly
+        working_dir = os.path.join(base_dir, 'takserver-docker')
+        if not os.path.exists(working_dir):
+            os.makedirs(working_dir, exist_ok=True)
+            logger.debug(f"[GenerateOTAContent] Created working directory: {working_dir}")
+        else:
+            logger.debug(f"[GenerateOTAContent] Using existing working directory: {working_dir}")
+        return working_dir
+
+    def get_takserver_version(self):
+        """Get TAK Server version from version.txt if it exists."""
+        version_file_path = os.path.join(self.working_dir, "version.txt")
+        logger.debug(f"[GenerateOTAContent] Checking for version file at: {version_file_path}")
+        
+        if os.path.exists(version_file_path):
+            try:
+                with open(version_file_path, "r") as version_file:
+                    version = version_file.read().strip()
+                    logger.debug(f"[GenerateOTAContent] Found TAK Server version: '{version}'")
+                    if not version:
+                        logger.error("[GenerateOTAContent] Version file exists but is empty")
+                        return "5.2-release-43"  # Default version if file is empty
+                    return version
+            except Exception as e:
+                logger.error(f"[GenerateOTAContent] Error reading version file: {str(e)}")
+                return "5.2-release-43"  # Default version if error reading file
+        else:
+            logger.error(f"[GenerateOTAContent] Version file not found at: {version_file_path}")
+            return "5.2-release-43"  # Default version if file doesn't exist
+
     def generate_inf_content(self):
         return r"""#!/bin/bash
 
@@ -138,14 +180,14 @@ ENTRYPOINT ["/bin/bash", "-c", "/opt/tak/configureInDocker.sh init &>> /opt/tak/
         return dockerfile_content
     
     def update_docker_compose_file(self):
-        docker_compose_content = """
+        docker_compose_content = f"""
 services:
   takserver-db:
     build:
       context: .
       dockerfile: docker/Dockerfile.takserver-db
     platform: linux/amd64
-    container_name: tak-database-5.2-release-43
+    container_name: tak-database-{self.takserver_version}
     hostname: tak-database
     init: true
     networks:
@@ -155,7 +197,7 @@ services:
     restart: unless-stopped
     tty: true
     volumes:
-      - ${TAK_DIR}:/opt/tak:z
+      - ${{TAK_DIR}}:/opt/tak:z
       - db-data:/var/lib/postgresql/data:z
 
   takserver:
@@ -163,7 +205,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile.takserver
     platform: linux/amd64
-    container_name: takserver-5.2-release-43
+    container_name: takserver-{self.takserver_version}
     hostname: takserver
     init: true
     networks:
@@ -176,8 +218,8 @@ services:
     restart: unless-stopped
     tty: true
     volumes:
-      - ${TAK_DIR}:/opt/tak:z
-      - ${PLUGINS_DIR}:/opt/tak/webcontent:z
+      - ${{TAK_DIR}}:/opt/tak:z
+      - ${{PLUGINS_DIR}}:/opt/tak/webcontent:z
 
 networks:
   net:

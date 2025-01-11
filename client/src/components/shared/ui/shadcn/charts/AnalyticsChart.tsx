@@ -16,14 +16,12 @@ import {
 } from "../card/card"
 
 interface AnalyticsChartProps extends React.HTMLAttributes<HTMLDivElement> {
-  data: Array<{
-    month: string
-    desktop: number
-  }>
-  title?: string
-  description?: string
-  trendingValue?: string
-  chartColor?: "blue" | "green" | "red" | "yellow"
+  data: number[];
+  title: string;
+  description: string;
+  trendingValue: string;
+  chartColor?: "blue" | "green" | "red" | "yellow";
+  className?: string;
 }
 
 const gradientColors = {
@@ -59,7 +57,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
               Time
             </span>
             <span className="font-bold text-muted-foreground">
-              {format(new Date(label), "HH:mm:ss")}
+              {format(new Date(), "HH:mm:ss")}
             </span>
           </div>
           <div className="flex flex-col">
@@ -67,28 +65,38 @@ const CustomTooltip = ({ active, payload, label }: any) => {
               Value
             </span>
             <span className="font-bold">
-              {payload[0].value.toFixed(2)}%
+              {payload[0].value.toFixed(2)}
             </span>
           </div>
         </div>
       </div>
     )
   }
-
   return null
 }
 
 export function AnalyticsChart({
   data,
-  title = "Analytics Overview",
-  description = "Real-time monitoring",
-  trendingValue = "0%",
+  title,
+  description,
+  trendingValue,
   chartColor = "blue",
   className,
   ...props
 }: AnalyticsChartProps) {
   const gradientId = `gradient-${title.toLowerCase().replace(/\s+/g, '-')}`
   const colors = gradientColors[chartColor]
+
+  // Convert the array of numbers to chart data format with timestamps
+  const chartData = data.map((value, index) => {
+    const timestamp = new Date();
+    // Subtract time for each point to create a timeline
+    timestamp.setSeconds(timestamp.getSeconds() - (data.length - 1 - index));
+    return {
+      value,
+      timestamp: timestamp.getTime()
+    };
+  });
 
   return (
     <Card className={cn("", className)} {...props}>
@@ -104,7 +112,7 @@ export function AnalyticsChart({
       <CardContent>
         <ResponsiveContainer width="100%" height={350}>
           <AreaChart
-            data={data}
+            data={chartData}
             margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
           >
             <defs>
@@ -119,8 +127,8 @@ export function AnalyticsChart({
               className="stroke-muted"
             />
             <XAxis
-              dataKey="month"
-              tickFormatter={(value) => format(new Date(value), "HH:mm:ss")}
+              dataKey="timestamp"
+              tickFormatter={(value) => format(value, "HH:mm:ss")}
               minTickGap={30}
               tick={{ fontSize: 12 }}
               axisLine={false}
@@ -128,17 +136,16 @@ export function AnalyticsChart({
               className="text-muted-foreground"
             />
             <YAxis
-              tickFormatter={(value) => `${value}%`}
               tick={{ fontSize: 12 }}
               axisLine={false}
               tickLine={false}
               className="text-muted-foreground"
-              domain={[0, 100]}
+              width={40}
             />
             <Tooltip content={<CustomTooltip />} />
             <Area
               type="monotone"
-              dataKey="desktop"
+              dataKey="value"
               stroke={colors.stroke}
               fill={`url(#${gradientId})`}
               strokeWidth={2}
@@ -151,7 +158,7 @@ export function AnalyticsChart({
       <CardFooter>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <TrendingUp className="h-4 w-4" />
-          <span>Last updated: {data?.length > 0 ? format(new Date(data[data.length - 1].month), "HH:mm:ss") : "Never"}</span>
+          <span>Last updated: {format(new Date(), "HH:mm:ss")}</span>
         </div>
       </CardFooter>
     </Card>
