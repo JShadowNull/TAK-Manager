@@ -142,6 +142,11 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
                 >
                   Restart
                 </Button>
+                <Button
+                  onClick={() => window.open('https://127.0.0.1:8443', '_blank')}
+                >
+                  Launch TAK Web UI
+                </Button>
               </>
             ) : (
               <Button
