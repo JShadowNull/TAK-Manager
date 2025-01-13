@@ -161,8 +161,6 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
             <Button
               onClick={handleUninstallClick}
               disabled={isOperationInProgress}
-              loading={currentOperation === 'uninstall'}
-              loadingText="Uninstalling"
               variant="danger"
             >
               Uninstall
@@ -172,8 +170,6 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
           <Button
             onClick={onInstall}
             disabled={isOperationInProgress}
-            loading={currentOperation === 'install'}
-            loadingText="Installing"
           >
             Install
           </Button>

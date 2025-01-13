@@ -29,7 +29,6 @@ class CertConfig:
         self.tak_dir = tak_dir
         self.working_dir = working_dir
         self.emit_event = emit_event
-
     def update_tak_dir(self, tak_dir: str) -> None:
         """Update the TAK directory."""
         self.tak_dir = tak_dir
@@ -41,19 +40,29 @@ class CertConfig:
     async def copy_client_cert_to_webaccess(self, container_name: str) -> None:
         """Copy the client certificate to webaccess folder."""
         cert_name = f"{self.name}.p12"
-        command = (
-            "mkdir -p /opt/tak/webaccess && "
-            f"cp /opt/tak/certs/files/{cert_name} /opt/tak/webaccess/{cert_name}"
-        )
-        
-        result = await self.run_command.run_command_async(
-            ["docker", "exec", container_name, "bash", "-c", command],
+        webaccess_dir = os.path.join(self.working_dir, "webaccess")
+
+        # Create directory on host
+        mkdir_result = await self.run_command.run_command_async(
+            ["mkdir", "-p", webaccess_dir],
             'install',
             emit_event=self.emit_event,
-            ignore_errors=True  # Directory creation and copy output is not errors
+            ignore_errors=True
         )
-        if not result.success:
-            raise Exception(result.stderr)
+        if not mkdir_result.success:
+            raise Exception(mkdir_result.stderr)
+
+        # Copy from container to host
+        copy_result = await self.run_command.run_command_async(
+            ["docker", "cp", 
+             f"{container_name}:/opt/tak/certs/files/{cert_name}",
+             f"{webaccess_dir}"],
+            'install', 
+            emit_event=self.emit_event,
+            ignore_errors=True
+        )
+        if not copy_result.success:
+            raise Exception(copy_result.stderr)
 
     async def configure_cert_metadata(self, container_name: str) -> None:
         """Configure certificate metadata in TAKServer."""
