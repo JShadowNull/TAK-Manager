@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '../../shared/ui/shadcn/button';
-import Popups from './Popups';
+import Popups from './TakOperationPopups';
 
 interface TakServerState {
   isInstalled: boolean;

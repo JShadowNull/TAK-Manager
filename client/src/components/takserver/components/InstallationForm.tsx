@@ -4,7 +4,7 @@ import { Button } from '../../shared/ui/shadcn/button';
 import { HelpIconTooltip } from '../../shared/ui/shadcn/tooltip/HelpIconTooltip';
 import { Eye, EyeOff } from 'lucide-react';
 import { z } from 'zod';
-import Popups from './Popups';
+import Popups from './TakOperationPopups';
 
 // Form validation schema
 const formSchema = z.object({
