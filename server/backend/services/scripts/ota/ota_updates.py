@@ -7,16 +7,17 @@ from pathlib import Path
 from backend.services.helpers.run_command import RunCommand
 from backend.services.scripts.ota.generate_content import GenerateOTAContent
 from backend.services.scripts.takserver.check_status import TakServerStatus
-from flask_sse import sse
-from backend.config.logging_config import configure_logging
+from typing import Dict, Any, Optional, Callable
 import subprocess
 import time
+import asyncio
+from backend.config.logging_config import configure_logging
 
 # Configure logging using centralized config
 logger = configure_logging(__name__)
 
 class OTAUpdate:
-    def __init__(self, ota_zip_path):
+    def __init__(self, ota_zip_path, emit_event: Optional[Callable[[Dict[str, Any]], None]] = None):
         self.ota_zip_path = ota_zip_path  # Store the path to the OTA zip file
         self.run_command = RunCommand()
         self.generate_content = GenerateOTAContent()
@@ -25,22 +26,33 @@ class OTAUpdate:
         self.status = 'processing'
         self.error = None
         self.message = ''
+        self.emit_event = emit_event
         logger.debug(f"OTAUpdate initialized with zip path: {json.dumps({'ota_zip_path': ota_zip_path})}")
+
+    def _create_event(self, event_type: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create an event object for SSE"""
+        event_data = {
+            'type': event_type,
+            'data': {
+                **data,
+                'timestamp': time.time()
+            }
+        }
+        logger.debug(f"Created event: {event_data}")
+        if self.emit_event:
+            self.emit_event(event_data)
+        return event_data
         
     def update_progress(self, progress, message, status='processing', channel: str = 'ota-update'):
         """Update installation progress"""
         self.installation_progress = progress
         self.message = message
         self.status = status
-        sse.publish(
-            {
-                'status': status,
-                'progress': progress,
-                'message': message,
-                'timestamp': time.time()
-            },
-            type='ota_status'
-        )
+        self._create_event('ota_status', {
+            'status': status,
+            'progress': progress,
+            'message': message
+        })
         logger.debug(f"Progress update: {json.dumps({'progress': progress, 'message': message, 'status': status})}")
         
     def get_progress(self):
@@ -61,16 +73,12 @@ class OTAUpdate:
         """Set error state"""
         self.error = error_message
         self.status = 'error'
-        sse.publish(
-            {
-                'status': 'error',
-                'message': error_message,
-                'error': error_message,
-                'isInProgress': False,
-                'timestamp': time.time()
-            },
-            type='ota_status'
-        )
+        self._create_event('ota_status', {
+            'status': 'error',
+            'message': error_message,
+            'error': error_message,
+            'isInProgress': False
+        })
         logger.error(f"Error set: {error_message}")
 
     def check_takserver_running(self, channel: str = 'ota-update'):
@@ -139,11 +147,21 @@ class OTAUpdate:
 
             self.update_progress(50, "Running docker compose build", channel=channel)
             build_command = ['docker-compose', '-f', compose_file_path, 'build']
-            self.run_command.run_command(build_command, capture_output=False, channel='ota-update')
+            self.run_command.run_command(
+                build_command,
+                'docker_build',
+                capture_output=False,
+                emit_event=self.emit_event
+            )
 
             self.update_progress(60, "Running docker compose up", channel=channel)
             up_command = ['docker-compose', '-f', compose_file_path, 'up', '-d', '--force-recreate']
-            self.run_command.run_command(up_command, capture_output=False, channel='ota-update')
+            self.run_command.run_command(
+                up_command,
+                'docker_up',
+                capture_output=False,
+                emit_event=self.emit_event
+            )
 
             self.update_progress(70, "Docker containers rebuilt successfully", channel=channel)
         except Exception as e:
@@ -160,7 +178,12 @@ class OTAUpdate:
             check_command = [
                 'docker', 'exec', takserver_container_name, 'test', '-f', script_path
             ]
-            result = self.run_command.run_command(check_command, capture_output=True, channel='ota-update')
+            result = self.run_command.run_command(
+                check_command,
+                'check_script',
+                capture_output=True,
+                emit_event=self.emit_event
+            )
 
             if isinstance(result, subprocess.CompletedProcess):
                 if result.returncode == 0:
@@ -197,7 +220,12 @@ class OTAUpdate:
             copy_command = [
                 'docker', 'cp', temp_script_path, f'{takserver_container_name}:/opt/android-sdk/build-tools/33.0.0/generate-inf.sh'
             ]
-            self.run_command.run_command(copy_command, capture_output=False, channel='ota-update')
+            self.run_command.run_command(
+                copy_command,
+                'copy_script',
+                capture_output=False,
+                emit_event=self.emit_event
+            )
 
             self.update_progress(85, "Setting up script permissions", channel=channel)
             dos2unix_command = [
@@ -206,8 +234,18 @@ class OTAUpdate:
             chmod_command = [
                 'docker', 'exec', takserver_container_name, 'chmod', '+x', '/opt/android-sdk/build-tools/33.0.0/generate-inf.sh'
             ]
-            self.run_command.run_command(dos2unix_command, capture_output=False, channel='ota-update')
-            self.run_command.run_command(chmod_command, capture_output=False, channel='ota-update')
+            self.run_command.run_command(
+                dos2unix_command,
+                'dos2unix',
+                capture_output=False,
+                emit_event=self.emit_event
+            )
+            self.run_command.run_command(
+                chmod_command,
+                'chmod',
+                capture_output=False,
+                emit_event=self.emit_event
+            )
 
             self.update_progress(87, "generate-inf.sh script setup completed", channel=channel)
         except Exception as e:
@@ -226,14 +264,24 @@ class OTAUpdate:
             check_command = [
                 'docker', 'exec', takserver_container_name, 'test', '-d', '/opt/tak/webcontent/plugins'
             ]
-            result = self.run_command.run_command(check_command, capture_output=True, channel='ota-update')
+            result = self.run_command.run_command(
+                check_command,
+                'check_plugins',
+                capture_output=True,
+                emit_event=self.emit_event
+            )
 
             if result.returncode == 0:
                 self.update_progress(92, "Removing existing plugins folder", channel=channel)
                 remove_command = [
                     'docker', 'exec', takserver_container_name, 'rm', '-rf', '/opt/tak/webcontent/plugins'
                 ]
-                self.run_command.run_command(remove_command, capture_output=False, channel='ota-update')
+                self.run_command.run_command(
+                    remove_command,
+                    'remove_plugins',
+                    capture_output=False,
+                    emit_event=self.emit_event
+                )
                 self.update_progress(93, "Existing plugins folder removed", channel=channel)
             else:
                 self.update_progress(93, "No existing plugins folder found", channel=channel)
@@ -264,7 +312,12 @@ class OTAUpdate:
                 copy_command = [
                     'docker', 'cp', f'{temp_dir}/.', f'{takserver_container_name}:/opt/tak/webcontent/plugins'
                 ]
-                self.run_command.run_command(copy_command, capture_output=False, channel='ota-update')
+                self.run_command.run_command(
+                    copy_command,
+                    'copy_plugins',
+                    capture_output=False,
+                    emit_event=self.emit_event
+                )
 
             self.update_progress(98, "Plugins prepared successfully", channel=channel)
         except Exception as e:
@@ -280,7 +333,12 @@ class OTAUpdate:
             command = [
                 'docker', 'exec', takserver_container_name, 'bash', '/opt/android-sdk/build-tools/33.0.0/generate-inf.sh', '/opt/tak/webcontent/plugins', 'true'
             ]
-            self.run_command.run_command(command, capture_output=False, channel='ota-update')
+            self.run_command.run_command(
+                command,
+                'generate_inf',
+                capture_output=False,
+                emit_event=self.emit_event
+            )
 
             self.update_progress(100, "generate-inf.sh script executed successfully", channel=channel)
         except Exception as e:
@@ -301,16 +359,12 @@ class OTAUpdate:
         """Main configuration process"""
         try:
             # Emit initial status
-            sse.publish(
-                {
-                    'status': 'started',
-                    'message': 'Starting OTA configuration process',
-                    'progress': 0,
-                    'isInProgress': True,
-                    'timestamp': time.time()
-                },
-                type='ota_status'
-            )
+            self._create_event('ota_status', {
+                'status': 'started',
+                'message': 'Starting OTA configuration process',
+                'progress': 0,
+                'isInProgress': True
+            })
 
             self.check_takserver_running(channel)
             self.update_dockerfile(channel)
@@ -322,16 +376,12 @@ class OTAUpdate:
             self.run_generate_inf_script(channel)
             
             # Emit completion status
-            sse.publish(
-                {
-                    'status': 'completed',
-                    'message': 'Configuration completed successfully',
-                    'progress': 100,
-                    'isInProgress': False,
-                    'timestamp': time.time()
-                },
-                type='ota_status'
-            )
+            self._create_event('ota_status', {
+                'status': 'completed',
+                'message': 'Configuration completed successfully',
+                'progress': 100,
+                'isInProgress': False
+            })
             self.update_progress(100, "Configuration completed successfully", 'complete', channel)
             return True
         except Exception as e:
@@ -342,16 +392,12 @@ class OTAUpdate:
         """Update plugins process"""
         try:
             # Emit initial status
-            sse.publish(
-                {
-                    'status': 'started',
-                    'message': 'Starting OTA update process',
-                    'progress': 0,
-                    'isInProgress': True,
-                    'timestamp': time.time()
-                },
-                type='ota_status'
-            )
+            self._create_event('ota_status', {
+                'status': 'started',
+                'message': 'Starting OTA update process',
+                'progress': 0,
+                'isInProgress': True
+            })
 
             self.check_takserver_running(channel)
             self.check_and_remove_existing_plugin_folder(channel)
@@ -360,16 +406,12 @@ class OTAUpdate:
             self.run_generate_inf_script(channel)
             
             # Emit completion status
-            sse.publish(
-                {
-                    'status': 'completed',
-                    'message': 'Update completed successfully',
-                    'progress': 100,
-                    'isInProgress': False,
-                    'timestamp': time.time()
-                },
-                type='ota_status'
-            )
+            self._create_event('ota_status', {
+                'status': 'completed',
+                'message': 'Update completed successfully',
+                'progress': 100,
+                'isInProgress': False
+            })
             self.update_progress(100, "Update completed successfully", 'complete', channel)
             return True
         except Exception as e:

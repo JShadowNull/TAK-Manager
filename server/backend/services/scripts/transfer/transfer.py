@@ -1,12 +1,18 @@
 import os
 from backend.services.helpers.run_command import RunCommand
-from flask_sse import sse
+from typing import Dict, Any, AsyncGenerator, Optional, Callable
+import json
 import time
+import asyncio
 from pathlib import Path
 from backend.services.scripts.transfer.adb_controller import ADBController
+from backend.config.logging_config import configure_logging
+
+# Configure logging using centralized config
+logger = configure_logging(__name__)
 
 class RapidFileTransfer:
-    def __init__(self):
+    def __init__(self, emit_event: Optional[Callable[[Dict[str, Any]], None]] = None):
         self.run_command = RunCommand()
         self.device_states = {}  # Single state tracking dictionary
         self.monitoring = False
@@ -15,7 +21,7 @@ class RapidFileTransfer:
         self.is_transfer_running = False
         self.transferred_files = {}  # Track transferred files per device
         self.device_progress = {}  # Add this to track progress per device
-        self.channel = 'transfer'  # Define a consistent channel for SSE events
+        self.emit_event = emit_event
         
         # File path mappings
         self.file_paths = {
@@ -31,10 +37,23 @@ class RapidFileTransfer:
 
         self.adb = ADBController()
 
+    def _create_event(self, event_type: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create an event object for SSE"""
+        event_data = {
+            'type': event_type,
+            'data': {
+                **data,
+                'timestamp': time.time()
+            }
+        }
+        logger.debug(f"Created event: {event_data}")
+        if self.emit_event:
+            self.emit_event(event_data)
+        return event_data
+
     def emit_transfer_update(self, status_type="status", device_id=None, **data):
         """Unified transfer status/progress emission using SSE"""
         base_status = {
-            'timestamp': time.time(),
             'type': status_type,  # 'status', 'progress', or 'error'
             'isRunning': self.is_transfer_running,
         }
@@ -43,46 +62,56 @@ class RapidFileTransfer:
             base_status['device_id'] = device_id
             
         status = {**base_status, **data}
-        sse.publish(
-            {
-                'type': 'transfer_update',
-                'data': status
-            },
-            type='transfer_update',
-            channel=self.channel
-        )
+        self._create_event('transfer_update', status)
 
     def emit_device_update(self, event_type, device_data):
         """Unified device state emission using SSE"""
         update = {
-            'timestamp': time.time(),
             'type': event_type,  # 'connection', 'state_change'
             'devices': device_data if isinstance(device_data, list) else [device_data]
         }
-        sse.publish(
-            {
-                'type': 'device_update',
-                'data': update
-            },
-            type='device_update',
-            channel=self.channel
-        )
+        self._create_event('device_update', update)
 
     def emit_file_update(self, event_type, files_data):
         """Unified file system update emission using SSE"""
         update = {
-            'timestamp': time.time(),
             'type': event_type,  # 'list', 'change'
             'files': files_data
         }
-        sse.publish(
-            {
-                'type': 'file_update',
-                'data': update
-            },
-            type='file_update',
-            channel=self.channel
-        )
+        self._create_event('file_update', update)
+
+    async def status_generator(self) -> AsyncGenerator[Dict[str, Any], None]:
+        """Generate transfer status events."""
+        while True:
+            try:
+                status = {
+                    'isRunning': self.is_transfer_running,
+                    'devices': [
+                        {
+                            'id': device_id,
+                            'name': data['name'],
+                            'status': data['status'],
+                            'progress': self.device_progress.get(device_id, {})
+                        }
+                        for device_id, data in self.device_states.items()
+                    ]
+                }
+                yield {
+                    "event": "transfer_status",
+                    "data": json.dumps(status)
+                }
+            except Exception as e:
+                logger.error(f"Error generating transfer status: {str(e)}")
+                yield {
+                    "event": "transfer_status",
+                    "data": json.dumps({
+                        'type': 'error',
+                        'message': f'Error getting transfer status: {str(e)}',
+                        'isRunning': self.is_transfer_running,
+                        'devices': []
+                    })
+                }
+            await asyncio.sleep(1)  # Update every second
 
     def get_default_working_directory(self):
         """Get the working directory from environment variable."""
@@ -94,7 +123,13 @@ class RapidFileTransfer:
 
     def get_device_name(self, device_id):
         try:
-            result = self.run_command.run_command(['adb', '-s', device_id, 'shell', 'getprop', 'ro.product.model'], 'transfer', capture_output=True, emit_output=False)
+            result = self.run_command.run_command(
+                ['adb', '-s', device_id, 'shell', 'getprop', 'ro.product.model'],
+                'device_info',
+                capture_output=True,
+                emit_output=False,
+                emit_event=self.emit_event
+            )
             if result.stdout:
                 output = result.stdout
                 if isinstance(output, bytes):
@@ -180,7 +215,8 @@ class RapidFileTransfer:
         else:
             return self.file_paths['prefs']
 
-    def monitor_devices(self):
+    async def monitor_devices(self):
+        """Monitor devices asynchronously."""
         self.emit_transfer_update(
             status_type="status",
             state="starting",
@@ -208,15 +244,15 @@ class RapidFileTransfer:
                             # Only process state change if it's different from last known state
                             if device_id not in last_device_states or last_device_states[device_id] != new_state:
                                 last_device_states[device_id] = new_state
-                                self.handle_device_update(device_id, new_state)
+                                await self.handle_device_update(device_id, new_state)
                     
-                    time.sleep(0.1)
+                    await asyncio.sleep(0.1)
                 except Exception as line_error:
                     self.emit_transfer_update(
                         status_type="error",
                         error=f"Error reading device update: {str(line_error)}"
                     )
-                    time.sleep(1)
+                    await asyncio.sleep(1)
         except Exception as e:
             self.emit_transfer_update(
                 status_type="error",
@@ -226,7 +262,8 @@ class RapidFileTransfer:
             if process:
                 process.kill()
 
-    def handle_device_update(self, device_id, new_state):
+    async def handle_device_update(self, device_id, new_state):
+        """Handle device state updates asynchronously."""
         try:
             device_name = self.adb.get_device_name(device_id)
             device_display = f"{device_name} ({device_id})"
@@ -265,8 +302,7 @@ class RapidFileTransfer:
                             state="preparing"
                         )
                         
-                        # Let the route handle thread creation
-                        self.start_transfer(device_id)
+                        await self.start_transfer(device_id)
 
             elif new_state in ['offline', 'unauthorized']:
                 self.emit_device_update('connection', {
@@ -338,7 +374,8 @@ class RapidFileTransfer:
             if data['state'] == 'device'
         ]
 
-    def start_transfer(self, device_id):
+    async def start_transfer(self, device_id):
+        """Start transfer for a specific device asynchronously."""
         try:
             if not self.is_transfer_running:
                 self.is_transfer_running = True
@@ -396,7 +433,7 @@ class RapidFileTransfer:
                     return
                 
                 src_file = os.path.join(self.temp_dir, filename)
-                success = self.copy_file(device_id, src_file, files_completed, total_files)
+                success = await asyncio.to_thread(self.copy_file, device_id, src_file, files_completed, total_files)
                 
                 if success:
                     self.transferred_files[device_id].add(filename)
@@ -435,6 +472,7 @@ class RapidFileTransfer:
                 self.device_states[device_id]['status'] = 'failed'
 
     def stop_transfer(self):
+        """Stop all active transfers."""
         try:
             self.emit_transfer_update(
                 status_type="status",
@@ -491,6 +529,7 @@ class RapidFileTransfer:
             )
 
     def stop_monitoring(self):
+        """Stop device monitoring."""
         self.monitoring = False
         self.emit_transfer_update(
             status_type="status",
@@ -499,7 +538,7 @@ class RapidFileTransfer:
         )
 
     def get_transfer_status(self):
-        """Get current transfer status"""
+        """Get current transfer status."""
         self.emit_transfer_update(
             status_type="status",
             state="current",
@@ -522,7 +561,7 @@ class RapidFileTransfer:
                     )
 
     def emit_connected_devices(self):
-        """Emit current device list to clients"""
+        """Emit current device list to clients."""
         devices = [
             {
                 'id': did,

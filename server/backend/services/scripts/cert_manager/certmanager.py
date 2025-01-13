@@ -2,69 +2,75 @@ import os
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from backend.services.helpers.run_command import RunCommand
-from flask_sse import sse
-from backend.config.logging_config import configure_logging
+from typing import Dict, Any, AsyncGenerator, Optional, Callable
+import json
 import time
+import asyncio
+from backend.config.logging_config import configure_logging
 
 # Configure logging using centralized config
 logger = configure_logging(__name__)
 
 class CertManager:
-    def __init__(self):
+    def __init__(self, emit_event: Optional[Callable[[Dict[str, Any]], None]] = None):
         self.run_command = RunCommand()
         self.working_dir = self.get_default_working_directory()
+        self.emit_event = emit_event
 
-    def _send_operation_status(self, operation_type: str, status: str, message: str, details: dict = None, channel: str = 'cert-manager'):
-        """Send operation status updates via SSE"""
-        sse.publish(
-            {
-                'status': status,
-                'operation': operation_type,
-                'message': message,
-                'details': details or {},
-                'timestamp': time.time()
-            },
-            type='cert_manager_status'
-        )
+    def _create_event(self, operation_type: str, status: str, message: str, details: dict = None) -> Dict[str, Any]:
+        """Create an event object for SSE"""
+        event_data = {
+            'status': status,
+            'operation': operation_type,
+            'message': message,
+            'details': details or {},
+            'timestamp': time.time()
+        }
+        logger.debug(f"Created operation status event: {event_data}")
+        if self.emit_event:
+            self.emit_event(event_data)
+        return event_data
 
-    def _send_certificates_update(self, certificates: list, channel: str = 'cert-manager'):
-        """Send updated certificates list via SSE"""
-        sse.publish(
-            {
-                'status': 'update',
-                'certificates': certificates,
-                'timestamp': time.time()
-            },
-            type='cert_manager_status'
-        )
+    def _create_certificates_event(self, certificates: list) -> Dict[str, Any]:
+        """Create a certificates update event"""
+        event_data = {
+            'status': 'update',
+            'type': 'certificates_update',
+            'certificates': certificates,
+            'timestamp': time.time()
+        }
+        logger.debug(f"Created certificates update event")
+        if self.emit_event:
+            self.emit_event(event_data)
+        return event_data
 
-    def _send_progress_update(self, operation: str, current: int, total: int, message: str, channel: str = 'cert-manager'):
-        """Send progress updates via SSE"""
-        sse.publish(
-            {
-                'status': 'in_progress',
-                'operation': operation,
-                'progress': (current / total) * 100,
-                'current': current,
-                'total': total,
-                'message': message,
-                'timestamp': time.time()
-            },
-            type='cert_manager_status'
-        )
+    async def status_generator(self) -> AsyncGenerator[Dict[str, Any], None]:
+        """Generate certificate status events."""
+        while True:
+            try:
+                certificates = self.get_registered_certificates()
+                event_data = {
+                    'type': 'certificate_status',
+                    'certificates': certificates,
+                    'timestamp': time.time()
+                }
+                yield {
+                    "event": "certificate_status",
+                    "data": json.dumps(event_data)
+                }
+            except Exception as e:
+                logger.error(f"Error generating certificate status: {str(e)}")
+                yield {
+                    "event": "certificate_status",
+                    "data": json.dumps({
+                        'type': 'error',
+                        'message': f'Error getting certificate status: {str(e)}',
+                        'certificates': [],
+                        'timestamp': time.time()
+                    })
+                }
+            await asyncio.sleep(5)  # Update every 5 seconds
 
-    def _send_log_message(self, message: str, error: bool = False, channel: str = 'cert-manager'):
-        """Send log messages via SSE"""
-        sse.publish(
-            {
-                'status': 'error' if error else 'log',
-                'message': message,
-                'timestamp': time.time()
-            },
-            type='cert_manager_status'
-        )
-
-    # Directory and Path Methods
     def get_default_working_directory(self):
         """Get the working directory from environment variable."""
         base_dir = '/home/tak-manager'  # Use the container mount point directly
@@ -72,6 +78,13 @@ class CertManager:
         if not os.path.exists(working_dir):
             os.makedirs(working_dir, exist_ok=True)
         return working_dir
+
+    def get_container_name(self) -> str:
+        """Get TAK Server container name based on version."""
+        version = self.get_takserver_version()
+        if not version:
+            raise Exception("Could not determine TAK Server version")
+        return f"takserver-{version}"
 
     def get_takserver_version(self):
         """Get TAK Server version from version.txt if it exists."""
@@ -104,40 +117,31 @@ class CertManager:
             
         except Exception as e:
             error_message = f"Error getting auth file path: {str(e)}"
-            if hasattr(self, 'operation_status'):
-                self.operation_status.fail_operation(
-                    'fetch',
-                    error_message
-                )
+            self._create_event(
+                'fetch',
+                'error',
+                error_message,
+                {'error': str(e)}
+            )
             raise Exception(error_message)
 
-    def get_container_name(self):
-        """Get the TAK Server container name based on version."""
-        version = self.get_takserver_version()
-        if not version:
-            raise Exception("Could not determine TAK Server version")
-        return f"takserver-{version}"
-
-    # Certificate Management Methods
-    def get_registered_certificates(self, channel: str = 'cert-manager'):
+    def get_registered_certificates(self) -> list:
         """Parse UserAuthenticationFile.xml and return registered certificate information."""
         try:
-            self._send_operation_status(
+            self._create_event(
                 'fetch',
                 'in_progress',
-                'Fetching registered certificates',
-                channel=channel
+                'Fetching registered certificates'
             )
 
             auth_file = self.get_auth_file_path()
             if not os.path.exists(auth_file):
                 error_message = f"Authentication file not found at: {auth_file}"
-                self._send_operation_status(
+                self._create_event(
                     'fetch',
-                    'failed',
+                    'error',
                     error_message,
-                    {'error': error_message},
-                    channel
+                    {'error': error_message}
                 )
                 return []
 
@@ -165,60 +169,59 @@ class CertManager:
                     
                     certificates.append(cert_info)
                 
-                self._send_certificates_update(certificates, channel)
-                self._send_operation_status(
+                self._create_certificates_event(certificates)
+                self._create_event(
                     'fetch',
                     'completed',
                     'Successfully fetched registered certificates',
-                    {'total': len(certificates)},
-                    channel
+                    {'total': len(certificates)}
                 )
                 
                 return certificates
 
             except ET.ParseError as e:
                 error_message = f"Error parsing XML file: {str(e)}"
-                self._send_operation_status(
+                self._create_event(
                     'fetch',
-                    'failed',
+                    'error',
                     error_message,
-                    {'error': error_message},
-                    channel
+                    {'error': error_message}
                 )
                 return []
 
         except Exception as e:
             error_message = f"Error reading certificates: {str(e)}"
-            self._send_operation_status(
+            self._create_event(
                 'fetch',
-                'failed',
+                'error',
                 error_message,
-                {'error': error_message},
-                channel
+                {'error': error_message}
             )
             return []
 
-    def create_client_certificate(self, username, channel: str = 'cert-manager'):
+    def create_client_certificate(self, username: str) -> bool:
         """Create client certificates for a user."""
         try:
             container_name = self.get_container_name()
             command = f"cd /opt/tak/certs && yes y | ./makeCert.sh client {username}"
             
             result = self.run_command.run_command(
-                ["docker", "exec", container_name, "bash", "-c", command], 
-                channel=channel
+                ["docker", "exec", container_name, "bash", "-c", command],
+                'create',
+                emit_event=self.emit_event
             )
-            return bool(result)
+            return result.success
 
         except Exception as e:
-            self.run_command.emit_log_output(
-                f"Error creating certificates for user {username}: {str(e)}",
-                channel,
-                error=True
+            self._create_event(
+                'create',
+                'error',
+                f"Error creating certificates for user {username}",
+                {'error': str(e)}
             )
             return False
 
-    def register_user(self, username, password=None, is_admin=False, groups=None, channel: str = 'cert-manager'):
+    def register_user(self, username: str, password: Optional[str] = None, is_admin: bool = False, groups: Optional[list] = None) -> bool:
         """Register a user with their certificate."""
         try:
             container_name = self.get_container_name()
@@ -240,641 +243,111 @@ class CertManager:
             
             result = self.run_command.run_command(
                 ["docker", "exec", container_name, "bash", "-c", command],
-                channel=channel
+                'register',
+                emit_event=self.emit_event
             )
             
-            # Check if the command actually succeeded
-            if not result or "Command failed" in str(result) or "error" in str(result).lower():
-                self.run_command.emit_log_output(
-                    f"Failed to register user {username}: Command execution failed",
-                    channel
+            if not result.success or "Command failed" in str(result.stdout) or "error" in str(result.stdout).lower():
+                self._create_event(
+                    'register',
+                    'error',
+                    f"Failed to register user {username}",
+                    {'error': 'Command execution failed'}
                 )
                 return False
                 
             return True
 
         except Exception as e:
-            self.run_command.emit_log_output(
-                f"Error registering user {username}: {str(e)}",
-                channel
+            self._create_event(
+                'register',
+                'error',
+                f"Error registering user {username}",
+                {'error': str(e)}
             )
             return False
 
-    def delete_user_certificates(self, username):
-        """Delete all certificate files associated with a given username."""
+    def delete_user_certificates(self, username: str) -> bool:
+        """Delete certificates for a user."""
         try:
             container_name = self.get_container_name()
-
-            # Emit deletion started event
-            sse.publish(
-                {
-                    'status': 'started',
-                    'operation': 'delete',
-                    'message': f'Starting deletion of certificates for user {username}',
-                    'details': {'username': username},
-                    'timestamp': time.time()
-                },
-                type='cert_manager_status'
-            )
-
-            # First verify the container exists and is running
-            verify_container = self.run_command.run_command(
-                ["docker", "container", "inspect", container_name],
-                channel=channel
-            )
-            if not verify_container:
-                sse.publish(
-                    {
-                        'status': 'error',
-                        'operation': 'delete',
-                        'message': f'TAK Server container {container_name} not found or not running',
-                        'details': {'username': username},
-                        'timestamp': time.time()
-                    },
-                    type='cert_manager_status'
-                )
-                return False
 
             # First unregister the user from UserManager
             command = f"java -jar /opt/tak/utils/UserManager.jar usermod -D {username}"
             
-            # Emit unregistering status
-            sse.publish(
-                {
-                    'status': 'in_progress',
-                    'operation': 'delete',
-                    'message': f'Unregistering user {username}',
-                    'details': {'username': username},
-                    'timestamp': time.time()
-                },
-                type='cert_manager_status'
+            self._create_event(
+                'delete',
+                'in_progress',
+                f'Unregistering user {username}',
+                {'username': username}
             )
-            
-            if not self.run_command.run_command(
-                ["docker", "exec", container_name, "bash", "-c", command],
-                channel=channel
-            ):
-                sse.publish(
-                    {
-                        'status': 'error',
-                        'operation': 'delete',
-                        'message': f'Failed to unregister user {username}',
-                        'details': {'username': username},
-                        'timestamp': time.time()
-                    },
-                    type='cert_manager_status'
-                )
-                return False
-
-            # Emit deleting files status
-            sse.publish(
-                {
-                    'status': 'in_progress',
-                    'operation': 'delete',
-                    'message': f'Deleting certificate files for user {username}',
-                    'details': {'username': username},
-                    'timestamp': time.time()
-                },
-                type='cert_manager_status'
-            )
-
-            # Delete all files matching the username pattern in the container
-            delete_command = f"rm -f /opt/tak/certs/files/{username}* && echo 'Deleted files for {username}'"
             
             result = self.run_command.run_command(
-                ["docker", "exec", container_name, "bash", "-c", delete_command],
-                channel=channel
-            )
-
-            # Verify no files remain
-            verify_command = f"find /opt/tak/certs/files/ -name '{username}*' -type f"
-            remaining_files = self.run_command.run_command(
-                ["docker", "exec", container_name, "bash", "-c", verify_command],
-                channel=channel
-            )
-
-            if not remaining_files:
-                success_message = f"Successfully deleted certificates for user {username}"
-                sse.publish(
-                    {
-                        'status': 'completed',
-                        'operation': 'delete',
-                        'message': success_message,
-                        'details': {'username': username},
-                        'timestamp': time.time()
-                    },
-                    type='cert_manager_status'
-                )
-                self.run_command.emit_log_output(success_message, 'cert-manager')
-                return True
-            else:
-                error_message = f"Some files remain for user {username}: {remaining_files}"
-                sse.publish(
-                    {
-                        'status': 'error',
-                        'operation': 'delete',
-                        'message': error_message,
-                        'details': {
-                            'username': username,
-                            'remaining_files': str(remaining_files)
-                        },
-                        'timestamp': time.time()
-                    },
-                    type='cert_manager_status'
-                )
-                self.run_command.emit_log_output(error_message, 'cert-manager')
-                return False
-
-        except Exception as e:
-            error_message = f"Error deleting certificates for user {username}: {str(e)}"
-            sse.publish(
-                {
-                    'status': 'error',
-                    'operation': 'delete',
-                    'message': error_message,
-                    'details': {
-                        'username': username,
-                        'error': str(e)
-                    },
-                    'timestamp': time.time()
-                },
-                type='cert_manager_status'
-            )
-            self.run_command.emit_log_output(error_message, 'cert-manager')
-            return False
-
-    # Main Interface Methods
-    def create_main(self, username, password=None, is_admin=False, groups=None):
-        """Create client certificates for a user."""
-        try:
-            # Validate certificate data
-            cert_data = {
-                'username': username,
-                'password': password,
-                'is_admin': is_admin,
-                'groups': groups if groups else ['__ANON__']
-            }
-            
-            is_valid, error_message = self.validate_cert_data(cert_data)
-            if not is_valid:
-                sse.publish(
-                    {
-                        'status': 'error',
-                        'operation': 'create',
-                        'message': error_message,
-                        'details': {
-                            'username': username,
-                            'error': error_message
-                        },
-                        'timestamp': time.time()
-                    },
-                    type='cert_manager_status'
-                )
-                return {
-                    'success': False,
-                    'message': error_message
-                }
-
-            # Start the operation
-            sse.publish(
-                {
-                    'status': 'started',
-                    'operation': 'create',
-                    'message': f'Starting certificate creation for user {username}',
-                    'details': {'username': username},
-                    'timestamp': time.time()
-                },
-                type='cert_manager_status'
-            )
-
-            # Create the certificates
-            sse.publish(
-                {
-                    'status': 'in_progress',
-                    'operation': 'create',
-                    'message': f'Creating certificate for user {username}',
-                    'details': {'username': username},
-                    'timestamp': time.time()
-                },
-                type='cert_manager_status'
-            )
-
-            cert_result = self.create_client_certificate(username)
-            if not cert_result:
-                error_message = f'Failed to create certificates for user {username}'
-                sse.publish(
-                    {
-                        'status': 'error',
-                        'operation': 'create',
-                        'message': error_message,
-                        'details': {'username': username},
-                        'timestamp': time.time()
-                    },
-                    type='cert_manager_status'
-                )
-                return {
-                    'success': False,
-                    'message': error_message
-                }
-
-            # Update progress for registration step
-            sse.publish(
-                {
-                    'status': 'in_progress',
-                    'operation': 'create',
-                    'message': f'Registering user {username}',
-                    'details': {'username': username},
-                    'timestamp': time.time()
-                },
-                type='cert_manager_status'
-            )
-
-            # Register the user
-            register_result = self.register_user(username, password, is_admin, groups)
-            if not register_result:
-                error_message = f'Failed to register user {username}'
-                sse.publish(
-                    {
-                        'status': 'error',
-                        'operation': 'create',
-                        'message': error_message,
-                        'details': {'username': username},
-                        'timestamp': time.time()
-                    },
-                    type='cert_manager_status'
-                )
-                # Clean up the created certificate since registration failed
-                self.delete_user_certificates(username)
-                return {
-                    'success': False,
-                    'message': error_message
-                }
-            
-            success_message = (
-                f"Successfully created {'admin' if is_admin else 'user'} {username} "
-                f"with groups: {', '.join(groups if groups else ['__ANON__'])}"
-            )
-            
-            # Get the updated certificates list
-            certificates = self.get_registered_certificates(emit_status=False)
-            
-            # Emit certificates data and completion status
-            self._send_certificates_update(certificates)
-            sse.publish(
-                {
-                    'status': 'completed',
-                    'operation': 'create',
-                    'message': success_message,
-                    'details': {
-                        'username': username,
-                        'is_admin': is_admin,
-                        'groups': groups if groups else ['__ANON__']
-                    },
-                    'timestamp': time.time()
-                },
-                type='cert_manager_status'
-            )
-            
-            return {
-                'success': True,
-                'message': success_message
-            }
-
-        except Exception as e:
-            error_message = f"Error creating certificates for user {username}: {str(e)}"
-            sse.publish(
-                {
-                    'status': 'error',
-                    'operation': 'create', 
-                    'message': error_message,
-                    'details': {
-                        'username': username,
-                        'error': str(e)
-                    },
-                    'timestamp': time.time()
-                },
-                type='cert_manager_status'
-            )
-            # Try to clean up any partially created certificates
-            try:
-                self.delete_user_certificates(username)
-            except:
-                pass
-            return {
-                'success': False,
-                'message': error_message
-            }
-
-    def delete_main(self, username: str, channel: str = 'cert-manager'):
-        """Main deletion function that the frontend calls to remove a user completely."""
-        try:
-            # Start the deletion operation
-            sse.publish(
-                {
-                    'status': 'in_progress',
-                    'operation': 'delete',
-                    'message': f'Starting deletion of user {username}',
-                    'details': {'username': username},
-                    'timestamp': time.time()
-                },
-                type='cert_manager_status'
-            )
-
-            # First verify the user exists
-            certificates = self.get_registered_certificates(channel=channel)
-            if not any(cert['identifier'] == username for cert in certificates):
-                error_message = f'User {username} not found'
-                sse.publish(
-                    {
-                        'status': 'failed',
-                        'operation': 'delete',
-                        'message': error_message,
-                        'details': {
-                            'username': username,
-                            'error': error_message
-                        },
-                        'timestamp': time.time()
-                    },
-                    type='cert_manager_status'
-                )
-                return {
-                    'success': False,
-                    'message': error_message
-                }
-            
-            # Delete the certificate
-            container_name = self.get_container_name()
-
-            # First unregister the user from UserManager
-            command = f"java -jar /opt/tak/utils/UserManager.jar usermod -D {username}"
-            
-            sse.publish(
-                {
-                    'status': 'in_progress',
-                    'operation': 'delete',
-                    'message': f'Unregistering user {username}',
-                    'details': {
-                        'username': username,
-                        'progress': {'current': 0, 'total': 2}
-                    },
-                    'timestamp': time.time()
-                },
-                type='cert_manager_status'
-            )
-            
-            if not self.run_command.run_command(
                 ["docker", "exec", container_name, "bash", "-c", command],
-                channel=channel
-            ):
-                error_message = f'Failed to unregister user {username}'
-                sse.publish(
-                    {
-                        'status': 'failed',
-                        'operation': 'delete',
-                        'message': error_message,
-                        'details': {
-                            'username': username,
-                            'error': error_message
-                        },
-                        'timestamp': time.time()
-                    },
-                    type='cert_manager_status'
-                )
-                return {
-                    'success': False,
-                    'message': error_message
-                }
-
-            sse.publish(
-                {
-                    'status': 'in_progress', 
-                    'operation': 'delete',
-                    'message': f'Deleting certificate files for {username}',
-                    'details': {
-                        'username': username,
-                        'progress': {'current': 1, 'total': 2}
-                    },
-                    'timestamp': time.time()
-                },
-                type='cert_manager_status'
+                'delete',
+                emit_event=self.emit_event
             )
+            
+            if not result.success:
+                self._create_event(
+                    'delete',
+                    'error',
+                    f'Failed to unregister user {username}',
+                    {'username': username}
+                )
+                return False
 
             # Delete all files matching the username pattern
             delete_command = f"rm -f /opt/tak/certs/files/{username}* && echo 'Deleted files for {username}'"
+            
             result = self.run_command.run_command(
                 ["docker", "exec", container_name, "bash", "-c", delete_command],
-                channel=channel
+                'delete',
+                emit_event=self.emit_event
             )
 
             # Verify no files remain
             verify_command = f"find /opt/tak/certs/files/ -name '{username}*' -type f"
-            remaining_files = self.run_command.run_command(
+            result = self.run_command.run_command(
                 ["docker", "exec", container_name, "bash", "-c", verify_command],
-                channel=channel
+                'delete',
+                emit_event=self.emit_event,
+                capture_output=True
             )
 
-            if not remaining_files:
-                # Get updated certificates list
-                certificates = self.get_registered_certificates(channel=channel)
-                self._send_certificates_update(certificates, channel)
-                
-                success_message = f"Successfully deleted user {username} and all associated certificates"
-                sse.publish(
-                    {
-                        'status': 'completed',
-                        'operation': 'delete',
-                        'message': success_message,
-                        'details': {'username': username},
-                        'timestamp': time.time()
-                    },
-                    type='cert_manager_status'
+            if not result.stdout:
+                self._create_event(
+                    'delete',
+                    'completed',
+                    f'Successfully deleted certificates for user {username}',
+                    {'username': username}
                 )
-                return {
-                    'success': True,
-                    'message': success_message
-                }
+                return True
             else:
-                error_message = f"Some files remain for user {username}"
-                sse.publish(
+                self._create_event(
+                    'delete',
+                    'error',
+                    f'Some files remain for user {username}',
                     {
-                        'status': 'failed',
-                        'operation': 'delete',
-                        'message': error_message,
-                        'details': {
-                            'username': username,
-                            'error': error_message,
-                            'remaining_files': str(remaining_files)
-                        },
-                        'timestamp': time.time()
-                    },
-                    type='cert_manager_status'
+                        'username': username,
+                        'remaining_files': result.stdout
+                    }
                 )
-                return {
-                    'success': False,
-                    'message': error_message
-                }
+                return False
 
         except Exception as e:
-            error_message = f"Error during deletion of user {username}: {str(e)}"
-            sse.publish(
+            self._create_event(
+                'delete',
+                'error',
+                f'Error deleting certificates for user {username}',
                 {
-                    'status': 'failed',
-                    'operation': 'delete',
-                    'message': error_message,
-                    'details': {
-                        'username': username,
-                        'error': error_message
-                    },
-                    'timestamp': time.time()
-                },
-                type='cert_manager_status'
-            )
-            return {
-                'success': False,
-                'message': error_message
-            }
-
-    def delete_batch(self, usernames: list, channel: str = 'cert-manager'):
-        """Delete multiple certificates in a batch."""
-        try:
-            total_certs = len(usernames)
-            completed_certs = 0
-            results = []
-
-            # Start batch deletion operation
-            sse.publish(
-                {
-                    'status': 'in_progress',
-                    'operation': 'delete',
-                    'message': f'Starting batch deletion of {total_certs} certificates',
-                    'details': {'total': total_certs},
-                    'timestamp': time.time()
-                },
-                type='cert_manager_status'
-            )
-
-            # Get initial certificates list
-            certificates = self.get_registered_certificates(channel=channel)
-            
-            for username in usernames:
-                try:
-                    # Verify user exists
-                    if not any(cert['identifier'] == username for cert in certificates):
-                        results.append({
-                            'username': username,
-                            'message': f'User {username} not found',
-                            'status': 'failed'
-                        })
-                        continue
-
-                    # Update progress
-                    sse.publish(
-                        {
-                            'status': 'in_progress',
-                            'operation': 'delete',
-                            'message': f'Deleting user {username}',
-                            'details': {
-                                'username': username,
-                                'progress': {'current': completed_certs, 'total': total_certs}
-                            },
-                            'timestamp': time.time()
-                        },
-                        type='cert_manager_status'
-                    )
-
-                    # Delete certificate
-                    result = self.delete_main(username, channel=channel)
-                    
-                    if result['success']:
-                        completed_certs += 1
-                        results.append({
-                            'username': username,
-                            'message': f'Successfully deleted user {username}',
-                            'status': 'completed'
-                        })
-                    else:
-                        results.append({
-                            'username': username,
-                            'message': result['message'],
-                            'status': 'failed'
-                        })
-
-                except Exception as e:
-                    results.append({
-                        'username': username,
-                        'message': str(e),
-                        'status': 'failed'
-                    })
-
-            # Get final certificates list
-            certificates = self.get_registered_certificates(channel=channel)
-            self._send_certificates_update(certificates, channel)
-
-            # Send final status
-            if completed_certs == total_certs:
-                sse.publish(
-                    {
-                        'status': 'completed',
-                        'operation': 'delete',
-                        'message': f'Successfully deleted {completed_certs} certificates',
-                        'details': {
-                            'total': total_certs,
-                            'completed': completed_certs,
-                            'results': results
-                        },
-                        'timestamp': time.time()
-                    },
-                    type='cert_manager_status'
-                )
-                return {
-                    'success': True,
-                    'message': f'Successfully deleted {completed_certs} certificates',
-                    'results': results
+                    'username': username,
+                    'error': str(e)
                 }
-            else:
-                sse.publish(
-                    {
-                        'status': 'failed',
-                        'operation': 'delete',
-                        'message': f'Deleted {completed_certs} of {total_certs} certificates',
-                        'details': {
-                            'total': total_certs,
-                            'completed': completed_certs,
-                            'results': results,
-                            'error': 'Some certificates failed to delete'
-                        },
-                        'timestamp': time.time()
-                    },
-                    type='cert_manager_status'
-                )
-                return {
-                    'success': False,
-                    'message': f'Failed to delete some certificates',
-                    'results': results
-                }
-
-        except Exception as e:
-            error_message = f"Error during batch deletion: {str(e)}"
-            sse.publish(
-                {
-                    'status': 'failed',
-                    'operation': 'delete',
-                    'message': error_message,
-                    'details': {
-                        'error': error_message,
-                        'results': results if 'results' in locals() else []
-                    },
-                    'timestamp': time.time()
-                },
-                type='cert_manager_status'
             )
-            return {
-                'success': False,
-                'message': error_message,
-                'results': results if 'results' in locals() else []
-            }
+            return False
 
-    def validate_cert_data(self, cert_data):
+    def validate_cert_data(self, cert_data: Dict[str, Any]) -> tuple[bool, Optional[str]]:
         """Validate certificate data."""
         if not isinstance(cert_data, dict):
             return False, "Certificate data must be a dictionary"
@@ -910,67 +383,173 @@ class CertManager:
             
         return True, None
 
-    def validate_batch_inputs(self, base_name, count, group='__ANON__'):
-        """Validate batch creation inputs."""
-        if not base_name:
-            return False, "Base name is required"
+    def create_main(self, username: str, password: Optional[str] = None, is_admin: bool = False, groups: Optional[list] = None) -> Dict[str, Any]:
+        """Create client certificates for a user."""
+        try:
+            # Validate certificate data
+            cert_data = {
+                'username': username,
+                'password': password,
+                'is_admin': is_admin,
+                'groups': groups if groups else ['__ANON__']
+            }
+            
+            is_valid, error_message = self.validate_cert_data(cert_data)
+            if not is_valid:
+                self._create_event(
+                    'create',
+                    'error',
+                    error_message,
+                    {
+                        'username': username,
+                        'error': error_message
+                    }
+                )
+                return {
+                    'success': False,
+                    'message': error_message
+                }
 
-        if not all(c.isalnum() or c in '-_' for c in base_name):
-            return False, "Base name must contain only letters, numbers, hyphens, and underscores"
+            # Start the operation
+            self._create_event(
+                'create',
+                'started',
+                f'Starting certificate creation for user {username}',
+                {'username': username}
+            )
 
-        if count < 1:
-            return False, "Count must be greater than 0"
+            # Create the certificates
+            self._create_event(
+                'create',
+                'in_progress',
+                f'Creating certificate for user {username}',
+                {'username': username}
+            )
 
-        if not isinstance(group, str) or not group.strip():
-            return False, "Group must be a non-empty string"
+            cert_result = self.create_client_certificate(username)
+            if not cert_result:
+                error_message = f'Failed to create certificates for user {username}'
+                self._create_event(
+                    'create',
+                    'error',
+                    error_message,
+                    {'username': username}
+                )
+                return {
+                    'success': False,
+                    'message': error_message
+                }
 
-        if not all(c.isalnum() or c in '-_' for c in group):
-            return False, f"Group name '{group}' contains invalid characters"
+            # Update progress for registration step
+            self._create_event(
+                'create',
+                'in_progress',
+                f'Registering user {username}',
+                {'username': username}
+            )
 
-        return True, None
+            # Register the user
+            register_result = self.register_user(username, password, is_admin, groups)
+            if not register_result:
+                error_message = f'Failed to register user {username}'
+                self._create_event(
+                    'create',
+                    'error',
+                    error_message,
+                    {'username': username}
+                )
+                # Clean up the created certificate since registration failed
+                self.delete_user_certificates(username)
+                return {
+                    'success': False,
+                    'message': error_message
+                }
+            
+            success_message = (
+                f"Successfully created {'admin' if is_admin else 'user'} {username} "
+                f"with groups: {', '.join(groups if groups else ['__ANON__'])}"
+            )
+            
+            # Get the updated certificates list
+            certificates = self.get_registered_certificates()
+            
+            # Emit certificates data and completion status
+            self._create_certificates_event(certificates)
+            self._create_event(
+                'create',
+                'completed',
+                success_message,
+                {
+                    'username': username,
+                    'is_admin': is_admin,
+                    'groups': groups if groups else ['__ANON__']
+                }
+            )
+            
+            return {
+                'success': True,
+                'message': success_message
+            }
 
-    def create_batch(self, certificates: list, channel: str = 'cert-manager'):
-        """Create certificates for multiple users in a batch."""
+        except Exception as e:
+            error_message = f"Error creating certificates for user {username}: {str(e)}"
+            self._create_event(
+                'create',
+                'error',
+                error_message,
+                {
+                    'username': username,
+                    'error': str(e)
+                }
+            )
+            # Try to clean up any partially created certificates
+            try:
+                self.delete_user_certificates(username)
+            except:
+                pass
+            return {
+                'success': False,
+                'message': error_message
+            }
+
+    def create_batch(self, certificates: list) -> Dict[str, Any]:
+        """Create multiple certificates in a batch."""
         try:
             total_certs = len(certificates)
             completed_certs = 0
             results = []
 
-            sse.publish(
-                {
-                    'status': 'in_progress',
-                    'operation': 'create',
-                    'message': f'Starting batch creation of {total_certs} certificates',
-                    'details': {'total': total_certs},
-                    'timestamp': time.time()
-                },
-                type='cert_manager_status'
+            # Start batch creation operation
+            self._create_event(
+                'create',
+                'started',
+                f'Starting batch creation of {total_certs} certificates',
+                {'total': total_certs}
             )
 
             for cert_data in certificates:
                 try:
-                    is_valid, error_message = self.validate_cert_data(cert_data)
+                    # Validate certificate data
+                    is_valid, error = self.validate_cert_data(cert_data)
                     if not is_valid:
                         results.append({
                             'username': cert_data.get('username', 'unknown'),
-                            'message': error_message,
+                            'message': error,
                             'status': 'failed'
                         })
                         continue
 
                     username = cert_data['username']
-                    sse.publish(
+
+                    # Update progress
+                    self._create_event(
+                        'create',
+                        'in_progress',
+                        f'Creating certificate for user {username}',
                         {
-                            'status': 'in_progress',
-                            'operation': 'create',
-                            'message': f'Creating certificate for {username}',
-                            'details': {
-                                'username': username,
-                                'progress': {'current': completed_certs, 'total': total_certs}
-                            },
-                            'timestamp': time.time()
-                        },
-                        type='cert_manager_status'
+                            'username': username,
+                            'progress': {'current': completed_certs, 'total': total_certs}
+                        }
                     )
 
                     if self.create_client_certificate(username):
@@ -1004,40 +583,32 @@ class CertManager:
                     })
 
             # Get and send final certificates list
-            certificates = self.get_registered_certificates(channel=channel)
-            self._send_certificates_update(certificates, channel)
+            certificates = self.get_registered_certificates()
+            self._create_certificates_event(certificates)
 
             # Send final status
             if completed_certs == total_certs:
-                sse.publish(
+                self._create_event(
+                    'create',
+                    'completed',
+                    f'Successfully created {completed_certs} certificates',
                     {
-                        'status': 'completed',
-                        'operation': 'create',
-                        'message': f'Successfully created {completed_certs} certificates',
-                        'details': {
-                            'total': total_certs,
-                            'completed': completed_certs,
-                            'results': results
-                        },
-                        'timestamp': time.time()
-                    },
-                    type='cert_manager_status'
+                        'total': total_certs,
+                        'completed': completed_certs,
+                        'results': results
+                    }
                 )
             else:
-                sse.publish(
+                self._create_event(
+                    'create',
+                    'error',
+                    f'Created {completed_certs} of {total_certs} certificates',
                     {
-                        'status': 'failed',
-                        'operation': 'create',
-                        'message': f'Created {completed_certs} of {total_certs} certificates',
-                        'details': {
-                            'total': total_certs,
-                            'completed': completed_certs,
-                            'results': results,
-                            'error': 'Some certificates failed to create'
-                        },
-                        'timestamp': time.time()
-                    },
-                    type='cert_manager_status'
+                        'total': total_certs,
+                        'completed': completed_certs,
+                        'results': results,
+                        'error': 'Some certificates failed to create'
+                    }
                 )
 
             return {
@@ -1048,18 +619,14 @@ class CertManager:
 
         except Exception as e:
             error_message = f"Error during batch creation: {str(e)}"
-            sse.publish(
+            self._create_event(
+                'create',
+                'error',
+                error_message,
                 {
-                    'status': 'failed',
-                    'operation': 'create',
-                    'message': error_message,
-                    'details': {
-                        'error': error_message,
-                        'results': results if 'results' in locals() else []
-                    },
-                    'timestamp': time.time()
-                },
-                type='cert_manager_status'
+                    'error': error_message,
+                    'results': results if 'results' in locals() else []
+                }
             )
             return {
                 'success': False,
@@ -1067,106 +634,197 @@ class CertManager:
                 'results': results if 'results' in locals() else []
             }
 
-    def delete_certificate(self, username, channel: str = 'cert-manager'):
-        """Delete a single certificate"""
+    def delete_main(self, username: str) -> Dict[str, Any]:
+        """Delete a user and their certificates."""
         try:
-            container_name = self.get_container_name()
-
-            # Delete user from UserManager
-            cmd = f"java -jar /opt/tak/utils/UserManager.jar usermod -D {username}"
-            result = self.run_command.run_command(
-                ["docker", "exec", container_name, "bash", "-c", cmd],
-                channel=channel
+            # Start the deletion operation
+            self._create_event(
+                'delete',
+                'started',
+                f'Starting deletion of user {username}',
+                {'username': username}
             )
-            if not result:
-                return False
 
-            # Delete certificate files
-            cmd = f"rm -f /opt/tak/certs/files/{username}* && echo 'Deleted files for {username}'"
-            result = self.run_command.run_command(
-                ["docker", "exec", container_name, "bash", "-c", cmd],
-                channel=channel
-            )
-            if not result:
-                return False
+            # First verify the user exists
+            certificates = self.get_registered_certificates()
+            if not any(cert['identifier'] == username for cert in certificates):
+                error_message = f'User {username} not found'
+                self._create_event(
+                    'delete',
+                    'error',
+                    error_message,
+                    {
+                        'username': username,
+                        'error': error_message
+                    }
+                )
+                return {
+                    'success': False,
+                    'message': error_message
+                }
 
-            # If both commands succeeded, consider deletion successful
-            return True
+            # Delete the certificates
+            if self.delete_user_certificates(username):
+                # Get updated certificates list
+                certificates = self.get_registered_certificates()
+                self._create_certificates_event(certificates)
+                
+                success_message = f"Successfully deleted user {username} and all associated certificates"
+                self._create_event(
+                    'delete',
+                    'completed',
+                    success_message,
+                    {'username': username}
+                )
+                return {
+                    'success': True,
+                    'message': success_message
+                }
+            else:
+                error_message = f"Failed to delete user {username}"
+                self._create_event(
+                    'delete',
+                    'error',
+                    error_message,
+                    {'username': username}
+                )
+                return {
+                    'success': False,
+                    'message': error_message
+                }
 
         except Exception as e:
-            self.run_command.emit_log_output(
-                f"Error deleting certificate for {username}: {str(e)}",
-                channel,
-                error=True
+            error_message = f"Error during deletion of user {username}: {str(e)}"
+            self._create_event(
+                'delete',
+                'error',
+                error_message,
+                {
+                    'username': username,
+                    'error': str(e)
+                }
             )
-            return False
+            return {
+                'success': False,
+                'message': error_message
+            }
 
-    def delete_certificates(self, usernames):
-        """Delete multiple certificates"""
-        total_certs = len(usernames)
-        completed_certs = 0
-        
-        # Start overall deletion operation
-        sse.publish(
-            {
-                'status': 'in_progress',
-                'operation': 'delete',
-                'message': f'Starting deletion of {total_certs} certificates',
-                'details': {'total': total_certs},
-                'timestamp': time.time()
-            },
-            type='cert_manager_status'
-        )
-        
-        for username in usernames:
-            # Update progress for current certificate
-            sse.publish(
-                {
-                    'status': 'in_progress',
-                    'operation': 'delete',
-                    'message': f'Deleting certificate for {username}',
-                    'details': {
+    def delete_batch(self, usernames: list) -> Dict[str, Any]:
+        """Delete multiple certificates in a batch."""
+        try:
+            total_certs = len(usernames)
+            completed_certs = 0
+            results = []
+
+            # Start batch deletion operation
+            self._create_event(
+                'delete',
+                'started',
+                f'Starting batch deletion of {total_certs} certificates',
+                {'total': total_certs}
+            )
+
+            # Get initial certificates list
+            certificates = self.get_registered_certificates()
+            
+            for username in usernames:
+                try:
+                    # Verify user exists
+                    if not any(cert['identifier'] == username for cert in certificates):
+                        results.append({
+                            'username': username,
+                            'message': f'User {username} not found',
+                            'status': 'failed'
+                        })
+                        continue
+
+                    # Update progress
+                    self._create_event(
+                        'delete',
+                        'in_progress',
+                        f'Deleting user {username}',
+                        {
+                            'username': username,
+                            'progress': {'current': completed_certs, 'total': total_certs}
+                        }
+                    )
+
+                    # Delete certificate
+                    result = self.delete_main(username)
+                    
+                    if result['success']:
+                        completed_certs += 1
+                        results.append({
+                            'username': username,
+                            'message': f'Successfully deleted user {username}',
+                            'status': 'completed'
+                        })
+                    else:
+                        results.append({
+                            'username': username,
+                            'message': result['message'],
+                            'status': 'failed'
+                        })
+
+                except Exception as e:
+                    results.append({
                         'username': username,
-                        'progress': {'current': completed_certs, 'total': total_certs}
-                    },
-                    'timestamp': time.time()
-                },
-                type='cert_manager_status'
-            )
-            
-            # Delete individual certificate
-            success = self.delete_certificate(username)
-            if success:
-                completed_certs += 1
-            
-        # Complete operation based on results
-        if completed_certs == total_certs:
-            sse.publish(
-                {
-                    'status': 'completed',
-                    'operation': 'delete',
-                    'message': f'Successfully deleted {total_certs} certificates',
-                    'details': {'total': total_certs},
-                    'timestamp': time.time()
-                },
-                type='cert_manager_status'
-            )
-        else:
-            sse.publish(
-                {
-                    'status': 'failed',
-                    'operation': 'delete',
-                    'message': f'Deleted {completed_certs} of {total_certs} certificates',
-                    'details': {
-                        'completed': completed_certs,
+                        'message': str(e),
+                        'status': 'failed'
+                    })
+
+            # Get final certificates list
+            certificates = self.get_registered_certificates()
+            self._create_certificates_event(certificates)
+
+            # Send final status
+            if completed_certs == total_certs:
+                self._create_event(
+                    'delete',
+                    'completed',
+                    f'Successfully deleted {completed_certs} certificates',
+                    {
                         'total': total_certs,
+                        'completed': completed_certs,
+                        'results': results
+                    }
+                )
+                return {
+                    'success': True,
+                    'message': f'Successfully deleted {completed_certs} certificates',
+                    'results': results
+                }
+            else:
+                self._create_event(
+                    'delete',
+                    'error',
+                    f'Deleted {completed_certs} of {total_certs} certificates',
+                    {
+                        'total': total_certs,
+                        'completed': completed_certs,
+                        'results': results,
                         'error': 'Some certificates failed to delete'
-                    },
-                    'timestamp': time.time()
-                },
-                type='cert_manager_status'
+                    }
+                )
+                return {
+                    'success': False,
+                    'message': f'Failed to delete some certificates',
+                    'results': results
+                }
+
+        except Exception as e:
+            error_message = f"Error during batch deletion: {str(e)}"
+            self._create_event(
+                'delete',
+                'error',
+                error_message,
+                {
+                    'error': error_message,
+                    'results': results if 'results' in locals() else []
+                }
             )
-            
-        # Always emit updated certificate list after deletion
-        certificates = self.get_certificates()
-        self._send_certificates_update(certificates)
+            return {
+                'success': False,
+                'message': error_message,
+                'results': results if 'results' in locals() else []
+            }

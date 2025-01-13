@@ -1,18 +1,27 @@
-from flask import Blueprint, jsonify, request
-from werkzeug.utils import secure_filename
+from fastapi import APIRouter, UploadFile, Form, HTTPException
+from fastapi.responses import Response
+from sse_starlette.sse import EventSourceResponse
+from typing import AsyncGenerator, Dict, Any
+import json
+import asyncio
 from backend.services.scripts.takserver.takserver_installer import TakServerInstaller
 from backend.services.scripts.takserver.check_status import TakServerStatus
 from backend.services.scripts.takserver.takserver_uninstaller import TakServerUninstaller
 import os
 from backend.config.logging_config import configure_logging
-from flask_sse import sse
+import time
 
 # Setup basic logging
 logger = configure_logging(__name__)
 
-# Blueprint setup
-takserver_bp = Blueprint('takserver', __name__)
+# Router setup
+takserver = APIRouter()
 status_checker = TakServerStatus()
+
+# Global state for SSE events
+_latest_operation_status: Dict[str, Any] = {}
+_latest_install_status: Dict[str, Any] = {}
+_latest_uninstall_status: Dict[str, Any] = {}
 
 def get_upload_path():
     base_dir = '/home/tak-manager'
@@ -20,107 +29,261 @@ def get_upload_path():
     os.makedirs(upload_dir, exist_ok=True)
     return upload_dir
 
-@takserver_bp.route('/install-takserver', methods=['POST'])
-def install_takserver():
+async def server_status_generator() -> AsyncGenerator[Dict[str, Any], None]:
+    """Generate TAK server status events (installation and running state)."""
+    last_status = None
+    while True:
+        try:
+            status = await status_checker.get_status()
+            status_data = {
+                "isInstalled": status["isInstalled"],
+                "isRunning": status["isRunning"],
+                "version": status["version"]
+            }
+            
+            # Only emit if status has changed
+            if status_data != last_status:
+                event_data = {
+                    "event": "server-status",
+                    "data": json.dumps(status_data)
+                }
+                logger.debug(f"Sending server status SSE: {event_data}")
+                last_status = status_data
+                yield event_data
+        except Exception as e:
+            logger.error(f"Error generating server status: {str(e)}")
+            error_data = {
+                "isInstalled": False,
+                "isRunning": False,
+                "version": "Error",
+                "error": str(e)
+            }
+            if error_data != last_status:
+                event_data = {
+                    "event": "server-status",
+                    "data": json.dumps(error_data)
+                }
+                logger.debug(f"Sending error server status SSE: {event_data}")
+                last_status = error_data
+                yield event_data
+        await asyncio.sleep(1)  # Check every second
+
+async def operation_status_generator() -> AsyncGenerator[Dict[str, Any], None]:
+    """Generate container operation status events (start/stop/restart progress)."""
+    last_status = None
+    while True:
+        if _latest_operation_status and _latest_operation_status != last_status:
+            event_data = {
+                "event": "operation-status",
+                "data": json.dumps(_latest_operation_status)
+            }
+            logger.debug(f"Sending operation status SSE: {event_data}")
+            last_status = _latest_operation_status.copy()
+            yield event_data
+        await asyncio.sleep(1)  # Check every second
+
+async def install_status_generator() -> AsyncGenerator[Dict[str, Any], None]:
+    """Generate installation status events (progress, terminal output)."""
+    last_status = None
+    while True:
+        if _latest_install_status and _latest_install_status != last_status:
+            # Don't mark Docker output as errors if ignore_errors is True
+            if _latest_install_status.get("type") == "terminal" and not _latest_install_status.get("isError", False):
+                _latest_install_status["isError"] = False
+            
+            event_data = {
+                "event": "install-status", 
+                "data": json.dumps(_latest_install_status)
+            }
+            logger.debug(f"Sending install status SSE: {event_data}")
+            last_status = _latest_install_status.copy()
+            yield event_data
+        await asyncio.sleep(0)
+
+async def uninstall_status_generator() -> AsyncGenerator[Dict[str, Any], None]:
+    """Generate uninstallation status events (progress, terminal output)."""
+    last_status = None
+    while True:
+        if _latest_uninstall_status and _latest_uninstall_status != last_status:
+            # Don't mark Docker output as errors if ignore_errors is True
+            if _latest_uninstall_status.get("type") == "terminal" and not _latest_uninstall_status.get("isError", False):
+                _latest_uninstall_status["isError"] = False
+            
+            event_data = {
+                "event": "uninstall-status",
+                "data": json.dumps(_latest_uninstall_status)
+            }
+            logger.debug(f"Sending uninstall status SSE: {event_data}")
+            last_status = _latest_uninstall_status.copy()
+            yield event_data
+        await asyncio.sleep(0.1)  # Check every 100ms for more responsive updates
+
+@takserver.get('/server-status-stream')
+async def server_status_stream():
+    """SSE endpoint for TAK server installation and running state."""
+    return EventSourceResponse(server_status_generator())
+
+@takserver.get('/operation-status-stream')
+async def operation_status_stream():
+    """SSE endpoint for container operation status updates."""
+    return EventSourceResponse(operation_status_generator())
+
+@takserver.get('/install-status-stream')
+async def install_status_stream():
+    """SSE endpoint for installation progress and terminal output."""
+    return EventSourceResponse(install_status_generator())
+
+@takserver.get('/uninstall-status-stream')
+async def uninstall_status_stream():
+    """SSE endpoint for uninstallation progress and terminal output."""
+    return EventSourceResponse(uninstall_status_generator())
+
+@takserver.post('/install-takserver')
+async def install_takserver(
+    docker_zip_file: UploadFile,
+    postgres_password: str = Form(...),
+    certificate_password: str = Form(...),
+    organization: str = Form(...),
+    state: str = Form(...),
+    city: str = Form(...),
+    organizational_unit: str = Form(...),
+    name: str = Form(...)
+):
+    logger.debug("Starting TAK server installation")
+    logger.debug(f"Received file: {docker_zip_file.filename}")
+    logger.debug(f"Installation parameters - Organization: {organization}, State: {state}, City: {city}, Unit: {organizational_unit}, Name: {name}")
+    
     try:
-        if 'docker_zip_file' not in request.files:
-            return '', 400
-
-        file = request.files['docker_zip_file']
-        if file.filename == '':
-            return '', 400
-
         # Save file
         upload_dir = get_upload_path()
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(upload_dir, filename)
-        file.save(file_path)
+        file_path = os.path.join(upload_dir, docker_zip_file.filename)
+        logger.debug(f"Saving uploaded file to: {file_path}")
+        
+        # Save uploaded file
+        with open(file_path, "wb") as buffer:
+            content = await docker_zip_file.read()
+            buffer.write(content)
+        logger.debug("File saved successfully")
 
-        # Create installer
+        # Create installer with SSE event emitter
+        async def emit_event(data: Dict[str, Any]):
+            global _latest_install_status
+            if _latest_install_status != data:  # Only emit if the data has changed
+                _latest_install_status = data
+                logger.debug(f"Emitting install status event: {data}")
+
+        logger.debug("Creating TAK Server installer")
         installer = TakServerInstaller(
             docker_zip_path=file_path,
-            postgres_password=request.form['postgres_password'],
-            certificate_password=request.form['certificate_password'],
-            organization=request.form['organization'],
-            state=request.form['state'],
-            city=request.form['city'],
-            organizational_unit=request.form['organizational_unit'],
-            name=request.form['name']
+            postgres_password=postgres_password,
+            certificate_password=certificate_password,
+            organization=organization,
+            state=state,
+            city=city,
+            organizational_unit=organizational_unit,
+            name=name,
+            emit_event=emit_event
         )
 
-        try:
-            success = installer.main()
-            if success:
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-                return '', 200
-            return '', 500
+        logger.debug("Starting installation process")
+        success = await installer.main()
+        logger.debug(f"Installation completed with success={success}")
+        
+        # Clean up uploaded file regardless of success
+        if os.path.exists(file_path):
+            logger.debug(f"Cleaning up uploaded file: {file_path}")
+            os.remove(file_path)
             
-        except Exception as install_error:
-            logger.error(f"Installation failed, attempting rollback: {str(install_error)}")
-            try:
-                installer.rollback_takserver_installation()
-            except Exception as rollback_error:
-                logger.error(f"Rollback failed: {str(rollback_error)}")
-            if os.path.exists(file_path):
-                os.remove(file_path)
-            raise install_error
+        if not success:
+            logger.error("Installation failed")
+            raise HTTPException(status_code=500, detail="Installation failed")
+            
+        logger.debug("Installation completed successfully")
+        return Response(status_code=200)
 
     except Exception as e:
         logger.error(f"Installation error: {str(e)}")
-        return '', 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@takserver_bp.route('/takserver-status', methods=['GET'])
-def get_takserver_status():
+@takserver.get('/takserver-status')
+async def get_takserver_status():
+    """Get current TAK server status."""
     try:
-        status_checker.get_status()
-        return '', 204
+        status = await status_checker.get_status()
+        return status
     except Exception as e:
         logger.error(f"Status check error: {str(e)}")
-        return '', 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@takserver_bp.route('/stop-installation', methods=['POST'])
-def stop_installation():
+@takserver.post('/takserver-start')
+async def start_takserver():
+    """Start TAK server containers."""
     try:
-        # Create installer instance
-        installer = TakServerInstaller(
-            docker_zip_path='',  # Not needed for rollback
-            postgres_password='',
-            certificate_password='',
-            organization='',
-            state='',
-            city='',
-            organizational_unit='',
-            name=''
-        )
-        # Stop installation and perform rollback
-        installer.stop_installation()
-        return '', 200
+        result = await status_checker.start_containers()
+        global _latest_operation_status
+        _latest_operation_status = result
+        if result["status"] == "error":
+            raise HTTPException(status_code=500, detail=result["message"])
+        return result
     except Exception as e:
-        logger.error(f"Stop installation error: {str(e)}")
-        return '', 500
+        logger.error(f"Start error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@takserver_bp.route('/takserver-start', methods=['POST'])
-def start_takserver():
-    status_checker.start_containers()
-    return '', 204
-
-@takserver_bp.route('/takserver-stop', methods=['POST']) 
-def stop_takserver():
-    status_checker.stop_containers()
-    return '', 204
-
-@takserver_bp.route('/takserver-restart', methods=['POST'])
-def restart_takserver():
-    status_checker.restart_containers()
-    return '', 204
-
-@takserver_bp.route('/uninstall-takserver', methods=['POST'])
-def uninstall_takserver():
+@takserver.post('/takserver-stop')
+async def stop_takserver():
+    """Stop TAK server containers."""
     try:
-        uninstaller = TakServerUninstaller()
-        success = uninstaller.uninstall()
-        return '', 200 if success else 500
+        result = await status_checker.stop_containers()
+        global _latest_operation_status
+        _latest_operation_status = result
+        if result["status"] == "error":
+            raise HTTPException(status_code=500, detail=result["message"])
+        return result
+    except Exception as e:
+        logger.error(f"Stop error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@takserver.post('/takserver-restart')
+async def restart_takserver():
+    """Restart TAK server containers."""
+    try:
+        result = await status_checker.restart_containers()
+        global _latest_operation_status
+        _latest_operation_status = result
+        if result["status"] == "error":
+            raise HTTPException(status_code=500, detail=result["message"])
+        return result
+    except Exception as e:
+        logger.error(f"Restart error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@takserver.post('/uninstall-takserver')
+async def uninstall_takserver():
+    """Uninstall TAK server."""
+    logger.debug("Starting TAK server uninstallation")
+    
+    try:
+        # Create uninstaller with SSE event emitter
+        async def emit_event(data: Dict[str, Any]):
+            global _latest_uninstall_status
+            if _latest_uninstall_status != data:  # Only emit if the data has changed
+                _latest_uninstall_status = data
+                logger.debug(f"Emitting uninstall status event: {data}")
+
+        logger.debug("Creating TAK Server uninstaller")
+        uninstaller = TakServerUninstaller(emit_event=emit_event)
+
+        logger.debug("Starting uninstallation process")
+        success = await uninstaller.uninstall()
+        logger.debug(f"Uninstallation completed with success={success}")
+            
+        if not success:
+            logger.error("Uninstallation failed")
+            raise HTTPException(status_code=500, detail="Uninstallation failed")
+            
+        logger.debug("Uninstallation completed successfully")
+        return Response(status_code=200)
+
     except Exception as e:
         logger.error(f"Uninstallation error: {str(e)}")
-        return '', 500
+        raise HTTPException(status_code=500, detail=str(e))

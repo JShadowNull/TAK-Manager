@@ -2,7 +2,8 @@ import xml.etree.ElementTree as ET
 import os
 from pathlib import Path
 from backend.services.helpers.run_command import RunCommand
-from flask_sse import sse
+from typing import Dict, Any, AsyncGenerator, Optional, Callable
+import json
 import logging
 import shutil
 from xml.dom import minidom
@@ -10,31 +11,84 @@ import zipfile
 import tempfile
 import uuid
 import time
+import asyncio
 
 logger = logging.getLogger(__name__)
 
 class DataPackage:
-    def __init__(self):
+    def __init__(self, emit_event: Optional[Callable[[Dict[str, Any]], None]] = None):
         self.run_command = RunCommand()
         self.stop_event = False
+        self.emit_event = emit_event
 
     def stop(self):
         """Stop the current configuration process"""
         self.stop_event = True
-        sse.publish(
-            {
-                'status': 'stopped',
-                'message': 'Configuration stopped by user',
-                'isInProgress': False,
-                'timestamp': time.time()
-            },
-            type='data_package_status'
+        self._create_event(
+            'stop',
+            'stopped',
+            'Configuration stopped by user',
+            {'isInProgress': False}
         )
 
     def check_stop(self):
         """Check if the operation should be stopped"""
         if self.stop_event:
             raise Exception("Configuration stopped by user")
+
+    def _create_event(self, operation_type: str, status: str, message: str, details: dict = None) -> Dict[str, Any]:
+        """Create an event object for SSE"""
+        event_data = {
+            'status': status,
+            'operation': operation_type,
+            'message': message,
+            'details': details or {},
+            'timestamp': time.time()
+        }
+        logger.debug(f"Created operation status event: {event_data}")
+        if self.emit_event:
+            self.emit_event(event_data)
+        return event_data
+
+    def _create_files_event(self, files: list) -> Dict[str, Any]:
+        """Create a files update event"""
+        event_data = {
+            'status': 'update',
+            'type': 'files_update',
+            'files': files,
+            'timestamp': time.time()
+        }
+        logger.debug(f"Created files update event")
+        if self.emit_event:
+            self.emit_event(event_data)
+        return event_data
+
+    async def status_generator(self) -> AsyncGenerator[Dict[str, Any], None]:
+        """Generate data package status events."""
+        while True:
+            try:
+                files = self.get_certificate_files()
+                event_data = {
+                    'type': 'data_package_status',
+                    'files': files,
+                    'timestamp': time.time()
+                }
+                yield {
+                    "event": "data_package_status",
+                    "data": json.dumps(event_data)
+                }
+            except Exception as e:
+                logger.error(f"Error generating data package status: {str(e)}")
+                yield {
+                    "event": "data_package_status",
+                    "data": json.dumps({
+                        'type': 'error',
+                        'message': f'Error getting data package status: {str(e)}',
+                        'files': [],
+                        'timestamp': time.time()
+                    })
+                }
+            await asyncio.sleep(5)  # Update every 5 seconds
 
     def get_default_working_directory(self):
         """Get the working directory from environment variable."""
@@ -132,27 +186,21 @@ class DataPackage:
         # Write to file
         config_pref_path = os.path.join(temp_dir, 'initial.pref')
         
-        sse.publish(
-            {
-                'status': 'in_progress',
-                'message': f'Creating config file at: {config_pref_path}',
-                'isInProgress': True,
-                'timestamp': time.time()
-            },
-            type='data_package_status'
+        self._create_event(
+            'config',
+            'in_progress',
+            f'Creating config file at: {config_pref_path}',
+            {'isInProgress': True}
         )
         
         with open(config_pref_path, 'w', encoding='utf-8') as file:
             file.write(xml_content)
             
-        sse.publish(
-            {
-                'status': 'in_progress',
-                'message': 'Config file created successfully',
-                'isInProgress': True,
-                'timestamp': time.time()
-            },
-            type='data_package_status'
+        self._create_event(
+            'config',
+            'in_progress',
+            'Config file created successfully',
+            {'isInProgress': True}
         )
 
     def generate_uuid(self):
@@ -267,21 +315,15 @@ class DataPackage:
         )
         return version
 
-    def list_cert_files(self, container_name):
-        """
-        Lists certificate files in the specified container's /opt/tak/certs/files directory.
-        Returns list of filenames.
-        """
+    def list_cert_files(self, container_name) -> list:
+        """Lists certificate files in the specified container's /opt/tak/certs/files directory."""
         self.check_stop()
         try:
-            sse.publish(
-                {
-                    'status': 'in_progress',
-                    'message': f'Listing certificate files from container {container_name}...',
-                    'isInProgress': True,
-                    'timestamp': time.time()
-                },
-                type='data_package_status'
+            self._create_event(
+                'files',
+                'in_progress',
+                f'Listing certificate files from container {container_name}...',
+                {'isInProgress': True}
             )
 
             # First check if the directory exists
@@ -292,7 +334,6 @@ class DataPackage:
             self.run_command.emit_log_output(f"Executing command: {' '.join(check_dir_command)}", 'data-package')
             try:
                 result = self.run_command.run_command(check_dir_command, channel='data-package', capture_output=True)
-                # Handle both string and bytes output
                 output = result.stdout.decode() if isinstance(result.stdout, bytes) else result.stdout
                 if 'exists' not in output:
                     raise Exception("Certificate directory not found in container")
@@ -307,48 +348,43 @@ class DataPackage:
             self.run_command.emit_log_output(f"Executing command: {' '.join(list_files_command)}", 'data-package')
             result = self.run_command.run_command(list_files_command, channel='data-package', capture_output=True)
             
-            # Handle both string and bytes output
             output = result.stdout.decode() if isinstance(result.stdout, bytes) else result.stdout
             
             if output:
-                # Split the output into lines and filter empty lines
                 cert_files = [line.strip() for line in output.split('\n') if line.strip()]
                 
-                sse.publish(
+                self._create_event(
+                    'files',
+                    'in_progress',
+                    f'Found certificate files: {cert_files}',
                     {
-                        'status': 'in_progress',
-                        'message': f'Found certificate files: {cert_files}',
                         'isInProgress': True,
-                        'timestamp': time.time(),
                         'files': cert_files
-                    },
-                    type='data_package_status'
+                    }
                 )
                 return cert_files
             else:
-                sse.publish(
+                self._create_event(
+                    'files',
+                    'in_progress',
+                    'No certificate files found',
                     {
-                        'status': 'in_progress',
-                        'message': 'No certificate files found',
                         'isInProgress': True,
-                        'timestamp': time.time(),
                         'files': []
-                    },
-                    type='data_package_status'
+                    }
                 )
                 return []
 
         except Exception as e:
             error_msg = f"Error listing certificate files: {str(e)}"
-            sse.publish(
+            self._create_event(
+                'files',
+                'error',
+                error_msg,
                 {
-                    'status': 'error',
-                    'message': error_msg,
                     'isInProgress': False,
-                    'timestamp': time.time(),
                     'error': str(e)
-                },
-                type='data_package_status'
+                }
             )
             raise Exception(error_msg)
 
@@ -370,14 +406,11 @@ class DataPackage:
         if os.path.exists(zip_path):
             os.remove(zip_path)
         
-        sse.publish(
-            {
-                'status': 'in_progress',
-                'message': f'Creating data package: {zip_path}',
-                'isInProgress': True,
-                'timestamp': time.time()
-            },
-            type='data_package_status'
+        self._create_event(
+            'config',
+            'in_progress',
+            f'Creating data package: {zip_path}',
+            {'isInProgress': True}
         )
         
         try:
@@ -393,78 +426,60 @@ class DataPackage:
                         arc_name = os.path.relpath(file_path, temp_dir).replace(os.sep, '/')
                         zipf.write(file_path, arc_name)
 
-            sse.publish(
-                {
-                    'status': 'in_progress',
-                    'message': 'Data package created successfully',
-                    'isInProgress': True,
-                    'timestamp': time.time()
-                },
-                type='data_package_status'
+            self._create_event(
+                'config',
+                'in_progress',
+                'Data package created successfully',
+                {'isInProgress': True}
             )
                          
         except Exception as e:
             error_msg = f'Error creating data package: {str(e)}'
-            sse.publish(
+            self.run_command.emit_log_output(
+                error_msg,
+                'data-package'
+            )
+            self._create_event(
+                'config',
+                'error',
+                error_msg,
                 {
-                    'status': 'error',
-                    'message': error_msg,
                     'isInProgress': False,
-                    'timestamp': time.time(),
                     'error': str(e)
-                },
-                type='data_package_status'
+                }
             )
             raise
 
-    def get_certificate_files(self, channel: str = 'data-package'):
+    def get_certificate_files(self) -> list:
         """Get certificate files from the container"""
         try:
             version = self.read_version_txt()
             container_name = f"takserver-{version}"
             cert_files = self.list_cert_files(container_name)
             
-            # Emit the certificate files for the frontend
-            sse.publish(
-                {
-                    'event': 'certificate_files',
-                    'data': {
-                        'files': cert_files
-                    },
-                    'type': 'data_package_status'
-                }
-            )
+            # Create files update event
+            self._create_files_event(cert_files)
             
             return cert_files
 
         except Exception as e:
             error_msg = f"Error getting certificate files: {str(e)}"
             self.run_command.emit_log_output(
-                f'Error getting certificate files: {str(e)}',
-                channel='data-package'
+                error_msg,
+                'data-package'
             )
-            sse.publish(
+            self._create_event(
+                'files',
+                'error',
+                error_msg,
                 {
-                    'status': 'error',
-                    'message': error_msg,
-                    'isInProgress': False,
-                    'timestamp': time.time(),
-                    'error': str(e)
-                },
-                type='data_package_status'
-            )
-            sse.publish(
-                {
-                    'event': 'certificate_files',
-                    'data': {
-                        'files': []
-                    },
-                    'type': 'data_package_status'
+                    'error': str(e),
+                    'files': []
                 }
             )
             return []
 
-    def main(self, preferences_data, channel: str = 'data-package'):
+    def main(self, preferences_data) -> Dict[str, Any]:
         """Main function to handle data package configuration"""
         try:
             self.stop_event = False
@@ -472,14 +487,11 @@ class DataPackage:
             # Create a temporary directory for all operations
             with tempfile.TemporaryDirectory() as temp_dir:
                 # Emit operation started event
-                sse.publish(
-                    {
-                        'status': 'started',
-                        'message': 'Starting data package configuration...',
-                        'isInProgress': True,
-                        'timestamp': time.time()
-                    },
-                    type='data_package_status'
+                self._create_event(
+                    'config',
+                    'started',
+                    'Starting data package configuration...',
+                    {'isInProgress': True}
                 )
 
                 # Get zip name from preferences
@@ -502,26 +514,23 @@ class DataPackage:
                 preferences_data = {k: v for k, v in preferences_data.items() if not k.startswith('#')}
 
                 # Generate config file in temp directory
-                self.generate_config_pref(preferences_data, temp_dir, channel)
+                self.generate_config_pref(preferences_data, temp_dir)
                 
                 # Create manifest file in temp directory with all certificates
-                self.create_manifest_file(temp_dir, zip_name, ca_certs, client_certs, channel)
+                self.create_manifest_file(temp_dir, zip_name, ca_certs, client_certs)
                 
                 # Copy all certificates if any are present
                 if ca_certs or client_certs:
-                    self.copy_certificates_from_container(temp_dir, ca_certs, client_certs, channel)
+                    self.copy_certificates_from_container(temp_dir, ca_certs, client_certs)
                 
                 # Create final zip file from temp directory
-                self.create_zip_file(temp_dir, zip_name, channel)
+                self.create_zip_file(temp_dir, zip_name)
                 
-                sse.publish(
-                    {
-                        'status': 'completed',
-                        'message': 'Data package configuration completed successfully',
-                        'isInProgress': False,
-                        'timestamp': time.time()
-                    },
-                    type='data_package_status'
+                self._create_event(
+                    'config',
+                    'completed',
+                    'Data package configuration completed successfully',
+                    {'isInProgress': False}
                 )
                 
                 return {'status': 'Data package configuration completed successfully'}
@@ -529,17 +538,16 @@ class DataPackage:
         except Exception as e:
             error_msg = f'Error during configuration: {str(e)}'
             self.run_command.emit_log_output(
-                f'Error during configuration: {str(e)}',
-                channel='data-package'
+                error_msg,
+                'data-package'
             )
-            sse.publish(
+            self._create_event(
+                'config',
+                'error',
+                error_msg,
                 {
-                    'status': 'error',
-                    'message': error_msg,
                     'isInProgress': False,
-                    'timestamp': time.time(),
                     'error': str(e)
-                },
-                type='data_package_status'
+                }
             )
             return {'error': error_msg}

@@ -1,172 +1,70 @@
 # backend/services/scripts/docker_manager.py
 
 import docker
-from flask_sse import sse
+from typing import Dict, Any, AsyncGenerator, Optional, Callable
+import json
+import asyncio
 from backend.config.logging_config import configure_logging
 import time
+from sse_starlette.sse import ServerSentEvent
 
-# Configure logging using centralized config
 logger = configure_logging(__name__)
 
 class DockerManager:
     def __init__(self):
         self.client = docker.from_env()
+        self._operation_states = {}  # Track operations by container name
 
-    def _send_operation_status(self, operation_type: str, status: str, message: str, details: dict = None, channel: str = 'docker'):
-        """Send operation status updates via SSE"""
-        event_data = {
-            'status': status,
-            'operation': operation_type,
-            'message': message,
-            'details': details or {},
+    def get_container_status(self):
+        """Get current container list with operation states"""
+        containers = []
+        for container in self.client.containers.list(all=True):
+            container_info = {
+                'id': container.id,
+                'name': container.name,
+                'status': container.status,
+                'state': container.status,
+                'running': container.status == 'running',
+                'image': container.image.tags[0] if container.image.tags else 'none',
+                'operation': self._operation_states.get(container.name)
+            }
+            containers.append(container_info)
+
+        return {
+            'type': 'container_status',
+            'containers': containers,
             'timestamp': time.time()
         }
-        logger.debug(f"Sending operation status SSE event: {event_data}")
-        sse.publish(event_data, type='docker_status')
 
-    def start_container(self, container_name: str, channel: str = 'docker'):
-        """Start a Docker container by its name."""
+    async def status_generator(self):
+        """Generate container status events every 5 seconds"""
+        while True:
+            yield self.get_container_status()
+            await asyncio.sleep(5)
+
+    async def start_container(self, container_name: str):
+        """Start a container and track its operation state"""
         try:
-            # Start operation status
-            self._send_operation_status(
-                'start',
-                'in_progress',
-                f"Starting container {container_name}...",
-                {'container': container_name}
-            )
-
             container = self.client.containers.get(container_name)
+            self._operation_states[container_name] = {'action': 'start', 'status': 'in_progress'}
             container.start()
-            
-            # Send success status
-            success_msg = f"Container {container_name} started successfully."
-            self._send_operation_status(
-                'start',
-                'completed',
-                success_msg,
-                {'container': container_name}
-            )
-            
-            # Send updated container list
-            self._send_containers_update()
-            return {"status": success_msg}
-            
-        except docker.errors.NotFound:
-            error = f"Container {container_name} not found"
-            self._send_operation_status(
-                'start',
-                'error',
-                error,
-                {'container': container_name, 'error': error}
-            )
-            return {"error": error}
-        except docker.errors.APIError as e:
-            error = f"Error starting container {container_name}: {str(e)}"
-            self._send_operation_status(
-                'start',
-                'error',
-                error,
-                {'container': container_name, 'error': str(e)}
-            )
-            return {"error": error}
+            self._operation_states[container_name] = {'action': 'start', 'status': 'completed'}
+            del self._operation_states[container_name]
         except Exception as e:
-            error = f"Unexpected error starting container: {str(e)}"
-            self._send_operation_status(
-                'start',
-                'error',
-                error,
-                {'container': container_name, 'error': str(e)}
-            )
-            return {"error": error}
+            self._operation_states[container_name] = {'action': 'start', 'status': 'error', 'error': str(e)}
+            del self._operation_states[container_name]
+            raise
 
-    def stop_container(self, container_name: str, channel: str = 'docker'):
-        """Stop a Docker container by its name."""
+    async def stop_container(self, container_name: str):
+        """Stop a container and track its operation state"""
         try:
-            # Start operation status
-            self._send_operation_status(
-                'stop',
-                'in_progress',
-                f"Stopping container {container_name}...",
-                {'container': container_name}
-            )
-
             container = self.client.containers.get(container_name)
+            self._operation_states[container_name] = {'action': 'stop', 'status': 'in_progress'}
             container.stop()
-            
-            # Send success status
-            success_msg = f"Container {container_name} stopped successfully."
-            self._send_operation_status(
-                'stop',
-                'completed',
-                success_msg,
-                {'container': container_name}
-            )
-            
-            # Send updated container list
-            self._send_containers_update()
-            return {"status": success_msg}
-            
-        except docker.errors.NotFound:
-            error = f"Container {container_name} not found"
-            self._send_operation_status(
-                'stop',
-                'error',
-                error,
-                {'container': container_name, 'error': error}
-            )
-            return {"error": error}
-        except docker.errors.APIError as e:
-            error = f"Error stopping container {container_name}: {str(e)}"
-            self._send_operation_status(
-                'stop',
-                'error',
-                error,
-                {'container': container_name, 'error': str(e)}
-            )
-            return {"error": error}
-
-    def list_containers(self):
-        """List Docker containers (running and non-running) with their status."""
-        try:
-            containers = self.client.containers.list(all=True)
-            container_list = []
-            for container in containers:
-                state = container.attrs['State']
-                container_list.append({
-                    "id": container.id,
-                    "name": container.name,
-                    "status": container.status,
-                    "state": state['Status'],
-                    "running": state['Running'],
-                    "started_at": state['StartedAt'],
-                    "finished_at": state['FinishedAt'],
-                    "image": container.image.tags[0] if container.image.tags else "none"
-                })
-            return container_list
-        except docker.errors.APIError as e:
-            logger.error(f"Error listing containers: {str(e)}")
-            return []
-
-    def _send_containers_update(self, channel: str = 'docker'):
-        """Send updated container list via SSE"""
-        try:
-            containers = self.list_containers()
-            event_data = {
-                'type': 'container_update',
-                'containers': containers,
-                'timestamp': time.time()
-            }
-            logger.debug(f"Sending container update SSE event: {event_data}")
-            sse.publish(event_data, type='docker_status')
+            self._operation_states[container_name] = {'action': 'stop', 'status': 'completed'}
+            del self._operation_states[container_name]
         except Exception as e:
-            error_msg = f"Error sending containers update: {str(e)}"
-            logger.error(error_msg)
-            error_data = {
-                'type': 'error',
-                'message': f'Error getting container list: {str(e)}',
-                'containers': [],
-                'timestamp': time.time()
-            }
-            logger.debug(f"Sending error SSE event: {error_data}")
-            sse.publish(error_data, type='docker_status')
+            self._operation_states[container_name] = {'action': 'stop', 'status': 'error', 'error': str(e)}
+            del self._operation_states[container_name]
+            raise
 

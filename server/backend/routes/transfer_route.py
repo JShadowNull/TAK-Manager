@@ -1,285 +1,134 @@
 # Path: backend/routes/transfer_route.py
 
-from flask import Blueprint, jsonify, request
-from werkzeug.utils import secure_filename
-from backend.services.scripts.transfer.transfer import RapidFileTransfer
-from backend.services.scripts.system.thread_manager import ThreadManager
+from fastapi import APIRouter, UploadFile, Form, HTTPException
+from fastapi.responses import Response
+from sse_starlette.sse import EventSourceResponse
+from typing import Dict, Any, AsyncGenerator
+import json
+import asyncio
 import os
-import time
+from backend.services.scripts.transfer.transfer import RapidFileTransfer
+from backend.config.logging_config import configure_logging
 
-# ============================================================================
-# Blueprint and Global Variables
-# ============================================================================
-# Create blueprint for Transfer routes
-transfer_bp = Blueprint('transfer', __name__, url_prefix='/api/transfer')
+# Setup basic logging
+logger = configure_logging(__name__)
 
-# Initialize managers
-thread_manager = ThreadManager()
-rapid_file_transfer = RapidFileTransfer()
+# Router setup
+transfer = APIRouter()
 
-# ============================================================================
-# Helper Functions
-# ============================================================================
-def execute_transfer_operation(operation_func):
-    """Execute a transfer operation in a background thread"""
-    def operation_thread():
-        try:
-            result = operation_func()
-            if result and result.get('error'):
-                rapid_file_transfer.emit_transfer_update(
-                    status_type="error",
-                    error=result['error']
-                )
-                return {'success': False, 'message': result['error']}
-            return {'success': True, 'message': result.get('status', 'Operation completed successfully')}
-        except Exception as e:
-            rapid_file_transfer.emit_transfer_update(
-                status_type="error",
-                error=str(e)
-            )
-            return {'success': False, 'message': str(e)}
+# Global state for SSE events
+_latest_transfer_status: Dict[str, Any] = {}
+_latest_device_status: Dict[str, Any] = {}
+_latest_file_status: Dict[str, Any] = {}
 
-    # Spawn the operation in a background thread using thread_manager
-    thread_manager.spawn(operation_func=operation_thread)
-    return {'message': 'Operation initiated successfully'}
+# Global transfer manager instance
+transfer_manager = None
 
-# ============================================================================
-# HTTP Routes
-# ============================================================================
-@transfer_bp.route('/start_monitoring', methods=['POST'])
-def start_monitoring():
-    """Start device monitoring"""
-    try:
-        def monitor_operation():
-            if not rapid_file_transfer.monitoring:
-                rapid_file_transfer.start_monitoring()
-                # Create and manage the monitoring thread
-                thread_manager.spawn(
-                    operation_func=rapid_file_transfer.monitor_devices
-                )
-                return {'status': 'Device monitoring started'}
-            return {'status': 'Monitoring already active'}
-
-        return jsonify(execute_transfer_operation(monitor_operation))
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@transfer_bp.route('/stop_monitoring', methods=['POST'])
-def stop_monitoring():
-    """Stop device monitoring"""
-    try:
-        def stop_operation():
-            rapid_file_transfer.stop_monitoring()
-            return {'status': 'Device monitoring stopped'}
-
-        return jsonify(execute_transfer_operation(stop_operation))
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@transfer_bp.route('/start_transfer', methods=['POST'])
-def start_transfer():
-    """Start transfer for all connected devices"""
-    try:
-        def transfer_operation():
-            # Get list of devices that need transfer
-            device_ids = rapid_file_transfer.start_transfer_all_devices()
-            
-            if device_ids:
-                # Create transfer threads for each device
-                for device_id in device_ids:
-                    thread_manager.spawn(
-                        operation_func=lambda: rapid_file_transfer.start_transfer(device_id)
-                    )
-                return {'status': f'Transfer started for {len(device_ids)} device(s)'}
-            return {'error': 'No devices available for transfer'}
-
-        return jsonify(execute_transfer_operation(transfer_operation))
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@transfer_bp.route('/stop_transfer', methods=['POST'])
-def stop_transfer():
-    """Stop all ongoing transfers"""
-    try:
-        def stop_operation():
-            rapid_file_transfer.stop_transfer()
-            return {'status': 'Transfer stopped'}
-
-        return jsonify(execute_transfer_operation(stop_operation))
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@transfer_bp.route('/get_status', methods=['GET'])
-def get_status():
-    """Get current transfer status"""
-    try:
-        def status_operation():
-            rapid_file_transfer.get_transfer_status()
-            return {'status': 'Status updated'}
-
-        return jsonify(execute_transfer_operation(status_operation))
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@transfer_bp.route('/get_devices', methods=['GET'])
-def get_devices():
-    """Get list of connected devices"""
-    try:
-        def devices_operation():
-            rapid_file_transfer.emit_connected_devices()
-            return {'status': 'Device list updated'}
-
-        return jsonify(execute_transfer_operation(devices_operation))
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@transfer_bp.route('/check_adb', methods=['GET'])
-def check_adb():
-    """Route to check if ADB is installed"""
-    try:
-        def check_operation():
-            try:
-                is_installed = rapid_file_transfer.check_adb_installed()
-                if is_installed:
-                    return {'status': 'ADB is already installed'}
-                return {'error': 'ADB is not installed'}
-            except Exception as e:
-                return {'error': str(e)}
-
-        return jsonify(execute_transfer_operation(check_operation))
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@transfer_bp.route('/install_adb', methods=['POST'])
-def install_adb():
-    """Route to install ADB if not installed"""    
-    try:
-        def install_operation():
-            try:
-                success = rapid_file_transfer.install_adb()
-                if not success:
-                    return {'error': 'Failed to install ADB'}
-                return {'status': 'ADB installed successfully'}
-            except Exception as e:
-                return {'error': str(e)}
-
-        return jsonify(execute_transfer_operation(install_operation))
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@transfer_bp.route('/upload_file', methods=['POST'])
-def upload_file():
-    """Handle file upload to temporary directory"""
-    try:
-        if 'file' not in request.files:
-            return jsonify({"error": "No file part"}), 400
+def get_transfer_manager():
+    global transfer_manager
+    if transfer_manager is None:
+        async def emit_event(data: Dict[str, Any]):
+            event_type = data.get('type', '')
+            if event_type == 'transfer_update':
+                global _latest_transfer_status
+                _latest_transfer_status = data.get('data', {})
+            elif event_type == 'device_update':
+                global _latest_device_status
+                _latest_device_status = data.get('data', {})
+            elif event_type == 'file_update':
+                global _latest_file_status
+                _latest_file_status = data.get('data', {})
         
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({"error": "No selected file"}), 400
-        
-        if file:
-            filename = secure_filename(file.filename)
-            file_path = os.path.join(rapid_file_transfer.temp_dir, filename)
-            
-            # Ensure temp directory exists
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
-            
-            def upload_operation():
-                try:
-                    file.save(file_path)
-                    rapid_file_transfer.emit_file_update('change', {
-                        'filename': filename,
-                        'action': 'uploaded'
-                    })
-                    return {'status': f'File {filename} uploaded successfully'}
-                except Exception as e:
-                    return {'error': str(e)}
+        transfer_manager = RapidFileTransfer(emit_event=emit_event)
+    return transfer_manager
 
-            return jsonify(execute_transfer_operation(upload_operation))
-        
-        return jsonify({"error": "Invalid file"}), 400
-        
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+async def transfer_status_generator() -> AsyncGenerator[Dict[str, Any], None]:
+    """Generate transfer status events."""
+    manager = get_transfer_manager()
+    async for event in manager.status_generator():
+        yield event
 
-@transfer_bp.route('/delete_file', methods=['POST'])
-def delete_file():
-    """Handle file deletion from temporary directory"""
+@transfer.get('/transfer-status-stream')
+async def transfer_status_stream():
+    """SSE endpoint for transfer status updates."""
+    return EventSourceResponse(transfer_status_generator())
+
+@transfer.post('/start-monitoring')
+async def start_monitoring():
+    """Start monitoring for connected devices."""
     try:
-        data = request.get_json()
-        if not data or 'filename' not in data:
-            return jsonify({"error": "No filename provided"}), 400
+        manager = get_transfer_manager()
+        manager.start_monitoring()
         
-        filename = data['filename']
-        file_path = os.path.join(rapid_file_transfer.temp_dir, filename)
+        # Start monitoring in background task
+        asyncio.create_task(manager.monitor_devices())
         
-        def delete_operation():
-            try:
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-                    rapid_file_transfer.emit_file_update('change', {
-                        'filename': filename,
-                        'action': 'deleted'
-                    })
-                    return {'status': f'File {filename} deleted successfully'}
-                return {'error': 'File not found'}
-            except Exception as e:
-                return {'error': str(e)}
-
-        return jsonify(execute_transfer_operation(delete_operation))
-        
+        return Response(status_code=200)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"Error starting monitoring: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@transfer_bp.route('/cleanup', methods=['POST'])
-def cleanup_temp():
-    """Clean up temporary directory and states only if transfer is not running"""
+@transfer.post('/stop-monitoring')
+async def stop_monitoring():
+    """Stop monitoring for connected devices."""
     try:
-        def cleanup_operation():
-            try:
-                if not rapid_file_transfer.is_transfer_running:
-                    # Remove all files in temp directory
-                    for filename in os.listdir(rapid_file_transfer.temp_dir):
-                        file_path = os.path.join(rapid_file_transfer.temp_dir, filename)
-                        if os.path.isfile(file_path):
-                            os.remove(file_path)
-                    
-                    # Reset all states
-                    rapid_file_transfer.device_progress.clear()
-                    rapid_file_transfer.transferred_files.clear()
-                    rapid_file_transfer.device_states.clear()
-                    
-                    rapid_file_transfer.emit_file_update('list', [])
-                    return {'status': 'Cleanup completed successfully'}
-                return {'error': 'Cleanup skipped - transfer is running'}
-            except Exception as e:
-                return {'error': str(e)}
-
-        return jsonify(execute_transfer_operation(cleanup_operation))
-        
+        manager = get_transfer_manager()
+        manager.stop_monitoring()
+        return Response(status_code=200)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"Error stopping monitoring: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@transfer_bp.route('/get_files', methods=['GET'])
-def get_files():
-    """Get list of files in temporary directory"""
+@transfer.post('/start-transfer')
+async def start_transfer():
+    """Start file transfer to all connected devices."""
     try:
-        def list_operation():
-            try:
-                files = []
-                if os.path.exists(rapid_file_transfer.temp_dir):
-                    files = [f for f in os.listdir(rapid_file_transfer.temp_dir) 
-                            if os.path.isfile(os.path.join(rapid_file_transfer.temp_dir, f))]
-                
-                rapid_file_transfer.emit_file_update('list', files)
-                return {'status': 'success', 'files': files}
-            except Exception as e:
-                return {'error': str(e)}
-
-        return jsonify(execute_transfer_operation(list_operation))
+        manager = get_transfer_manager()
+        device_ids = manager.start_transfer_all_devices()
         
+        if not device_ids:
+            raise HTTPException(status_code=400, detail="No connected devices found or no files to transfer")
+        
+        # Start transfer for each device in background tasks
+        for device_id in device_ids:
+            asyncio.create_task(manager.start_transfer(device_id))
+        
+        return Response(status_code=200)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"Error starting transfer: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@transfer.post('/stop-transfer')
+async def stop_transfer():
+    """Stop all active transfers."""
+    try:
+        manager = get_transfer_manager()
+        manager.stop_transfer()
+        return Response(status_code=200)
+    except Exception as e:
+        logger.error(f"Error stopping transfer: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@transfer.get('/transfer-status')
+async def get_transfer_status():
+    """Get current transfer status."""
+    try:
+        manager = get_transfer_manager()
+        manager.get_transfer_status()
+        return _latest_transfer_status
+    except Exception as e:
+        logger.error(f"Error getting transfer status: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@transfer.get('/connected-devices')
+async def get_connected_devices():
+    """Get list of currently connected devices."""
+    try:
+        manager = get_transfer_manager()
+        manager.emit_connected_devices()
+        return _latest_device_status
+    except Exception as e:
+        logger.error(f"Error getting connected devices: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 

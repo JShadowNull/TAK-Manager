@@ -1,12 +1,18 @@
 import React from 'react';
-import { TakServerState } from '../types';
+
+interface TakServerState {
+  isInstalled: boolean;
+  isRunning: boolean;
+  version?: string;
+  error?: string | null;
+}
 
 interface StatusDisplayProps {
   takState: TakServerState;
-  operationError?: string;
+  error?: string;
 }
 
-const StatusDisplay: React.FC<StatusDisplayProps> = ({ takState, operationError }) => (
+const StatusDisplay: React.FC<StatusDisplayProps> = ({ takState, error }) => (
   <div className="mb-4">
     <div className="flex flex-col gap-1">
       <p className="text-sm flex items-center gap-2">
@@ -35,9 +41,9 @@ const StatusDisplay: React.FC<StatusDisplayProps> = ({ takState, operationError 
         </p>
       )}
     </div>
-    {operationError && (
+    {error && (
       <p className="text-sm text-destructive mt-2">
-        Error: {operationError}
+        Error: {error}
       </p>
     )}
   </div>

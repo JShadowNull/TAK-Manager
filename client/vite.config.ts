@@ -18,8 +18,8 @@ export default defineConfig({
     host: '0.0.0.0',
     port: process.env.FRONTEND_PORT ? parseInt(process.env.FRONTEND_PORT) : 5173,
     proxy: {
-      '/api': 'http://10.72.72.28:8989',
-      '/stream': 'http://10.72.72.28:8989',
+      '/api': 'http://127.0.0.1:8989',
+      '/stream': 'http://127.0.0.1:8989',
     }
   }
 }) 

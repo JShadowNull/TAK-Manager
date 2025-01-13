@@ -1,128 +1,137 @@
-import React, { useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from '../../shared/ui/shadcn/button';
-import { TakServerState } from '../types';
 import { LoadingSpinner } from '../../shared/ui/icons/LoadingSpinner';
-import useFetch from '../../shared/hooks/useFetch';
+import Popups from './Popups';
+
+interface TakServerState {
+  isInstalled: boolean;
+  isRunning: boolean;
+  version?: string;
+  error?: string | null;
+}
+
+type Operation = 'start' | 'stop' | 'restart' | 'install' | 'uninstall' | null;
 
 interface ControlButtonsProps {
   takState: TakServerState;
-  onUninstall: () => void;
-  onRestart: () => void;
-  onStartStop: () => void;
   onInstall: () => void;
-  disabled: boolean;
-  currentOperation: 'start' | 'stop' | 'restart' | 'uninstall' | 'install' | null;
-  setShowUninstallConfirm: (show: boolean) => void;
 }
 
 const ControlButtons: React.FC<ControlButtonsProps> = ({
   takState,
-  onRestart,
-  onStartStop,
-  onInstall,
-  disabled,
-  currentOperation,
-  setShowUninstallConfirm
+  onInstall
 }) => {
-  const { post } = useFetch();
+  const [currentOperation, setCurrentOperation] = useState<Operation>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showUninstallConfirm, setShowUninstallConfirm] = useState(false);
+  const [showUninstallProgress, setShowUninstallProgress] = useState(false);
 
-  // Start API call if there's a pending operation after refresh
-  useEffect(() => {
-    if (currentOperation === 'start') {
-      handleStart();
-    } else if (currentOperation === 'stop') {
-      handleStop();
-    } else if (currentOperation === 'restart') {
-      handleRestart();
-    }
-  }, []);
-
-  const handleStart = async () => {
+  const handleOperation = async (operation: Operation, endpoint: string) => {
     try {
-      onStartStop();
-      await post('/api/takserver/takserver-start');
+      setIsLoading(true);
+      setCurrentOperation(operation);
+      setError(null);
+
+      const response = await fetch(`/api/takserver/takserver-${endpoint}`, {
+        method: 'POST'
+      });
+
+      if (!response.ok) {
+        throw new Error(`Operation failed: ${response.statusText}`);
+      }
     } catch (error) {
-      console.error('Failed to start TAK server:', error);
-      onStartStop();
+      console.error(`Failed to ${operation} TAK server:`, error);
+      setError(error instanceof Error ? error.message : 'Operation failed');
+    } finally {
+      setIsLoading(false);
+      setCurrentOperation(null);
     }
   };
 
-  const handleStop = async () => {
-    try {
-      onStartStop();
-      await post('/api/takserver/takserver-stop');
-    } catch (error) {
-      console.error('Failed to stop TAK server:', error);
-      onStartStop();
-    }
+  const handleStart = () => handleOperation('start', 'start');
+  const handleStop = () => handleOperation('stop', 'stop');
+  const handleRestart = () => handleOperation('restart', 'restart');
+  
+  const handleUninstallClick = () => setShowUninstallConfirm(true);
+  
+  const handleUninstallConfirm = () => {
+    setShowUninstallConfirm(false);
+    setShowUninstallProgress(true);
   };
 
-  const handleRestart = async () => {
-    try {
-      onRestart();
-      await post('/api/takserver/takserver-restart');
-    } catch (error) {
-      console.error('Failed to restart TAK server:', error);
-      onRestart();
-    }
-  };
-
-  const handleUninstallClick = () => {
-    setShowUninstallConfirm(true);
+  const handleUninstallComplete = () => {
+    setShowUninstallProgress(false);
   };
 
   return (
-    <div className="flex gap-4">
-      {takState.isInstalled ? (
-        <>
-          {takState.isRunning ? (
-            <>
+    <>
+      <div className="flex gap-4">
+        {error && (
+          <p className="text-sm text-destructive mb-2">{error}</p>
+        )}
+        
+        {takState.isInstalled ? (
+          <>
+            {takState.isRunning ? (
+              <>
+                <Button
+                  onClick={handleStop}
+                  disabled={isLoading}
+                >
+                  {currentOperation === 'stop' && (
+                    <LoadingSpinner className="mr-2 h-4 w-4" />
+                  )}
+                  Stop
+                </Button>
+                <Button
+                  onClick={handleRestart}
+                  disabled={isLoading}
+                >
+                  {currentOperation === 'restart' && <LoadingSpinner className="mr-2 h-4 w-4" />}
+                  Restart
+                </Button>
+              </>
+            ) : (
               <Button
-                onClick={handleStop}
-                disabled={disabled}
+                onClick={handleStart}
+                disabled={isLoading}
               >
-                {currentOperation === 'stop' && (
+                {currentOperation === 'start' && (
                   <LoadingSpinner className="mr-2 h-4 w-4" />
                 )}
-                Stop
+                Start
               </Button>
-              <Button
-                onClick={handleRestart}
-                disabled={disabled}
-              >
-                {currentOperation === 'restart' && <LoadingSpinner className="mr-2 h-4 w-4" />}
-                Restart
-              </Button>
-            </>
-          ) : (
+            )}
             <Button
-              onClick={handleStart}
-              disabled={disabled}
+              onClick={handleUninstallClick}
+              disabled={isLoading}
+              variant="danger"
             >
-              {currentOperation === 'start' && (
-                <LoadingSpinner className="mr-2 h-4 w-4" />
-              )}
-              Start
+              {currentOperation === 'uninstall' && <LoadingSpinner className="mr-2 h-4 w-4" />}
+              Uninstall
             </Button>
-          )}
+          </>
+        ) : (
           <Button
-            onClick={handleUninstallClick}
-            disabled={disabled}
-            variant="danger"
+            onClick={onInstall}
+            disabled={isLoading}
           >
-            {currentOperation === 'uninstall' && <LoadingSpinner className="mr-2 h-4 w-4" />}
-            Uninstall
+            {currentOperation === 'install' && <LoadingSpinner className="mr-2 h-4 w-4" />}
+            Install
           </Button>
-        </>
-      ) : (
-        <Button
-          onClick={onInstall}
-          disabled={disabled}
-        >
-          Install
-        </Button>
-      )}
-    </div>
+        )}
+      </div>
+
+      <Popups
+        showUninstallConfirm={showUninstallConfirm}
+        onUninstallConfirmClose={() => setShowUninstallConfirm(false)}
+        onUninstallConfirm={handleUninstallConfirm}
+        onInstallComplete={() => {}}
+        onUninstallComplete={handleUninstallComplete}
+        showUninstallProgress={showUninstallProgress}
+      />
+    </>
   );
 };
 

@@ -1,17 +1,4 @@
 services:
-  redis:
-    image: redis:7.2-alpine
-    container_name: tak-manager-redis-${MODE:-dev}
-    restart: ${RESTART_POLICY}
-    env_file: .env
-    networks:
-      - tak-manager-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: ${HEALTHCHECK_INTERVAL}
-      timeout: ${HEALTHCHECK_TIMEOUT}
-      retries: ${HEALTHCHECK_RETRIES}
-
   app:
     image: tak-manager:1.0.0
     build:
@@ -38,8 +25,6 @@ services:
       interval: ${HEALTHCHECK_INTERVAL}
       timeout: ${HEALTHCHECK_TIMEOUT}
       retries: ${HEALTHCHECK_RETRIES}
-    depends_on:
-      - redis
 
 networks:
   tak-manager-network:

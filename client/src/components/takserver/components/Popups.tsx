@@ -1,118 +1,226 @@
-import React, { useEffect, useRef } from 'react';
-import { Button } from "../../shared/ui/shadcn/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "../../shared/ui/shadcn/dialog";
-import { Progress } from "../../shared/ui/shadcn/progress";
-import { ScrollArea } from "../../shared/ui/shadcn/scroll-area";
+import React, { useState, useEffect } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../shared/ui/shadcn/dialog';
+import { Progress } from '../../shared/ui/shadcn/progress';
+import { Button } from '../../shared/ui/shadcn/button';
+import { ScrollArea } from '../../shared/ui/shadcn/scroll-area';
 
 interface TerminalLine {
   message: string;
   isError: boolean;
-  timestamp: number | null;
+  timestamp: number;
 }
 
 interface PopupsProps {
-  // Installation props
-  showInstallProgress: boolean;
-  showInstallComplete: boolean;
-  installProgress: number;
-  installError?: string;
-  onInstallProgressClose: () => void;
-  onInstallComplete: () => void;
-  onMoveToInstallComplete: () => void;
-  terminalOutput: TerminalLine[];
-  onStopInstallation?: () => void;
-
-  // Uninstallation props
   showUninstallConfirm: boolean;
-  showUninstallProgress: boolean;
-  showUninstallComplete: boolean;
-  uninstallProgress: number;
-  uninstallError?: string;
   onUninstallConfirmClose: () => void;
-  onUninstall: () => void;
-  onUninstallProgressClose: () => void;
+  onUninstallConfirm: () => void;
+  onInstallComplete: () => void;
   onUninstallComplete: () => void;
-  onMoveToUninstallComplete: () => void;
-  uninstallTerminalOutput: TerminalLine[];
+  showInstallProgress?: boolean;
+  showUninstallProgress?: boolean;
 }
 
 const Popups: React.FC<PopupsProps> = ({
-  // Installation props
-  showInstallProgress,
-  showInstallComplete,
-  installProgress,
-  installError,
-  onInstallComplete,
-  onMoveToInstallComplete,
-  terminalOutput,
-  onStopInstallation,
-
-  // Uninstallation props
   showUninstallConfirm,
-  showUninstallProgress,
-  showUninstallComplete,
-  uninstallProgress,
-  uninstallError,
   onUninstallConfirmClose,
-  onUninstall,
+  onUninstallConfirm,
+  onInstallComplete,
   onUninstallComplete,
-  onMoveToUninstallComplete,
-  uninstallTerminalOutput
+  showInstallProgress = false,
+  showUninstallProgress: externalShowUninstallProgress = false
 }) => {
-  // Refs for terminal output containers
-  const installTerminalRef = useRef<HTMLDivElement>(null);
-  const uninstallTerminalRef = useRef<HTMLDivElement>(null);
+  // Installation state
+  const [showInstallComplete, setShowInstallComplete] = useState(false);
+  const [installProgress, setInstallProgress] = useState(0);
+  const [installError, setInstallError] = useState<string>();
+  const [installTerminalOutput, setInstallTerminalOutput] = useState<TerminalLine[]>([]);
+  const [isInstallationComplete, setIsInstallationComplete] = useState(false);
 
-  // Auto-scroll terminal output
+  // Uninstall state
+  const [showUninstallComplete, setShowUninstallComplete] = useState(false);
+  const [uninstallProgress, setUninstallProgress] = useState(0);
+  const [uninstallError, setUninstallError] = useState<string>();
+  const [uninstallTerminalOutput, setUninstallTerminalOutput] = useState<TerminalLine[]>([]);
+  const [isUninstallationComplete, setIsUninstallationComplete] = useState(false);
+
+  // Debug logging for state changes
   useEffect(() => {
-    if (installTerminalRef.current && showInstallProgress) {
-      installTerminalRef.current.scrollTop = installTerminalRef.current.scrollHeight;
-    }
-  }, [terminalOutput, showInstallProgress]);
+    console.debug(`[Popups] Install Progress Dialog - showInstallProgress: ${showInstallProgress}, showInstallComplete: ${showInstallComplete}`);
+  }, [showInstallProgress, showInstallComplete]);
 
   useEffect(() => {
-    if (uninstallTerminalRef.current && showUninstallProgress) {
-      uninstallTerminalRef.current.scrollTop = uninstallTerminalRef.current.scrollHeight;
-    }
-  }, [uninstallTerminalOutput, showUninstallProgress]);
+    console.debug(`[Popups] Install Complete Dialog - showInstallComplete: ${showInstallComplete}, error: ${installError ? 'true' : 'false'}`);
+  }, [showInstallComplete, installError]);
 
-  const renderTerminalLine = (line: TerminalLine) => (
-    <div 
-      className={`font-mono text-sm whitespace-pre-wrap ${line.isError ? 'text-destructive' : 'text-foreground'}`}
-    >
-      {line.timestamp && (
-        <span className="text-muted-foreground mr-2">
-          {new Date(line.timestamp).toLocaleTimeString()}
-        </span>
-      )}
-      {line.message}
-    </div>
-  );
+  useEffect(() => {
+    console.debug(`[Popups] Uninstall Progress Dialog - showUninstallProgress: ${externalShowUninstallProgress}, showUninstallComplete: ${showUninstallComplete}`);
+  }, [externalShowUninstallProgress, showUninstallComplete]);
+
+  useEffect(() => {
+    console.debug(`[Popups] Uninstall Complete Dialog - showUninstallComplete: ${showUninstallComplete}, error: ${uninstallError ? 'true' : 'false'}`);
+  }, [showUninstallComplete, uninstallError]);
+
+  // Installation status stream
+  useEffect(() => {
+    if (!showInstallProgress) {
+      console.debug('[Popups] Install status stream - Not starting because showInstallProgress is false');
+      return;
+    }
+
+    // Clear any previous state when starting a new installation
+    setInstallError(undefined);
+    setInstallProgress(0);
+    setInstallTerminalOutput([]);
+    setShowInstallComplete(false);
+    setIsInstallationComplete(false);
+
+    console.debug('[Popups] Install status stream - Starting EventSource connection');
+    const installStatus = new EventSource('/api/takserver/install-status-stream');
+    installStatus.addEventListener('install-status', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.debug('[Popups] Install status event received:', data);
+        if (data.type === 'terminal') {
+          setInstallTerminalOutput(prev => [...prev, {
+            message: data.message,
+            isError: data.isError,
+            timestamp: data.timestamp
+          }]);
+        } else {
+          setInstallProgress(data.progress);
+          if (data.error) {
+            console.debug('[Popups] Install error received:', data.error);
+            setInstallError(data.error);
+            // Don't auto-close on error, let user review and close manually
+            setIsInstallationComplete(true);
+          }
+          if (data.status === 'complete') {
+            console.debug('[Popups] Install complete status received');
+            // Don't auto-close on completion, let user review and close manually
+            setIsInstallationComplete(true);
+          }
+        }
+      } catch (error) {
+        console.error('[Popups] Error parsing install status:', error);
+      }
+    });
+
+    return () => {
+      // Only close the connection if installation is complete AND user has acknowledged
+      if (isInstallationComplete && showInstallComplete) {
+        console.debug('[Popups] Install status stream - Closing EventSource connection');
+        installStatus.close();
+      }
+    };
+  }, [showInstallProgress]);
+
+  // Uninstall status stream
+  useEffect(() => {
+    if (!externalShowUninstallProgress) {
+      console.debug('[Popups] Uninstall status stream - Not starting because showUninstallProgress is false');
+      return;
+    }
+
+    // Clear any previous state when starting a new uninstallation
+    setUninstallError(undefined);
+    setUninstallProgress(0);
+    setUninstallTerminalOutput([]);
+    setShowUninstallComplete(false);
+    setIsUninstallationComplete(false);
+
+    console.debug('[Popups] Uninstall status stream - Starting EventSource connection');
+    const uninstallStatus = new EventSource('/api/takserver/uninstall-status-stream');
+    uninstallStatus.addEventListener('uninstall-status', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.debug('[Popups] Uninstall status event received:', data);
+        if (data.type === 'terminal') {
+          setUninstallTerminalOutput(prev => [...prev, {
+            message: data.message,
+            isError: data.isError,
+            timestamp: data.timestamp
+          }]);
+        } else if (data.type === 'status') {
+          setUninstallProgress(data.progress);
+          if (data.error) {
+            console.debug('[Popups] Uninstall error received:', data.error);
+            setUninstallError(data.error);
+            setIsUninstallationComplete(true);
+          }
+          if (data.status === 'complete') {
+            console.debug('[Popups] Uninstall complete status received');
+            setIsUninstallationComplete(true);
+          }
+        }
+      } catch (error) {
+        console.error('[Popups] Error parsing uninstall status:', error);
+      }
+    });
+
+    return () => {
+      if (isUninstallationComplete && showUninstallComplete) {
+        console.debug('[Popups] Uninstall status stream - Closing EventSource connection');
+        uninstallStatus.close();
+      }
+    };
+  }, [externalShowUninstallProgress]);
+
+  const handleUninstall = async () => {
+    try {
+      console.debug('[Popups] Starting uninstall process');
+      onUninstallConfirm();
+      setUninstallProgress(0);
+      setUninstallError(undefined);
+      setUninstallTerminalOutput([]);
+
+      const response = await fetch('/api/takserver/uninstall-takserver', {
+        method: 'POST'
+      });
+
+      if (!response.ok) {
+        throw new Error(`Uninstallation failed: ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error('[Popups] Uninstallation error:', error);
+      setUninstallError(error instanceof Error ? error.message : 'Uninstallation failed');
+    }
+  };
+
+  const resetInstallState = () => {
+    console.debug('[Popups] Resetting install state');
+    setShowInstallComplete(false);
+    setInstallProgress(0);
+    setInstallError(undefined);
+    setInstallTerminalOutput([]);
+    setIsInstallationComplete(true); // Ensure we mark it as complete before closing
+    onInstallComplete();
+  };
+
+  const resetUninstallState = () => {
+    console.debug('[Popups] Resetting uninstall state');
+    setShowUninstallComplete(false);
+    setUninstallProgress(0);
+    setUninstallError(undefined);
+    setUninstallTerminalOutput([]);
+    setIsUninstallationComplete(true); // Ensure we mark it as complete before closing
+    onUninstallComplete();
+  };
 
   return (
     <>
       {/* Installation Progress Dialog */}
       <Dialog 
-        open={showInstallProgress} 
-        onOpenChange={() => {}}
-        modal={true}
+        open={showInstallProgress && !showInstallComplete} 
+        onOpenChange={(open) => {
+          // Prevent dialog from being closed except through explicit user action
+          if (!open) {
+            return;
+          }
+        }}
       >
         <DialogContent 
-          onInteractOutside={(e) => {
-            // Always prevent closing if showing progress
-            e.preventDefault();
-          }}
-          onEscapeKeyDown={(e: KeyboardEvent) => {
-            // Always prevent closing if showing progress
-            e.preventDefault();
-          }}
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
           className="xl:max-w-3xl"
         >
           <DialogHeader>
@@ -132,17 +240,23 @@ const Popups: React.FC<PopupsProps> = ({
                 : `Progress: ${installProgress}%`
               }
             />
-            {terminalOutput.length > 0 && (
+            {installTerminalOutput.length > 0 && (
               <ScrollArea 
                 className="w-full rounded-md border p-4 mt-4 h-[300px] bg-background"
-                ref={installTerminalRef}
+                content={installTerminalOutput}
                 autoScroll={true}
-                content={terminalOutput}
               >
                 <div className="space-y-1">
-                  {terminalOutput.map((line, index) => (
+                  {installTerminalOutput.map((line, index) => (
                     <div key={index}>
-                      {renderTerminalLine(line)}
+                      <div className={`font-mono text-sm whitespace-pre-wrap ${line.isError ? 'text-destructive' : 'text-foreground'}`}>
+                        {line.timestamp && (
+                          <span className="text-muted-foreground mr-2">
+                            {new Date(line.timestamp).toLocaleTimeString()}
+                          </span>
+                        )}
+                        {line.message}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -150,16 +264,8 @@ const Popups: React.FC<PopupsProps> = ({
             )}
           </div>
           <DialogFooter>
-            {installProgress < 100 && !installError && onStopInstallation && (
-              <Button 
-                variant="danger" 
-                onClick={onStopInstallation}
-              >
-                Stop Installation
-              </Button>
-            )}
-            {(installProgress === 100 || installError) && (
-              <Button onClick={onMoveToInstallComplete}>
+            {isInstallationComplete && (
+              <Button onClick={() => setShowInstallComplete(true)}>
                 Next
               </Button>
             )}
@@ -168,14 +274,10 @@ const Popups: React.FC<PopupsProps> = ({
       </Dialog>
 
       {/* Installation Complete Dialog */}
-      <Dialog 
-        open={showInstallComplete} 
-        onOpenChange={() => {}}
-        modal={true}
-      >
+      <Dialog open={showInstallComplete}>
         <DialogContent 
           onInteractOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e: KeyboardEvent) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
         >
           <DialogHeader>
             <DialogTitle>
@@ -186,20 +288,16 @@ const Popups: React.FC<PopupsProps> = ({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button onClick={onInstallComplete}>Close</Button>
+            <Button onClick={resetInstallState}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Uninstall Confirmation Dialog */}
-      <Dialog 
-        open={showUninstallConfirm} 
-        onOpenChange={() => {}}
-        modal={true}
-      >
+      <Dialog open={showUninstallConfirm}>
         <DialogContent 
           onInteractOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e: KeyboardEvent) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
         >
           <DialogHeader>
             <DialogTitle>Confirm Uninstall</DialogTitle>
@@ -211,7 +309,7 @@ const Popups: React.FC<PopupsProps> = ({
             <Button variant="outline" onClick={onUninstallConfirmClose}>
               Cancel
             </Button>
-            <Button variant="danger" onClick={onUninstall}>
+            <Button variant="danger" onClick={handleUninstall}>
               Uninstall
             </Button>
           </DialogFooter>
@@ -220,19 +318,17 @@ const Popups: React.FC<PopupsProps> = ({
 
       {/* Uninstall Progress Dialog */}
       <Dialog 
-        open={showUninstallProgress} 
-        onOpenChange={() => {}}
-        modal={true}
+        open={externalShowUninstallProgress && !showUninstallComplete} 
+        onOpenChange={(open) => {
+          // Prevent dialog from being closed except through explicit user action
+          if (!open) {
+            return;
+          }
+        }}
       >
         <DialogContent 
-          onInteractOutside={(e) => {
-            // Always prevent closing if showing progress
-            e.preventDefault();
-          }}
-          onEscapeKeyDown={(e: KeyboardEvent) => {
-            // Always prevent closing if showing progress
-            e.preventDefault();
-          }}
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
           className="xl:max-w-3xl"
         >
           <DialogHeader>
@@ -255,50 +351,52 @@ const Popups: React.FC<PopupsProps> = ({
             {uninstallTerminalOutput.length > 0 && (
               <ScrollArea 
                 className="w-full rounded-md border p-4 mt-4 h-[300px] bg-background"
-                ref={uninstallTerminalRef}
-                autoScroll={true}
                 content={uninstallTerminalOutput}
+                autoScroll={true}
               >
                 <div className="space-y-1">
                   {uninstallTerminalOutput.map((line, index) => (
                     <div key={index}>
-                      {renderTerminalLine(line)}
+                      <div className={`font-mono text-sm whitespace-pre-wrap ${line.isError ? 'text-destructive' : 'text-foreground'}`}>
+                        {line.timestamp && (
+                          <span className="text-muted-foreground mr-2">
+                            {new Date(line.timestamp).toLocaleTimeString()}
+                          </span>
+                        )}
+                        {line.message}
+                      </div>
                     </div>
                   ))}
                 </div>
               </ScrollArea>
             )}
           </div>
-          {(uninstallProgress === 100 || uninstallError) && (
-            <DialogFooter>
-              <Button onClick={onMoveToUninstallComplete}>
+          <DialogFooter>
+            {isUninstallationComplete && (
+              <Button onClick={() => setShowUninstallComplete(true)}>
                 Next
               </Button>
-            </DialogFooter>
-          )}
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Uninstall Complete Dialog */}
-      <Dialog 
-        open={showUninstallComplete} 
-        onOpenChange={() => {}}
-        modal={true}
-      >
+      <Dialog open={showUninstallComplete}>
         <DialogContent 
           onInteractOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e: KeyboardEvent) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
         >
           <DialogHeader>
             <DialogTitle>
-              {uninstallError ? "Uninstall Failed" : "Uninstall Complete"}
+              {uninstallError ? "Uninstallation Failed" : "Uninstallation Complete"}
             </DialogTitle>
             <DialogDescription>
               {uninstallError ? uninstallError : "TAK Server has been successfully uninstalled!"}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button onClick={onUninstallComplete}>Close</Button>
+            <Button onClick={resetUninstallState}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

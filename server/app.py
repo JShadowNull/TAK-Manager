@@ -1,6 +1,7 @@
 import os
 import sys
-from flask import Flask
+from fastapi import FastAPI
+import uvicorn
 from dotenv import load_dotenv
 import logging
 
@@ -19,24 +20,21 @@ from backend.config.logging_config import configure_logging
 logger = configure_logging(__name__)
 
 def start_server():
-    """Start the Flask server."""
+    """Start the FastAPI server."""
     try:
         # Get configuration
         port = int(os.environ.get('BACKEND_PORT', 8989))
         is_dev = os.environ.get('MODE', 'development') == 'development'
         
-        # Create and configure Flask app
+        # Create and configure FastAPI app
         app = create_app()
         
         if is_dev:
             logger.info("Starting development server with auto-reload")
-            app.debug = True
-            app.run(host='0.0.0.0', port=port, use_reloader=True)
+            uvicorn.run("app:create_app", host="0.0.0.0", port=port, reload=True, factory=True)
         else:
             logger.info("Starting production server")
-            from gevent.pywsgi import WSGIServer
-            http_server = WSGIServer(('0.0.0.0', port), app, log=None)
-            http_server.serve_forever()
+            uvicorn.run(app, host="0.0.0.0", port=port)
         
     except Exception as e:
         logger.error(f"Server failed to start: {e}", exc_info=True)

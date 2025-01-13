@@ -23,6 +23,11 @@ interface Container {
   started_at: string;
   finished_at: string;
   image: string;
+  operation?: {
+    action: string;
+    status: string;
+    error?: string;
+  };
 }
 
 export const Dashboard: React.FC = () => {
@@ -94,155 +99,164 @@ export const Dashboard: React.FC = () => {
     localStorage.setItem('dashboard_download_history', JSON.stringify(downloadHistory));
   }, [downloadHistory]);
 
-  // Initialize SSE connection for both metrics and container updates
+  // Initialize SSE connections
   useEffect(() => {
-    // Start container updates
-    const startContainerUpdates = async () => {
-      try {
-        const response = await fetch.post('/api/docker-manager/containers/updates/start');
-        // Check if response is an Axios response (has data property)
-        const data = response.data || response;
-        
-        if (!response.ok && !response.status) {
-          throw new Error(data.message || 'Failed to start container updates');
-        }
-      } catch (error) {
-        // Only log real errors, not successful responses
-        if (error instanceof Error && error.message !== 'undefined' && !error.message.includes('json')) {
-          console.error('Failed to start container updates:', error);
-        }
-      }
-    };
-    startContainerUpdates();
+    let metricsEventSource: EventSource | null = null;
+    let dockerEventSource: EventSource | null = null;
 
-    // Set up metrics polling
-    const pollMetrics = async () => {
+    const setupSSEConnections = async () => {
       try {
-        const response = await fetch.post('/api/dashboard/monitoring/start');
-        // Check if response is an Axios response (has data property)
-        const data = response.data || response;
-        
-        if (!response.ok && !response.status) {
-          throw new Error(data.message || 'Failed to get metrics');
+        // Set up SSE connections first
+        setupMetricsEventSource();
+        setupDockerEventSource();
+
+        // Get initial metrics
+        const metricsResponse = await fetch.post('/api/dashboard/monitoring/start');
+        if (!metricsResponse.ok && !metricsResponse.status) {
+          throw new Error(metricsResponse.data?.message || 'Failed to get initial metrics');
         }
+        const initialMetrics = metricsResponse.data?.data || metricsResponse.data;
+        if (!initialMetrics) {
+          throw new Error('No metrics data received from server');
+        }
+        setMetrics(initialMetrics);
+        setCpuHistory(prev => [...prev.slice(-MAX_HISTORY_LENGTH), initialMetrics.totalCpu]);
+        setMemoryHistory(prev => [...prev.slice(-MAX_HISTORY_LENGTH), initialMetrics.totalMemory]);
+        setUploadHistory(prev => [...prev.slice(-MAX_HISTORY_LENGTH), initialMetrics.network.upload]);
+        setDownloadHistory(prev => [...prev.slice(-MAX_HISTORY_LENGTH), initialMetrics.network.download]);
       } catch (error) {
-        // Only log real errors, not successful responses
-        if (error instanceof Error && error.message !== 'undefined' && !error.message.includes('json')) {
-          console.error('Failed to get metrics:', error);
-        }
+        console.error('Failed to initialize dashboard:', error);
       }
     };
 
-    // Poll metrics every 3 seconds
-    const metricsInterval = setInterval(pollMetrics, 3000);
-
-    const eventSource = new EventSource('/stream');
-
-    // Handle system metrics updates
-    eventSource.addEventListener('system_metrics', (event) => {
-      try {
-        const newMetrics: SystemMetrics = JSON.parse(event.data);
-        
-        // Validate the data structure
-        if (typeof newMetrics.totalCpu !== 'number' || 
-            typeof newMetrics.totalMemory !== 'number' || 
-            typeof newMetrics.network?.upload !== 'number' || 
-            typeof newMetrics.network?.download !== 'number') {
-          console.error('Invalid metrics data structure:', newMetrics);
-          return;
-        }
-        
-        setMetrics(newMetrics);
-        
-        // Update historical data
-        setCpuHistory(prev => [...prev.slice(-MAX_HISTORY_LENGTH), newMetrics.totalCpu]);
-        setMemoryHistory(prev => [...prev.slice(-MAX_HISTORY_LENGTH), newMetrics.totalMemory]);
-        setUploadHistory(prev => [...prev.slice(-MAX_HISTORY_LENGTH), newMetrics.network.upload]);
-        setDownloadHistory(prev => [...prev.slice(-MAX_HISTORY_LENGTH), newMetrics.network.download]);
-      } catch (error) {
-        console.error('Error processing system metrics:', error);
+    const setupMetricsEventSource = () => {
+      if (metricsEventSource) {
+        metricsEventSource.close();
       }
-    });
 
-    // Handle docker status updates
-    eventSource.addEventListener('docker_status', (event) => {
-      const data = JSON.parse(event.data);
+      metricsEventSource = new EventSource('/api/dashboard/monitoring/metrics-stream');
       
-      switch (data.type) {
-        case 'container_update':
-          // Update containers list
-          setContainers(data.containers);
-          // Clear loading states only after container list is updated
-          setLoadingStates({});
-          break;
-
-        case 'error':
-          console.error('Docker error:', data.message);
-          // Clear loading state for the affected container
-          if (data.details?.container) {
-            setLoadingStates(prev => ({
-              ...prev,
-              [data.details.container]: false
-            }));
+      metricsEventSource.addEventListener('system-metrics', (event) => {
+        try {
+          const newMetrics: SystemMetrics = JSON.parse(event.data);
+          
+          // Validate the data structure
+          if (typeof newMetrics.totalCpu !== 'number' || 
+              typeof newMetrics.totalMemory !== 'number' || 
+              typeof newMetrics.network?.upload !== 'number' || 
+              typeof newMetrics.network?.download !== 'number') {
+            console.error('Invalid metrics data structure:', newMetrics);
+            return;
           }
-          break;
+          
+          setMetrics(newMetrics);
+          
+          // Update historical data
+          setCpuHistory(prev => [...prev.slice(-MAX_HISTORY_LENGTH), newMetrics.totalCpu]);
+          setMemoryHistory(prev => [...prev.slice(-MAX_HISTORY_LENGTH), newMetrics.totalMemory]);
+          setUploadHistory(prev => [...prev.slice(-MAX_HISTORY_LENGTH), newMetrics.network.upload]);
+          setDownloadHistory(prev => [...prev.slice(-MAX_HISTORY_LENGTH), newMetrics.network.download]);
+        } catch (error) {
+          console.error('Error processing system metrics:', error);
+        }
+      });
 
-        default:
-          // Handle operation status updates (start/stop)
-          if (data.status === 'in_progress') {
-            // Set loading state when operation starts
-            setLoadingStates(prev => ({
-              ...prev,
-              [data.details.container]: true
-            }));
-          } else if (data.status === 'completed' || data.status === 'error') {
-            // Don't clear loading state immediately
-            // Wait for container_update event to ensure proper state
-            setTimeout(async () => {
-              try {
-                // Request fresh container list
-                await fetch.post('/api/docker-manager/containers/updates/start');
-              } catch (error) {
-                console.error('Failed to get container updates:', error);
-                // If update fails, clear loading state as fallback
-                setLoadingStates(prev => ({
-                  ...prev,
-                  [data.details.container]: false
-                }));
-              }
-            }, 500); // Small delay to ensure container state has settled
-          }
+      metricsEventSource.addEventListener('error', () => {
+        console.error('Metrics SSE connection error - attempting to reconnect...');
+        setTimeout(setupMetricsEventSource, 5000);
+      });
+    };
+
+    const setupDockerEventSource = () => {
+      if (dockerEventSource) {
+        dockerEventSource.close();
       }
-    });
 
-    eventSource.addEventListener('error', (error) => {
-      console.error('SSE connection error:', error);
-      setTimeout(() => {
-        eventSource.close();
-        const newEventSource = new EventSource('/stream');
-        // Re-attach event listeners
-      }, 5000);
-    });
+      dockerEventSource = new EventSource('/api/docker-manager/containers/status-stream');
+      
+      dockerEventSource.addEventListener('docker_status', (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === 'container_status') {
+            setContainers(data.containers);
+            
+            // Update loading states based on operations
+            const newLoadingStates: Record<string, boolean> = {};
+            data.containers.forEach((container: Container) => {
+              if (container.operation?.status === 'in_progress') {
+                newLoadingStates[container.name] = true;
+              }
+            });
+            setLoadingStates(newLoadingStates);
+          }
+        } catch (error) {
+          console.error('Error processing docker status:', error);
+        }
+      });
 
+      dockerEventSource.addEventListener('error', () => {
+        console.error('Docker SSE connection error - attempting to reconnect...');
+        setTimeout(setupDockerEventSource, 5000);
+      });
+    };
+
+    // Initial setup
+    setupSSEConnections();
+
+    // Cleanup
     return () => {
-      eventSource.close();
-      clearInterval(metricsInterval);
+      if (metricsEventSource) {
+        metricsEventSource.close();
+      }
+      if (dockerEventSource) {
+        dockerEventSource.close();
+      }
     };
   }, []);
 
   const handleContainerOperation = async (name: string, action: string) => {
     try {
-      setLoadingStates(prev => ({
-        ...prev,
-        [name]: true
-      }));
+      console.log('Container operation requested:', {
+        container: name,
+        action: action,
+        currentLoadingStates: loadingStates,
+        timestamp: new Date().toISOString()
+      });
+
+      setLoadingStates(prev => {
+        const newState = {
+          ...prev,
+          [name]: true
+        };
+        console.log('Setting initial loading state:', {
+          container: name,
+          loadingStates: newState,
+          timestamp: new Date().toISOString()
+        });
+        return newState;
+      });
+
       await fetch.post(`/api/docker-manager/containers/${name}/${action}`);
     } catch (error) {
-      console.error(`Failed to ${action} container:`, error);
-      setLoadingStates(prev => ({
-        ...prev,
-        [name]: false
-      }));
+      console.error(`Failed to ${action} container:`, {
+        container: name,
+        error,
+        timestamp: new Date().toISOString()
+      });
+      
+      setLoadingStates(prev => {
+        const newState = {
+          ...prev,
+          [name]: false
+        };
+        console.log('Setting error loading state:', {
+          container: name,
+          loadingStates: newState,
+          timestamp: new Date().toISOString()
+        });
+        return newState;
+      });
     }
   };
 

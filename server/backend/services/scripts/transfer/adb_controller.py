@@ -3,39 +3,50 @@ import subprocess
 import re
 import pexpect
 from backend.services.helpers.run_command import RunCommand
-from flask_sse import sse
+from typing import Dict, Any, Optional, Callable
 import time
+from backend.config.logging_config import configure_logging
+
+# Configure logging using centralized config
+logger = configure_logging(__name__)
 
 class ADBController:
-    def __init__(self):
+    def __init__(self, emit_event: Optional[Callable[[Dict[str, Any]], None]] = None):
         self.run_command = RunCommand()
         self.active_push_processes = {}  # Dictionary to track active push processes by device_id
-        self.channel = 'transfer'  # Define a consistent channel for SSE events
+        self.emit_event = emit_event
+
+    def _create_event(self, event_type: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create an event object for SSE"""
+        event_data = {
+            'type': event_type,
+            'data': {
+                **data,
+                'timestamp': time.time()
+            }
+        }
+        logger.debug(f"Created event: {event_data}")
+        if self.emit_event:
+            self.emit_event(event_data)
+        return event_data
 
     def emit_adb_update(self, status_type="status", **data):
         """Unified ADB status emission using SSE"""
         update = {
-            'timestamp': time.time(),
             'type': status_type,  # 'status', 'progress', or 'error'
             **data
         }
-        sse.publish(
-            {
-                'type': 'adb_update',
-                'data': update
-            },
-            type='adb_update',
-            channel=self.channel
-        )
+        self._create_event('adb_update', update)
 
     def get_device_name(self, device_id):
         """Get device name using ADB"""
         try:
             result = self.run_command.run_command(
                 ['adb', '-s', device_id, 'shell', 'getprop', 'ro.product.model'],
-                self.channel,
+                'device_info',
                 capture_output=True,
-                emit_output=False
+                emit_output=False,
+                emit_event=self.emit_event
             )
             if result.stdout:
                 output = result.stdout
@@ -51,8 +62,9 @@ class ADBController:
         try:
             result = self.run_command.run_command(
                 ['adb', '-s', device_id, 'shell', f'mkdir -p {directory}'],
-                self.channel,
-                capture_output=True
+                'device_directory',
+                capture_output=True,
+                emit_event=self.emit_event
             )
             if not result.success:
                 self.emit_adb_update(
@@ -133,10 +145,11 @@ class ADBController:
             )
             return self.run_command.stream_output(
                 ['adb', 'track-devices'],
-                self.channel,
+                'device_monitoring',
                 capture_output=True,
                 check=False,
-                stream_output=True
+                stream_output=True,
+                emit_event=self.emit_event
             )
         except Exception as e:
             self.emit_adb_update(

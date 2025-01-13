@@ -1,52 +1,68 @@
 # backend/routes/data_package_route.py
 
-from flask import Blueprint, request, jsonify
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import JSONResponse
+from sse_starlette.sse import EventSourceResponse
+from pydantic import BaseModel, Field
+from typing import Dict, Any, Optional
 from backend.services.scripts.data_package_config.data_package import DataPackage
-from backend.services.scripts.system.thread_manager import thread_manager
 import uuid
 import json
 import os
 from pathlib import Path
 import logging
+import time
+import asyncio
 
 # Configure logger
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
 
 # ============================================================================
-# Blueprint and Global Variables
+# Router and Global Variables
 # ============================================================================
-data_package_bp = Blueprint('data_package', __name__)
+datapackage = APIRouter()
 configurations = {}
+
+# Global state for SSE events
+_latest_data_package_status: dict = {}
+
+def emit_data_package_event(data: dict):
+    """Update latest data package status state"""
+    global _latest_data_package_status
+    _latest_data_package_status = data
+
+# ============================================================================
+# Pydantic Models
+# ============================================================================
+class PreferencesData(BaseModel):
+    preferences: Dict[str, Any]
+
+class ConfigurationResponse(BaseModel):
+    configuration_id: str
+    message: str
+    status: str = 'pending'
+
+class StopRequest(BaseModel):
+    configuration_id: str
 
 # ============================================================================
 # Helper Functions
 # ============================================================================
-def execute_data_package_operation(operation_func, operation_type: str, channel: str = None):
-    """Execute a data package operation in a background thread"""
-    def operation_thread():
-        try:
-            result = operation_func()
-            if result and result.get('error'):
-                return {'success': False, 'message': result['error']}
-            return {'success': True, 'message': result.get('status', 'Operation completed successfully')}
-        except Exception as e:
-            error_message = str(e)
-            logger.error(f"Error in {operation_type} operation: {error_message}")
-            return {
-                'success': False,
-                'message': error_message
-            }
-
-    # Start the operation in a background thread
-    thread_id = f"data_package_{operation_type}_{channel}" if channel else f"data_package_{operation_type}"
-    thread = thread_manager.spawn(
-        func=operation_thread,
-        thread_id=thread_id,
-        channel=channel or 'data-package'
-    )
-    
-    return {'message': 'Operation initiated successfully'}
+async def execute_data_package_operation(operation_func) -> Dict[str, Any]:
+    """Execute a data package operation asynchronously"""
+    try:
+        result = await operation_func()
+        if result and result.get('error'):
+            return {'success': False, 'message': result['error']}
+        return {'success': True, 'message': result.get('status', 'Operation completed successfully')}
+    except Exception as e:
+        error_message = str(e)
+        logger.error(f"Error in operation: {error_message}")
+        return {
+            'success': False,
+            'message': error_message
+        }
 
 def normalize_preferences(preferences):
     """
@@ -100,123 +116,114 @@ def normalize_preferences(preferences):
 # ============================================================================
 class DataPackageOperationHandler:
     def __init__(self, data_package_instance=None):
-        self.data_package = data_package_instance or DataPackage()
+        self.data_package = data_package_instance or DataPackage(emit_event=emit_data_package_event)
         self.operation_in_progress = False
 
-    def handle_configuration(self, preferences_data, channel: str = 'data-package'):
+    async def handle_configuration(self, preferences_data):
         """Handle data package configuration process"""
         try:
             self.operation_in_progress = True
-            return self.data_package.main(preferences_data, channel=channel)
+            return await asyncio.to_thread(self.data_package.main, preferences_data)
         except Exception as e:
             return {'error': str(e)}
         finally:
             self.operation_in_progress = False
 
-    def handle_stop(self, channel: str = 'data-package'):
+    async def handle_stop(self):
         """Handle stopping the data package configuration"""
         try:
-            self.data_package.stop()
+            await asyncio.to_thread(self.data_package.stop)
             return {'status': 'Configuration stopped successfully'}
         except Exception as e:
             return {'error': str(e)}
 
 # ============================================================================
-# HTTP Routes
+# Routes
 # ============================================================================
-@data_package_bp.route('/submit-preferences', methods=['POST'])
-def submit_preferences():
+@datapackage.get('/status-stream')
+async def data_package_status_stream():
+    """SSE endpoint for data package status updates."""
+    data_package = DataPackage(emit_event=emit_data_package_event)
+    return EventSourceResponse(data_package.status_generator())
+
+@datapackage.post('/submit-preferences', response_model=ConfigurationResponse)
+async def submit_preferences(preferences: Dict[str, Any]):
     """Submit preferences for data package configuration"""
     try:
         configuration_id = str(uuid.uuid4())
-        channel = request.args.get('channel', 'data-package')
-        data_package = DataPackage()
+        data_package = DataPackage(emit_event=emit_data_package_event)
         handler = DataPackageOperationHandler(data_package)
         configurations[configuration_id] = handler
 
-        def configuration_operation():
-            return handler.handle_configuration(request.json, channel=channel)
-
-        operation_result = execute_data_package_operation(
-            configuration_operation,
-            'config',
-            channel
+        operation_result = await execute_data_package_operation(
+            lambda: handler.handle_configuration(preferences)
         )
         
-        return jsonify({
-            'configuration_id': configuration_id,
-            'message': operation_result.get('message', 'Configuration initiated'),
-            'status': operation_result.get('status', 'pending')
-        }), 200
+        return ConfigurationResponse(
+            configuration_id=configuration_id,
+            message=operation_result.get('message', 'Configuration initiated'),
+            status=operation_result.get('status', 'pending')
+        )
 
     except Exception as e:
         error_message = str(e)
         logger.error(f"Error processing request: {error_message}")
-        return jsonify({"error": error_message}), 500
+        raise HTTPException(status_code=500, detail=error_message)
 
-@data_package_bp.route('/stop', methods=['POST'])
-def stop_data_package():
+@datapackage.post('/stop')
+async def stop_data_package(stop_request: StopRequest):
     """Stop data package configuration"""
     try:
-        configuration_id = request.json.get('configuration_id')
-        channel = request.args.get('channel', 'data-package')
-        
-        if not configuration_id:
-            return jsonify({"error": "No configuration ID provided"}), 400
+        if stop_request.configuration_id not in configurations:
+            raise HTTPException(status_code=404, detail="Invalid configuration ID")
 
-        if configuration_id not in configurations:
-            return jsonify({"error": "Invalid configuration ID"}), 404
-
-        handler = configurations[configuration_id]
-
-        def stop_operation():
-            result = handler.handle_stop(channel=channel)
-            del configurations[configuration_id]
-            return result
-
-        operation_result = execute_data_package_operation(
-            stop_operation,
-            'stop',
-            channel
+        handler = configurations[stop_request.configuration_id]
+        operation_result = await execute_data_package_operation(
+            lambda: handler.handle_stop()
         )
-        return jsonify(operation_result), 200
+        
+        if operation_result['success']:
+            del configurations[stop_request.configuration_id]
+            
+        return operation_result
 
+    except HTTPException:
+        raise
     except Exception as e:
         error_message = str(e)
         logger.error(f"Error stopping configuration: {error_message}")
-        return jsonify({"error": error_message}), 500
+        raise HTTPException(status_code=500, detail=error_message)
 
-@data_package_bp.route('/save-preferences', methods=['POST'])
-def save_preferences():
+@datapackage.post('/save-preferences')
+async def save_preferences(data: PreferencesData):
     """Save preferences to a temporary file"""
     try:
-        data = request.get_json()
-        if not data or 'preferences' not in data:
-            return jsonify({"error": "No preferences data provided"}), 400
+        if not data.preferences:
+            raise HTTPException(status_code=400, detail="No preferences data provided")
             
-        preferences = data['preferences']
-        normalized_preferences = normalize_preferences(preferences)
+        normalized_preferences = normalize_preferences(data.preferences)
         
-        data_package = DataPackage()
+        data_package = DataPackage(emit_event=emit_data_package_event)
         working_dir = Path(data_package.get_default_working_directory())
         temp_dir = working_dir / '.temp'
         temp_dir.mkdir(parents=True, exist_ok=True)
         
         prefs_file = temp_dir / 'data_package_preferences.json'
-        with open(prefs_file, 'w') as f:
-            json.dump(normalized_preferences, f, indent=2)
+        async with asyncio.Lock():
+            with open(prefs_file, 'w') as f:
+                json.dump(normalized_preferences, f, indent=2)
         
-        return jsonify({"message": "Preferences saved successfully"}), 200
+        return {"message": "Preferences saved successfully"}
     except Exception as e:
         error_message = str(e)
         logger.error(f"Failed to save preferences: {error_message}")
-        return jsonify({"error": error_message}), 500
+        raise HTTPException(status_code=500, detail=error_message)
 
-@data_package_bp.route('/load-preferences', methods=['GET'])
-def load_preferences():
+@datapackage.get('/load-preferences')
+async def load_preferences():
     """Load preferences from the temporary file"""
     try:
-        data_package = DataPackage()
+        data_package = DataPackage(emit_event=emit_data_package_event)
         working_dir = Path(data_package.get_default_working_directory())
         temp_dir = working_dir / '.temp'
         prefs_file = temp_dir / 'data_package_preferences.json'
@@ -225,37 +232,34 @@ def load_preferences():
         
         if prefs_file.exists():
             try:
-                with open(prefs_file, 'r') as f:
-                    preferences = json.load(f)
-                    normalized_preferences = normalize_preferences(preferences)
-                return jsonify({"preferences": normalized_preferences}), 200
+                async with asyncio.Lock():
+                    with open(prefs_file, 'r') as f:
+                        preferences = json.load(f)
+                        normalized_preferences = normalize_preferences(preferences)
+                return {"preferences": normalized_preferences}
             except json.JSONDecodeError:
                 default_preferences = normalize_preferences({'count': {'value': 1}})
-                return jsonify({"preferences": default_preferences}), 200
+                return {"preferences": default_preferences}
         
         default_preferences = normalize_preferences({'count': {'value': 1}})
-        return jsonify({"preferences": default_preferences}), 200
+        return {"preferences": default_preferences}
     except Exception as e:
         error_message = str(e)
         logger.error(f"Failed to load preferences: {error_message}")
-        return jsonify({"error": error_message}), 500
+        raise HTTPException(status_code=500, detail=error_message)
 
-@data_package_bp.route('/certificate-files', methods=['GET'])
-def get_certificate_files():
+@datapackage.get('/certificate-files')
+async def get_certificate_files():
     """Get available certificate files"""
     try:
-        channel = request.args.get('channel', 'data-package')
-        data_package = DataPackage()
-        cert_files = data_package.get_certificate_files(channel=channel)
-        return jsonify({
+        data_package = DataPackage(emit_event=emit_data_package_event)
+        cert_files = await asyncio.to_thread(data_package.get_certificate_files)
+        return {
             'success': True,
             'files': cert_files
-        })
+        }
     except Exception as e:
         error_message = str(e)
         logger.error(f"Error getting certificate files: {error_message}")
-        return jsonify({
-            'success': False,
-            'message': error_message
-        }), 500
+        raise HTTPException(status_code=500, detail=error_message)
 

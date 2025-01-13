@@ -3,14 +3,15 @@
 import time
 import subprocess
 import json
-from typing import Dict, Any
-from flask_sse import sse
+from typing import Dict, Any, AsyncGenerator, Optional, Callable
+import asyncio
 from backend.config.logging_config import configure_logging
 
 logger = configure_logging(__name__)
 
 class SystemMonitor:
-    def __init__(self):
+    def __init__(self, emit_event: Optional[Callable[[Dict[str, Any]], None]] = None):
+        self.emit_event = emit_event
         logger.debug("SystemMonitor initialized")
 
     def get_docker_stats(self) -> Dict[str, Any]:
@@ -74,8 +75,8 @@ class SystemMonitor:
             logger.error(f"Error parsing size value '{size_str}': {str(e)}")
             return 0.0
 
-    def send_system_metrics(self):
-        """Send system metrics via SSE"""
+    def get_system_metrics(self) -> Dict[str, Any]:
+        """Get formatted system metrics"""
         try:
             metrics = self.get_docker_stats()
             if metrics:
@@ -97,7 +98,7 @@ class SystemMonitor:
                     except Exception as e:
                         logger.error(f"Error processing metrics for container {container_name}: {str(e)}")
 
-                formatted_metrics = {
+                return {
                     'totalCpu': round(total_cpu, 2),
                     'totalMemory': round(total_memory_mb, 2),
                     'network': {
@@ -106,11 +107,29 @@ class SystemMonitor:
                     },
                     'timestamp': time.time()
                 }
-                
-                logger.debug(f"Sending metrics via SSE: {json.dumps(formatted_metrics)}")
-                sse.publish(formatted_metrics, type='system_metrics')
-                return {"status": "success", "message": "System metrics sent"}
+            return {}
         except Exception as e:
-            error_msg = f"Error sending system metrics: {str(e)}"
-            logger.error(error_msg)
-            return {"error": error_msg}
+            logger.error(f"Error getting system metrics: {str(e)}")
+            return {}
+
+    async def metrics_generator(self) -> AsyncGenerator[Dict[str, Any], None]:
+        """Generate system metrics events."""
+        while True:
+            try:
+                metrics = self.get_system_metrics()
+                if metrics:
+                    yield {
+                        "event": "system-metrics",
+                        "data": json.dumps(metrics)
+                    }
+                    if self.emit_event:
+                        self.emit_event(metrics)
+            except Exception as e:
+                logger.error(f"Error generating metrics: {str(e)}")
+                yield {
+                    "event": "system-metrics",
+                    "data": json.dumps({
+                        "error": str(e)
+                    })
+                }
+            await asyncio.sleep(2)  # Update every 5 seconds
