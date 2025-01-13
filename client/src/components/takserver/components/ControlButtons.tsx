@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '../../shared/ui/shadcn/button';
-import { LoadingSpinner } from '../../shared/ui/icons/LoadingSpinner';
 import Popups from './Popups';
 
 interface TakServerState {
@@ -23,29 +22,80 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
 }) => {
   const [currentOperation, setCurrentOperation] = useState<Operation>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isOperationInProgress, setIsOperationInProgress] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showUninstallConfirm, setShowUninstallConfirm] = useState(false);
   const [showUninstallProgress, setShowUninstallProgress] = useState(false);
 
+  useEffect(() => {
+    console.debug('[ControlButtons] Operation status stream - Starting EventSource connection');
+    const eventSource = new EventSource('/api/takserver/operation-status-stream');
+
+    eventSource.addEventListener('operation-status', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.debug('[ControlButtons] Operation status event received:', data);
+        
+        // Handle operation status events
+        if (data.status === 'complete' || data.status === 'error') {
+          console.debug('[ControlButtons] Operation completed/errored, resetting states');
+          setIsLoading(false);
+          setIsOperationInProgress(false);
+          setCurrentOperation(null);
+          if (data.error) {
+            setError(data.error);
+          } else {
+            setError(null);
+          }
+        }
+      } catch (error) {
+        console.error('[ControlButtons] Error processing operation status:', error);
+        setIsLoading(false);
+        setIsOperationInProgress(false);
+        setCurrentOperation(null);
+      }
+    });
+
+    return () => {
+      console.debug('[ControlButtons] Operation status stream - Closing EventSource connection');
+      eventSource.close();
+    };
+  }, []); // Empty dependency array to prevent reconnection
+
+  // Add effect to monitor state changes
+  useEffect(() => {
+    console.log('Operation state changed:', {
+      currentOperation,
+      isLoading,
+      isOperationInProgress,
+      error
+    });
+  }, [currentOperation, isLoading, isOperationInProgress, error]);
+
   const handleOperation = async (operation: Operation, endpoint: string) => {
     try {
-      setIsLoading(true);
-      setCurrentOperation(operation);
+      console.log('Starting operation:', operation);
       setError(null);
-
-      const response = await fetch(`/api/takserver/takserver-${endpoint}`, {
+      setCurrentOperation(operation);
+      setIsLoading(true);
+      setIsOperationInProgress(true);
+      console.log('Set initial operation states:', { operation, isLoading: true, isOperationInProgress: true });
+      
+      const response = await fetch(`/api/takserver/${endpoint}-takserver`, {
         method: 'POST'
       });
 
       if (!response.ok) {
         throw new Error(`Operation failed: ${response.statusText}`);
       }
+      console.log('Operation request successful');
     } catch (error) {
-      console.error(`Failed to ${operation} TAK server:`, error);
+      console.error('Operation request failed:', error);
       setError(error instanceof Error ? error.message : 'Operation failed');
-    } finally {
       setIsLoading(false);
+      setIsOperationInProgress(false);
       setCurrentOperation(null);
+      console.log('Reset states due to error');
     }
   };
 
@@ -58,6 +108,7 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
   const handleUninstallConfirm = () => {
     setShowUninstallConfirm(false);
     setShowUninstallProgress(true);
+    handleOperation('uninstall', 'uninstall');
   };
 
   const handleUninstallComplete = () => {
@@ -77,47 +128,48 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
               <>
                 <Button
                   onClick={handleStop}
-                  disabled={isLoading}
+                  disabled={isOperationInProgress}
+                  loading={currentOperation === 'stop'}
+                  loadingText="Stopping"
                 >
-                  {currentOperation === 'stop' && (
-                    <LoadingSpinner className="mr-2 h-4 w-4" />
-                  )}
                   Stop
                 </Button>
                 <Button
                   onClick={handleRestart}
-                  disabled={isLoading}
+                  disabled={isOperationInProgress}
+                  loading={currentOperation === 'restart'}
+                  loadingText="Restarting"
                 >
-                  {currentOperation === 'restart' && <LoadingSpinner className="mr-2 h-4 w-4" />}
                   Restart
                 </Button>
               </>
             ) : (
               <Button
                 onClick={handleStart}
-                disabled={isLoading}
+                disabled={isOperationInProgress}
+                loading={currentOperation === 'start'}
+                loadingText="Starting"
               >
-                {currentOperation === 'start' && (
-                  <LoadingSpinner className="mr-2 h-4 w-4" />
-                )}
                 Start
               </Button>
             )}
             <Button
               onClick={handleUninstallClick}
-              disabled={isLoading}
+              disabled={isOperationInProgress}
+              loading={currentOperation === 'uninstall'}
+              loadingText="Uninstalling"
               variant="danger"
             >
-              {currentOperation === 'uninstall' && <LoadingSpinner className="mr-2 h-4 w-4" />}
               Uninstall
             </Button>
           </>
         ) : (
           <Button
             onClick={onInstall}
-            disabled={isLoading}
+            disabled={isOperationInProgress}
+            loading={currentOperation === 'install'}
+            loadingText="Installing"
           >
-            {currentOperation === 'install' && <LoadingSpinner className="mr-2 h-4 w-4" />}
             Install
           </Button>
         )}

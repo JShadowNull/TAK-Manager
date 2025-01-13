@@ -22,6 +22,7 @@ status_checker = TakServerStatus()
 _latest_operation_status: Dict[str, Any] = {}
 _latest_install_status: Dict[str, Any] = {}
 _latest_uninstall_status: Dict[str, Any] = {}
+_operation_in_progress = False
 
 def get_upload_path():
     base_dir = '/home/tak-manager'
@@ -121,7 +122,39 @@ async def uninstall_status_generator() -> AsyncGenerator[Dict[str, Any], None]:
 @takserver.get('/server-status-stream')
 async def server_status_stream():
     """SSE endpoint for TAK server installation and running state."""
-    return EventSourceResponse(server_status_generator())
+    async def generate():
+        last_status = None
+        while True:
+            try:
+                # Only get and emit status if no operation is in progress
+                if not _operation_in_progress:
+                    status = await status_checker.get_status()
+                    # Only emit if status changed
+                    if status is not None and status != last_status:
+                        event_data = {
+                            "event": "server-status",
+                            "data": json.dumps(status)
+                        }
+                        logger.debug(f"Sending server status SSE: {event_data}")
+                        last_status = status.copy()
+                        yield event_data
+            except Exception as e:
+                logger.error(f"Error generating server status: {str(e)}")
+                error_data = {
+                    "isInstalled": False,
+                    "isRunning": False,
+                    "version": "Error",
+                    "error": str(e)
+                }
+                event_data = {
+                    "event": "server-status",
+                    "data": json.dumps(error_data)
+                }
+                logger.debug(f"Sending error server status SSE: {event_data}")
+                yield event_data
+            await asyncio.sleep(1)  # Check every second
+
+    return EventSourceResponse(generate())
 
 @takserver.get('/operation-status-stream')
 async def operation_status_stream():
@@ -215,45 +248,84 @@ async def get_takserver_status():
         logger.error(f"Status check error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@takserver.post('/takserver-start')
+@takserver.post('/start-takserver')
 async def start_takserver():
     """Start TAK server containers."""
     try:
+        global _operation_in_progress
+        _operation_in_progress = True
+        
+        # Create status checker with event emitter
+        async def emit_event(data: Dict[str, Any]):
+            global _latest_operation_status
+            _latest_operation_status = data
+            logger.debug(f"Emitting operation status: {data}")
+
+        status_checker = TakServerStatus(emit_event=emit_event)
         result = await status_checker.start_containers()
-        global _latest_operation_status
-        _latest_operation_status = result
+        
         if result["status"] == "error":
+            _operation_in_progress = False
             raise HTTPException(status_code=500, detail=result["message"])
+            
+        _operation_in_progress = False
         return result
     except Exception as e:
+        _operation_in_progress = False
         logger.error(f"Start error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@takserver.post('/takserver-stop')
+@takserver.post('/stop-takserver')
 async def stop_takserver():
     """Stop TAK server containers."""
     try:
+        global _operation_in_progress
+        _operation_in_progress = True
+        
+        # Create status checker with event emitter
+        async def emit_event(data: Dict[str, Any]):
+            global _latest_operation_status
+            _latest_operation_status = data
+            logger.debug(f"Emitting operation status: {data}")
+
+        status_checker = TakServerStatus(emit_event=emit_event)
         result = await status_checker.stop_containers()
-        global _latest_operation_status
-        _latest_operation_status = result
+        
         if result["status"] == "error":
+            _operation_in_progress = False
             raise HTTPException(status_code=500, detail=result["message"])
+            
+        _operation_in_progress = False
         return result
     except Exception as e:
+        _operation_in_progress = False
         logger.error(f"Stop error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@takserver.post('/takserver-restart')
+@takserver.post('/restart-takserver')
 async def restart_takserver():
     """Restart TAK server containers."""
     try:
+        global _operation_in_progress
+        _operation_in_progress = True
+        
+        # Create status checker with event emitter
+        async def emit_event(data: Dict[str, Any]):
+            global _latest_operation_status
+            _latest_operation_status = data
+            logger.debug(f"Emitting operation status: {data}")
+
+        status_checker = TakServerStatus(emit_event=emit_event)
         result = await status_checker.restart_containers()
-        global _latest_operation_status
-        _latest_operation_status = result
+        
         if result["status"] == "error":
+            _operation_in_progress = False
             raise HTTPException(status_code=500, detail=result["message"])
+            
+        _operation_in_progress = False
         return result
     except Exception as e:
+        _operation_in_progress = False
         logger.error(f"Restart error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 

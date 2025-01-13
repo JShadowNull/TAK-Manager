@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from backend.services.helpers.run_command import RunCommand
 import time
-from typing import Dict, Any, Optional, Callable
+from typing import Dict, Any, Optional, Callable, Coroutine
 import logging
 from backend.config.logging_config import configure_logging
 import asyncio
@@ -10,28 +10,29 @@ import docker
 
 # Setup logging
 logger = configure_logging(__name__)
+# Set log level to INFO
 logger.setLevel(logging.INFO)
 
+
+
 class TakServerStatus:
-    def __init__(self, emit_event: Optional[Callable[[Dict[str, Any]], None]] = None):
+    def __init__(self, emit_event: Optional[Callable[[Dict[str, Any]], Coroutine[Any, Any, None]]] = None):
         self.run_command = RunCommand()
         self.working_dir = self.get_default_working_directory()
         self.emit_event = emit_event
         self.docker_client = docker.from_env()
 
-    def update_status(self, operation: str, status: str, message: str, error: Optional[str] = None) -> Dict[str, Any]:
+    async def update_status(self, operation: str, status: str, message: str, error: Optional[str] = None) -> Dict[str, Any]:
         """Update operation status."""
         status_data = {
-            "type": "status",
             "operation": operation,
             "status": status,
             "message": message,
             "error": error,
-            "isError": error is not None,
             "timestamp": int(time.time() * 1000)
         }
         if self.emit_event:
-            self.emit_event(status_data)
+            await self.emit_event(status_data)
         return status_data
 
     def get_default_working_directory(self):
@@ -76,8 +77,6 @@ class TakServerStatus:
 
     def check_installation(self):
         """Check if TAK Server is installed."""
-        logger.debug("Checking TAK Server installation...")
-        
         if not os.path.exists(self.working_dir):
             logger.debug(f"Working directory does not exist: {self.working_dir}")
             return False
@@ -89,26 +88,20 @@ class TakServerStatus:
 
         path_version = self._get_path_version(version)
         docker_compose_path = os.path.join(self.working_dir, f"takserver-docker-{path_version}", "docker-compose.yml")
-        logger.debug(f"Checking for docker-compose.yml at: {docker_compose_path}")
         
         if not os.path.exists(docker_compose_path):
             logger.debug("docker-compose.yml not found")
             return False
 
-        logger.debug("TAK Server installation check passed")
         return True
 
     async def check_containers_running(self):
         """Check if TAK Server containers are running."""
-        logger.debug("Checking if TAK Server containers are running...")
-        
         if not self.check_installation():
-            logger.debug("TAK Server installation check failed")
             return False
 
         version = self.get_takserver_version()
         if not version:
-            logger.debug("Could not determine TAK Server version")
             return False
 
         try:
@@ -116,26 +109,20 @@ class TakServerStatus:
                 f"takserver-{version}",
                 f"tak-database-{version}"
             ]
-            logger.debug(f"Checking containers: {containers}")
 
             for container_name in containers:
-                logger.debug(f"Inspecting container: {container_name}")
                 try:
                     container = self.docker_client.containers.get(container_name)
                     container_status = container.status
-                    logger.debug(f"Container {container_name} status: {container_status}")
                     
                     if container_status != "running":
-                        logger.debug(f"Container {container_name} is not running")
                         return False
                 except docker.errors.NotFound:
-                    logger.debug(f"Container {container_name} not found")
                     return False
                 except Exception as e:
                     logger.error(f"Error inspecting container {container_name}: {str(e)}")
                     return False
 
-            logger.debug("All containers are running")
             return True
 
         except Exception as e:
@@ -144,34 +131,29 @@ class TakServerStatus:
 
     async def get_status(self) -> Dict[str, Any]:
         """Get TAK Server installation and running state."""
-        logger.debug("Getting TAK Server status...")
-        
         is_installed = self.check_installation()
-        logger.debug(f"Installation status: {is_installed}")
-        
         version = self.get_takserver_version() if is_installed else None
-        logger.debug(f"Version: {version}")
-        
         is_running = await self.check_containers_running() if is_installed else False
-        logger.debug(f"Running status: {is_running}")
         
         status = {
             "isInstalled": is_installed,
             "isRunning": is_running,
             "version": self._get_path_version(version) if version else "Not Installed"
         }
-        logger.debug(f"Final status: {status}")
         return status
-
     async def start_containers(self) -> Dict[str, Any]:
         """Start TAK Server containers."""
         try:
+            logger.debug("Starting TAK Server containers...")
             if not self.check_installation():
-                return self.update_status("start", "error", "TAK Server is not installed")
+                logger.debug("TAK Server is not installed, cannot start containers")
+                return await self.update_status("start", "error", "TAK Server is not installed")
 
             docker_compose_dir = self.get_docker_compose_dir()
-            self.update_status("start", "in_progress", "Starting TAK Server containers...")
+            logger.debug(f"Using docker compose directory: {docker_compose_dir}")
+            await self.update_status("start", "in_progress", "Starting TAK Server containers...")
             
+            logger.debug("Running docker-compose up command...")
             result = await self.run_command.run_command_async(
                 ["docker-compose", "up", "-d"],
                 'status',
@@ -181,23 +163,28 @@ class TakServerStatus:
             )
 
             # Wait for containers to be running
+            logger.debug("Waiting for containers to start...")
             for attempt in range(30):  # 30 attempts, 2 seconds each
+                logger.debug(f"Checking container status - attempt {attempt + 1}/30")
                 if await self.check_containers_running():
-                    return self.update_status(
+                    logger.debug("Containers started successfully")
+                    return await self.update_status(
                         "start",
                         "complete",
                         "TAK Server containers started successfully"
                     )
                 await asyncio.sleep(2)
 
-            return self.update_status(
+            logger.debug("Timeout waiting for containers to start")
+            return await self.update_status(
                 "start",
                 "error",
                 "Timeout waiting for containers to start"
             )
 
         except Exception as e:
-            return self.update_status(
+            logger.error(f"Error starting containers: {str(e)}")
+            return await self.update_status(
                 "start",
                 "error",
                 "Error starting TAK Server containers",
@@ -207,12 +194,16 @@ class TakServerStatus:
     async def stop_containers(self) -> Dict[str, Any]:
         """Stop TAK Server containers."""
         try:
+            logger.debug("Stopping TAK Server containers...")
             if not self.check_installation():
-                return self.update_status("stop", "error", "TAK Server is not installed")
+                logger.debug("TAK Server is not installed, cannot stop containers")
+                return await self.update_status("stop", "error", "TAK Server is not installed")
 
             docker_compose_dir = self.get_docker_compose_dir()
-            self.update_status("stop", "in_progress", "Stopping TAK Server containers...")
+            logger.debug(f"Using docker compose directory: {docker_compose_dir}")
+            await self.update_status("stop", "in_progress", "Stopping TAK Server containers...")
             
+            logger.debug("Running docker-compose down command...")
             result = await self.run_command.run_command_async(
                 ["docker-compose", "down"],
                 'status',
@@ -222,23 +213,28 @@ class TakServerStatus:
             )
 
             # Wait for containers to be stopped
+            logger.debug("Waiting for containers to stop...")
             for attempt in range(30):  # 30 attempts, 2 seconds each
+                logger.debug(f"Checking container status - attempt {attempt + 1}/30")
                 if not await self.check_containers_running():
-                    return self.update_status(
+                    logger.debug("Containers stopped successfully")
+                    return await self.update_status(
                         "stop",
                         "complete",
                         "TAK Server containers stopped successfully"
                     )
                 await asyncio.sleep(2)
 
-            return self.update_status(
+            logger.debug("Timeout waiting for containers to stop")
+            return await self.update_status(
                 "stop",
                 "error",
                 "Timeout waiting for containers to stop"
             )
 
         except Exception as e:
-            return self.update_status(
+            logger.error(f"Error stopping containers: {str(e)}")
+            return await self.update_status(
                 "stop",
                 "error",
                 "Error stopping TAK Server containers",
@@ -248,12 +244,16 @@ class TakServerStatus:
     async def restart_containers(self) -> Dict[str, Any]:
         """Restart TAK Server containers."""
         try:
+            logger.debug("Restarting TAK Server containers...")
             if not self.check_installation():
-                return self.update_status("restart", "error", "TAK Server is not installed")
+                logger.debug("TAK Server is not installed, cannot restart containers")
+                return await self.update_status("restart", "error", "TAK Server is not installed")
 
             docker_compose_dir = self.get_docker_compose_dir()
-            self.update_status("restart", "in_progress", "Restarting TAK Server containers...")
+            logger.debug(f"Using docker compose directory: {docker_compose_dir}")
+            await self.update_status("restart", "in_progress", "Restarting TAK Server containers...")
             
+            logger.debug("Running docker-compose restart command...")
             result = await self.run_command.run_command_async(
                 ["docker-compose", "restart"],
                 'status',
@@ -263,23 +263,28 @@ class TakServerStatus:
             )
 
             # Wait for containers to be running
+            logger.debug("Waiting for containers to restart...")
             for attempt in range(30):  # 30 attempts, 2 seconds each
+                logger.debug(f"Checking container status - attempt {attempt + 1}/30")
                 if await self.check_containers_running():
-                    return self.update_status(
+                    logger.debug("Containers restarted successfully")
+                    return await self.update_status(
                         "restart",
                         "complete",
                         "TAK Server containers restarted successfully"
                     )
                 await asyncio.sleep(2)
 
-            return self.update_status(
+            logger.debug("Timeout waiting for containers to restart")
+            return await self.update_status(
                 "restart",
                 "error",
                 "Timeout waiting for containers to restart"
             )
 
         except Exception as e:
-            return self.update_status(
+            logger.error(f"Error restarting containers: {str(e)}")
+            return await self.update_status(
                 "restart",
                 "error",
                 "Error restarting TAK Server containers",
