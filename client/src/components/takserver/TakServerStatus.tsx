@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import StatusDisplay from './components/StatusDisplay';
-import ControlButtons from './components/ControlButtons';
-import InstallationForm from './components/InstallationForm';
+import StatusDisplay from './components/TakServerStatus/StatusDisplay';
+import ControlButtons from './components/TakServerStatus/ControlButtons';
+import InstallationForm from './components/TakServerStatus/InstallationForm';
 
 interface ServerState {
   isInstalled: boolean;

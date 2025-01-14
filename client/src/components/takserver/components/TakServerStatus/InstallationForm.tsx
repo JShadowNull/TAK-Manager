@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Input } from '../../shared/ui/shadcn/input';
-import { Button } from '../../shared/ui/shadcn/button';
-import { HelpIconTooltip } from '../../shared/ui/shadcn/tooltip/HelpIconTooltip';
+import { Input } from '../../../shared/ui/shadcn/input';
+import { Button } from '../../../shared/ui/shadcn/button';
+import { HelpIconTooltip } from '../../../shared/ui/shadcn/tooltip/HelpIconTooltip';
 import { Eye, EyeOff } from 'lucide-react';
 import { z } from 'zod';
 import Popups from './TakOperationPopups';

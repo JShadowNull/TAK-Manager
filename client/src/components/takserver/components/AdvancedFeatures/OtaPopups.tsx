@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button } from "../../shared/ui/shadcn/button";
+import { Button } from "../../../shared/ui/shadcn/button";
 import {
   Dialog,
   DialogContent,
@@ -7,9 +7,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "../../shared/ui/shadcn/dialog";
-import { Progress } from "../../shared/ui/shadcn/progress";
-import { ScrollArea } from "../../shared/ui/shadcn/scroll-area";
+} from "../../../shared/ui/shadcn/dialog";
+import { Progress } from "../../../shared/ui/shadcn/progress";
+import { ScrollArea } from "../../../shared/ui/shadcn/scroll-area";
 
 interface OtaPopupsProps {
   // Upload progress props

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../shared/ui/shadcn/dialog';
-import { Progress } from '../../shared/ui/shadcn/progress';
-import { Button } from '../../shared/ui/shadcn/button';
-import { ScrollArea } from '../../shared/ui/shadcn/scroll-area';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../../shared/ui/shadcn/dialog';
+import { Progress } from '../../../shared/ui/shadcn/progress';
+import { Button } from '../../../shared/ui/shadcn/button';
+import { ScrollArea } from '../../../shared/ui/shadcn/scroll-area';
 
 interface TerminalLine {
   message: string;
