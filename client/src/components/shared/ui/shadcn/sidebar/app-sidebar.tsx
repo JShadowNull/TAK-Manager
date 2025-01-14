@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, createContext, useContext } from "react"
 import { useLocation, Link } from "react-router-dom"
 import {
   Home,
@@ -10,7 +10,6 @@ import {
 } from "lucide-react"
 import { ModeToggle } from "@/components/shared/ui/shadcn/mode-toggle"
 import { Sheet, SheetContent } from "@/components/shared/ui/shadcn/sheet"
-
 import {
   Sidebar,
   SidebarContent,
@@ -23,6 +22,116 @@ import {
   SidebarFooter,
   SidebarHeader,
 } from "@/components/shared/ui/shadcn/sidebar/sidebar"
+
+interface ServerState {
+  isInstalled: boolean;
+  isRunning: boolean;
+  version: string;
+  error?: string;
+}
+
+interface TakServerContextType {
+  serverState: ServerState;
+}
+
+export const TakServerContext = createContext<TakServerContextType | undefined>(undefined);
+
+export const useTakServer = () => {
+  const context = useContext(TakServerContext);
+  if (context === undefined) {
+    throw new Error('useTakServer must be used within a TakServerProvider');
+  }
+  return context;
+};
+
+export function TakServerProvider({ children }: { children: React.ReactNode }) {
+  const [serverState, setServerState] = useState<ServerState>(() => {
+    // Try to get initial state from localStorage
+    const savedState = localStorage.getItem('takServerState')
+    if (savedState) {
+      try {
+        return JSON.parse(savedState)
+      } catch (error) {
+        console.error('[AppSidebar] Error parsing saved state:', error)
+      }
+    }
+    // Default state if nothing in localStorage
+    return {
+      isInstalled: false,
+      isRunning: false,
+      version: 'Not Installed'
+    }
+  });
+
+  // Update localStorage whenever serverState changes
+  useEffect(() => {
+    localStorage.setItem('takServerState', JSON.stringify(serverState));
+    window.dispatchEvent(new Event('takServerStateChange'));
+  }, [serverState]);
+
+  // Fetch status on mount and setup SSE
+  useEffect(() => {
+    const fetchStatus = async () => {
+      try {
+        const response = await fetch('/api/takserver/takserver-status');
+        if (!response.ok) {
+          throw new Error(`Failed to fetch status: ${response.statusText}`);
+        }
+        const data = await response.json();
+        setServerState(data);
+      } catch (error) {
+        console.error('Error fetching server status:', error);
+        setServerState(prev => ({ 
+          ...prev, 
+          error: error instanceof Error ? error.message : 'Failed to fetch server status' 
+        }));
+      }
+    };
+
+    // Initial fetch
+    fetchStatus();
+
+    // Setup SSE with reconnection logic
+    console.debug('[AppSidebar] Starting server status stream connection');
+    const serverStatus = new EventSource('/api/takserver/server-status-stream');
+
+    // Handle connection open
+    serverStatus.onopen = () => {
+      console.debug('[AppSidebar] Server status stream connected');
+    };
+
+    // Handle errors and reconnection
+    serverStatus.onerror = (error) => {
+      console.error('[AppSidebar] Server status stream error:', error);
+      // The browser will automatically try to reconnect
+    };
+
+    // Handle server status events
+    serverStatus.addEventListener('server-status', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.debug('[AppSidebar] Server status update received:', data);
+        if (data.isInstalled !== undefined && data.isRunning !== undefined) {
+          setServerState(data);
+        }
+      } catch (error) {
+        console.error('[AppSidebar] Error parsing server status:', error);
+      }
+    });
+
+    // Cleanup on unmount
+    return () => {
+      console.debug('[AppSidebar] Closing server status stream connection');
+      serverStatus.close();
+    };
+  }, []);
+
+  return (
+    <TakServerContext.Provider value={{ serverState }}>
+      {children}
+    </TakServerContext.Provider>
+  );
+}
 
 const items = [
   {
@@ -67,38 +176,7 @@ const items = [
 export function AppSidebar() {
   const location = useLocation()
   const [isOpen, setIsOpen] = useState(false)
-  const [takServerInstalled, setTakServerInstalled] = useState(false)
-
-  // Listen for changes to TAK server state
-  useEffect(() => {
-    const updateTakServerState = () => {
-      const savedState = localStorage.getItem('takServerState')
-      if (savedState) {
-        try {
-          const state = JSON.parse(savedState)
-          setTakServerInstalled(state.isInstalled === true)
-        } catch (error) {
-          console.error('Error parsing TAK server state:', error)
-          setTakServerInstalled(false)
-        }
-      } else {
-        setTakServerInstalled(false)
-      }
-    }
-
-    // Initial state
-    updateTakServerState()
-
-    // Listen for storage changes and custom event
-    window.addEventListener('storage', updateTakServerState)
-    window.addEventListener('takServerStateChange', updateTakServerState)
-    
-    // Cleanup
-    return () => {
-      window.removeEventListener('storage', updateTakServerState)
-      window.removeEventListener('takServerStateChange', updateTakServerState)
-    }
-  }, [])
+  const { serverState } = useTakServer();
 
   const getTitle = () => {
     const currentItem = items.find(item => item.url === location.pathname)
@@ -106,7 +184,7 @@ export function AppSidebar() {
   }
 
   return (
-    <>
+    <div className="flex flex-col min-h-screen">
       {/* Mobile Header */}
       <div className="xl:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-sm border-b border-border">
         <div className="relative flex items-center h-14">
@@ -143,7 +221,7 @@ export function AppSidebar() {
                 <SidebarGroupContent>
                   <SidebarMenu>
                     {items
-                      .filter((item) => item.alwaysShow || item.showWhen?.(takServerInstalled))
+                      .filter((item) => item.alwaysShow || item.showWhen?.(serverState.isInstalled))
                       .map((item) => (
                         <SidebarMenuItem key={item.title}>
                           <Link
@@ -199,7 +277,7 @@ export function AppSidebar() {
               <SidebarGroupContent>
                 <SidebarMenu>
                   {items
-                    .filter((item) => item.alwaysShow || item.showWhen?.(takServerInstalled))
+                    .filter((item) => item.alwaysShow || item.showWhen?.(serverState.isInstalled))
                     .map((item) => (
                       <SidebarMenuItem key={item.title}>
                         <Link
@@ -245,6 +323,6 @@ export function AppSidebar() {
           </SidebarFooter>
         </Sidebar>
       </div>
-    </>
+    </div>
   )
 }

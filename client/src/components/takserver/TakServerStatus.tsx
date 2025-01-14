@@ -11,7 +11,13 @@ interface ServerState {
 }
 
 interface TakServerStatusProps {
-  serverState: ServerState;
+  serverState: {
+    isInstalled: boolean;
+    isRunning: boolean;
+    version: string;
+    error?: string;
+  };
+  loading?: boolean;
 }
 
 const TakServerStatus: React.FC<TakServerStatusProps> = ({ serverState }) => {
