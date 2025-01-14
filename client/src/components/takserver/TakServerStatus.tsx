@@ -3,13 +3,6 @@ import StatusDisplay from './components/TakServerStatus/StatusDisplay';
 import ControlButtons from './components/TakServerStatus/ControlButtons';
 import InstallationForm from './components/TakServerStatus/InstallationForm';
 
-interface ServerState {
-  isInstalled: boolean;
-  isRunning: boolean;
-  version: string;
-  error?: string;
-}
-
 interface TakServerStatusProps {
   serverState: {
     isInstalled: boolean;
