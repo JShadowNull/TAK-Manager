@@ -156,7 +156,7 @@ FROM eclipse-temurin:17-jammy
 
 # Install necessary dependencies
 RUN apt update && \\
-apt-get install -y wget unzip openjdk-11-jdk dos2unix coreutils zip emacs-nox net-tools perl netcat vim && \\
+apt-get install -y wget unzip openjdk-17-jdk dos2unix coreutils zip emacs-nox net-tools perl netcat vim && \\
 rm -rf /var/lib/apt/lists/*
 
 # Set environment variables

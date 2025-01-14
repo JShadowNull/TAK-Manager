@@ -43,27 +43,9 @@ const Popups: React.FC<PopupsProps> = ({
   const [uninstallTerminalOutput, setUninstallTerminalOutput] = useState<TerminalLine[]>([]);
   const [isUninstallationComplete, setIsUninstallationComplete] = useState(false);
 
-  // Debug logging for state changes
-  useEffect(() => {
-    console.debug(`[Popups] Install Progress Dialog - showInstallProgress: ${showInstallProgress}, showInstallComplete: ${showInstallComplete}`);
-  }, [showInstallProgress, showInstallComplete]);
-
-  useEffect(() => {
-    console.debug(`[Popups] Install Complete Dialog - showInstallComplete: ${showInstallComplete}, error: ${installError ? 'true' : 'false'}`);
-  }, [showInstallComplete, installError]);
-
-  useEffect(() => {
-    console.debug(`[Popups] Uninstall Progress Dialog - showUninstallProgress: ${externalShowUninstallProgress}, showUninstallComplete: ${showUninstallComplete}`);
-  }, [externalShowUninstallProgress, showUninstallComplete]);
-
-  useEffect(() => {
-    console.debug(`[Popups] Uninstall Complete Dialog - showUninstallComplete: ${showUninstallComplete}, error: ${uninstallError ? 'true' : 'false'}`);
-  }, [showUninstallComplete, uninstallError]);
-
   // Installation status stream
   useEffect(() => {
     if (!showInstallProgress) {
-      console.debug('[Popups] Install status stream - Not starting because showInstallProgress is false');
       return;
     }
 
@@ -74,12 +56,10 @@ const Popups: React.FC<PopupsProps> = ({
     setShowInstallComplete(false);
     setIsInstallationComplete(false);
 
-    console.debug('[Popups] Install status stream - Starting EventSource connection');
     const installStatus = new EventSource('/api/takserver/install-status-stream');
     installStatus.addEventListener('install-status', (event) => {
       try {
         const data = JSON.parse(event.data);
-        console.debug('[Popups] Install status event received:', data);
         if (data.type === 'terminal') {
           setInstallTerminalOutput(prev => [...prev, {
             message: data.message,
@@ -89,26 +69,20 @@ const Popups: React.FC<PopupsProps> = ({
         } else {
           setInstallProgress(data.progress);
           if (data.error) {
-            console.debug('[Popups] Install error received:', data.error);
             setInstallError(data.error);
-            // Don't auto-close on error, let user review and close manually
             setIsInstallationComplete(true);
           }
           if (data.status === 'complete') {
-            console.debug('[Popups] Install complete status received');
-            // Don't auto-close on completion, let user review and close manually
             setIsInstallationComplete(true);
           }
         }
       } catch (error) {
-        console.error('[Popups] Error parsing install status:', error);
+        // Error handling remains but without logging
       }
     });
 
     return () => {
-      // Only close the connection if installation is complete AND user has acknowledged
       if (isInstallationComplete && showInstallComplete) {
-        console.debug('[Popups] Install status stream - Closing EventSource connection');
         installStatus.close();
       }
     };
@@ -117,7 +91,6 @@ const Popups: React.FC<PopupsProps> = ({
   // Uninstall status stream
   useEffect(() => {
     if (!externalShowUninstallProgress) {
-      console.debug('[Popups] Uninstall status stream - Not starting because showUninstallProgress is false');
       return;
     }
 
@@ -128,12 +101,10 @@ const Popups: React.FC<PopupsProps> = ({
     setShowUninstallComplete(false);
     setIsUninstallationComplete(false);
 
-    console.debug('[Popups] Uninstall status stream - Starting EventSource connection');
     const uninstallStatus = new EventSource('/api/takserver/uninstall-status-stream');
     uninstallStatus.addEventListener('uninstall-status', (event) => {
       try {
         const data = JSON.parse(event.data);
-        console.debug('[Popups] Uninstall status event received:', data);
         if (data.type === 'terminal') {
           setUninstallTerminalOutput(prev => [...prev, {
             message: data.message,
@@ -143,23 +114,20 @@ const Popups: React.FC<PopupsProps> = ({
         } else if (data.type === 'status') {
           setUninstallProgress(data.progress);
           if (data.error) {
-            console.debug('[Popups] Uninstall error received:', data.error);
             setUninstallError(data.error);
             setIsUninstallationComplete(true);
           }
           if (data.status === 'complete') {
-            console.debug('[Popups] Uninstall complete status received');
             setIsUninstallationComplete(true);
           }
         }
       } catch (error) {
-        console.error('[Popups] Error parsing uninstall status:', error);
+        // Error handling remains but without logging
       }
     });
 
     return () => {
       if (isUninstallationComplete && showUninstallComplete) {
-        console.debug('[Popups] Uninstall status stream - Closing EventSource connection');
         uninstallStatus.close();
       }
     };
@@ -167,7 +135,6 @@ const Popups: React.FC<PopupsProps> = ({
 
   const handleUninstall = async () => {
     try {
-      console.debug('[Popups] Starting uninstall process');
       onUninstallConfirm();
       setUninstallProgress(0);
       setUninstallError(undefined);
@@ -181,28 +148,25 @@ const Popups: React.FC<PopupsProps> = ({
         throw new Error(`Uninstallation failed: ${response.statusText}`);
       }
     } catch (error) {
-      console.error('[Popups] Uninstallation error:', error);
       setUninstallError(error instanceof Error ? error.message : 'Uninstallation failed');
     }
   };
 
   const resetInstallState = () => {
-    console.debug('[Popups] Resetting install state');
     setShowInstallComplete(false);
     setInstallProgress(0);
     setInstallError(undefined);
     setInstallTerminalOutput([]);
-    setIsInstallationComplete(true); // Ensure we mark it as complete before closing
+    setIsInstallationComplete(true);
     onInstallComplete();
   };
 
   const resetUninstallState = () => {
-    console.debug('[Popups] Resetting uninstall state');
     setShowUninstallComplete(false);
     setUninstallProgress(0);
     setUninstallError(undefined);
     setUninstallTerminalOutput([]);
-    setIsUninstallationComplete(true); // Ensure we mark it as complete before closing
+    setIsUninstallationComplete(true);
     onUninstallComplete();
   };
 

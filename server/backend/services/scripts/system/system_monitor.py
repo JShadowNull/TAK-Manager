@@ -6,8 +6,13 @@ import json
 from typing import Dict, Any, AsyncGenerator, Optional, Callable
 import asyncio
 from backend.config.logging_config import configure_logging
+import logging
 
+# Setup logging
 logger = configure_logging(__name__)
+# Set log level to INFO
+logger.setLevel(logging.INFO)
+
 
 class SystemMonitor:
     def __init__(self, emit_event: Optional[Callable[[Dict[str, Any]], None]] = None):

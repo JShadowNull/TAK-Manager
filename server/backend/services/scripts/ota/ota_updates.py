@@ -8,9 +8,9 @@ from backend.services.helpers.run_command import RunCommand
 from backend.services.scripts.ota.generate_content import GenerateOTAContent
 from backend.services.scripts.takserver.check_status import TakServerStatus
 from typing import Dict, Any, Optional, Callable
-import subprocess
 import time
 import asyncio
+import docker
 from backend.config.logging_config import configure_logging
 
 # Configure logging using centralized config
@@ -22,281 +22,250 @@ class OTAUpdate:
         self.run_command = RunCommand()
         self.generate_content = GenerateOTAContent()
         self.tak_status = TakServerStatus()
-        self.installation_progress = 0
-        self.status = 'processing'
-        self.error = None
-        self.message = ''
+        self._last_status = None
         self.emit_event = emit_event
+        self.docker_client = docker.from_env()
+        self.working_dir = self.get_default_working_directory()  # Initialize working_dir
         logger.debug(f"OTAUpdate initialized with zip path: {json.dumps({'ota_zip_path': ota_zip_path})}")
 
-    def _create_event(self, event_type: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Create an event object for SSE"""
-        event_data = {
-            'type': event_type,
-            'data': {
-                **data,
-                'timestamp': time.time()
-            }
-        }
-        logger.debug(f"Created event: {event_data}")
+    async def update_status(self, status: str, progress: float, message: str, error: Optional[str] = None) -> None:
+        """Update installation status."""
         if self.emit_event:
-            self.emit_event(event_data)
-        return event_data
-        
-    def update_progress(self, progress, message, status='processing', channel: str = 'ota-update'):
-        """Update installation progress"""
-        self.installation_progress = progress
-        self.message = message
-        self.status = status
-        self._create_event('ota_status', {
-            'status': status,
-            'progress': progress,
-            'message': message
-        })
-        logger.debug(f"Progress update: {json.dumps({'progress': progress, 'message': message, 'status': status})}")
-        
-    def get_progress(self):
-        """Get current installation progress"""
-        progress_info = {
-            'progress': self.installation_progress,
-            'status': self.status,
-            'message': self.message
-        }
-        if self.error:
-            progress_info['error'] = self.error
-            progress_info['status'] = 'error'
-        
-        logger.debug(f"Progress info: {json.dumps(progress_info)}")
-        return progress_info
-
-    def set_error(self, error_message, channel: str = 'ota-update'):
-        """Set error state"""
-        self.error = error_message
-        self.status = 'error'
-        self._create_event('ota_status', {
-            'status': 'error',
-            'message': error_message,
-            'error': error_message,
-            'isInProgress': False
-        })
-        logger.error(f"Error set: {error_message}")
-
-    def check_takserver_running(self, channel: str = 'ota-update'):
-        """Check and start TAKServer containers if needed"""
-        self.update_progress(15, "Checking TAKServer status", channel=channel)
-        
-        if not self.tak_status.check_installation():
-            raise Exception("TAKServer is not installed")
+            new_status = {
+                "type": "status",
+                "status": status,
+                "progress": progress,
+                "message": message,
+                "error": error,
+                "isError": error is not None,
+                "timestamp": int(time.time() * 1000)
+            }
             
-        if not self.tak_status.check_containers_running():
-            self.update_progress(20, "Starting TAKServer containers", channel=channel)
-            success = self.tak_status.start_containers()
-            if not success:
-                raise Exception("Failed to start TAKServer containers")
+            # Only emit if status has changed
+            if new_status != self._last_status:
+                await self.emit_event(new_status)
+                self._last_status = new_status
 
-    def update_dockerfile(self, channel: str = 'ota-update'):
+    def get_default_working_directory(self):
+        """Get the working directory."""
+        base_dir = '/home/tak-manager'
+        working_dir = os.path.join(base_dir, 'takserver-docker')
+        if not os.path.exists(working_dir):
+            os.makedirs(working_dir, exist_ok=True)
+        return working_dir
+
+    def get_docker_compose_dir(self):
+        """Get the docker compose directory."""
+        version = self.get_takserver_version()
+        if not version:
+            raise Exception("Could not determine TAK Server version")
+        path_version = self._get_path_version(version)
+        return os.path.join(self.working_dir, f"takserver-docker-{path_version}")
+
+    def get_takserver_version(self):
+        """Get TAK Server version from version.txt."""
+        version_file_path = os.path.join(self.working_dir, "version.txt")
+        
+        if os.path.exists(version_file_path):
+            try:
+                with open(version_file_path, "r") as version_file:
+                    version = version_file.read().strip()
+                    if not version:
+                        return None
+                    return version
+            except Exception:
+                return None
+        return None
+
+    def _get_path_version(self, version):
+        """Convert version string for path use."""
+        if not version:
+            return None
+        parts = version.split('-')
+        if len(parts) >= 3:
+            return f"{parts[0]}-RELEASE-{parts[2]}"
+        return version
+
+    async def stop_takserver(self) -> None:
+        """Stop TAKServer containers if needed"""
+        logger.debug("Stopping TAKServer containers.")
+        try:
+            await self.tak_status.stop_containers()
+            logger.debug("TAKServer containers stopped successfully.")
+        except Exception as e:
+            logger.error(f"Error in stop_takserver: {str(e)}")
+            raise
+
+    async def start_takserver(self) -> None:
+        """Start TAKServer containers if needed"""
+        logger.debug("Starting TAKServer containers.")
+        try:
+            await self.tak_status.start_containers()
+            logger.debug("TAKServer containers started successfully.")
+        except Exception as e:
+            logger.error(f"Error in start_takserver: {str(e)}")
+            raise
+
+    async def update_dockerfile(self) -> None:
         """Updates the Dockerfile with new content."""
         try:
-            self.update_progress(25, "Updating Dockerfile with new content", channel=channel)
-
-            docker_compose_dir = self.tak_status.get_docker_compose_dir()
+            logger.debug("Starting update_dockerfile method.")
+            docker_compose_dir = self.get_docker_compose_dir()
             dockerfile_path = os.path.join(docker_compose_dir, "docker", "Dockerfile.takserver")
 
+            logger.debug(f"Checking if Dockerfile exists at: {dockerfile_path}")
             if not os.path.exists(dockerfile_path):
+                logger.error(f"Dockerfile not found at {dockerfile_path}")
                 raise FileNotFoundError(f"Dockerfile not found at {dockerfile_path}")
 
+            logger.debug("Generating new Dockerfile content.")
             new_dockerfile_content = self.generate_content.update_dockerfile()
 
+            logger.debug(f"Writing new content to Dockerfile at: {dockerfile_path}")
             with open(dockerfile_path, 'w') as dockerfile:
                 dockerfile.write(new_dockerfile_content)
-
-            self.update_progress(30, "Dockerfile updated successfully", channel=channel)
+            logger.debug("Dockerfile updated successfully.")
         except Exception as e:
+            logger.error(f"Error updating Dockerfile: {str(e)}")
             raise
 
-    def update_docker_compose_file(self, channel: str = 'ota-update'):
-        """Updates the docker-compose.yml with new content."""
+    async def rebuild_takserver(self) -> None:
+        """Rebuild and restart TAK Server containers."""
         try:
-            self.update_progress(35, "Updating docker-compose.yml", channel=channel)
-
-            docker_compose_dir = self.tak_status.get_docker_compose_dir()
-            dockercompose_path = os.path.join(docker_compose_dir, "docker-compose.yml")
-
-            if not os.path.exists(dockercompose_path):
-                raise FileNotFoundError(f"docker-compose.yml not found at {dockercompose_path}")
-
-            new_dockercompose_content = self.generate_content.update_docker_compose_file()
-
-            with open(dockercompose_path, 'w') as dockercompose:
-                dockercompose.write(new_dockercompose_content)
-
-            self.update_progress(40, "docker-compose.yml updated successfully", channel=channel)
-        except Exception as e:
-            raise
-
-    def rebuild_takserver(self, channel: str = 'ota-update'):
-        try:
-            self.update_progress(45, "Starting Docker container rebuild process", channel=channel)
-
-            docker_compose_dir = self.tak_status.get_docker_compose_dir()
-            dockerfile_path = os.path.join(docker_compose_dir, "docker", "Dockerfile.takserver")
-            compose_file_path = os.path.join(docker_compose_dir, "docker-compose.yml")
-
-            if not os.path.exists(dockerfile_path) or not os.path.exists(compose_file_path):
-                raise FileNotFoundError("Required Docker files not found")
-
-            self.update_progress(50, "Running docker compose build", channel=channel)
-            build_command = ['docker-compose', '-f', compose_file_path, 'build']
-            self.run_command.run_command(
-                build_command,
-                'docker_build',
-                capture_output=False,
-                emit_event=self.emit_event
+            logger.debug("Getting docker compose directory...")
+            docker_compose_dir = self.get_docker_compose_dir()
+            logger.debug(f"Using docker compose directory: {docker_compose_dir}")
+            
+            # Build and start containers using docker-compose
+            logger.info("Building and starting Docker containers...")
+            logger.debug("Running docker-compose up command with build and force-recreate flags...")
+            result = await self.run_command.run_command_async(
+                ["docker-compose", "up", "-d", "--build", "--force-recreate"],
+                'ota',
+                emit_event=self.emit_event,
+                working_dir=docker_compose_dir,
+                ignore_errors=True
             )
+            if not result.success:
+                logger.debug(f"Docker compose command failed with stderr: {result.stderr}")
+                raise Exception(f"Failed to rebuild containers: {result.stderr}")
 
-            self.update_progress(60, "Running docker compose up", channel=channel)
-            up_command = ['docker-compose', '-f', compose_file_path, 'up', '-d', '--force-recreate']
-            self.run_command.run_command(
-                up_command,
-                'docker_up',
-                capture_output=False,
-                emit_event=self.emit_event
-            )
+            logger.debug("Docker compose command completed successfully")
 
-            self.update_progress(70, "Docker containers rebuilt successfully", channel=channel)
         except Exception as e:
+            logger.error(f"Error in rebuild_takserver: {str(e)}")
             raise
 
-    def check_if_generate_inf_script_exists(self, channel: str = 'ota-update'):
+    async def check_if_generate_inf_script_exists(self) -> bool:
         try:
-            self.update_progress(75, "Checking for generate-inf.sh script", channel=channel)
             script_path = '/opt/android-sdk/build-tools/33.0.0/generate-inf.sh'
-
-            version = self.tak_status.get_takserver_version()
+            version = self.get_takserver_version()
             takserver_container_name = f"takserver-{version}"
 
-            check_command = [
-                'docker', 'exec', takserver_container_name, 'test', '-f', script_path
-            ]
-            result = self.run_command.run_command(
-                check_command,
-                'check_script',
-                capture_output=True,
-                emit_event=self.emit_event
-            )
-
-            if isinstance(result, subprocess.CompletedProcess):
-                if result.returncode == 0:
-                    self.update_progress(77, "generate-inf.sh script found", channel=channel)
-                    return True
-                else:
-                    self.update_progress(77, "generate-inf.sh script not found", channel=channel)
-                    return False
-            else:
+            try:
+                container = self.docker_client.containers.get(takserver_container_name)
+                exit_code, _ = container.exec_run(f"test -f {script_path}")
+                return exit_code == 0
+            except docker.errors.NotFound:
+                logger.error(f"Container {takserver_container_name} not found")
+                return False
+            except Exception as e:
+                logger.error(f"Error checking script existence: {str(e)}")
                 return False
         except Exception as e:
+            logger.error(f"Error in check_if_generate_inf_script_exists: {str(e)}")
             raise
 
-    def create_generate_inf_script(self, channel: str = 'ota-update'):
+    async def create_generate_inf_script(self) -> None:
         temp_script_path = None
         try:
-            self.update_progress(80, "Setting up generate-inf.sh script", channel=channel)
-
-            version = self.tak_status.get_takserver_version()
+            version = self.get_takserver_version()
             takserver_container_name = f"takserver-{version}"
 
-            script_exists = self.check_if_generate_inf_script_exists(channel)
+            script_exists = await self.check_if_generate_inf_script_exists()
             if script_exists:
-                self.update_progress(85, "generate-inf.sh script already exists", channel=channel)
                 return
 
             generate_inf_script_content = self.generate_content.generate_inf_content()
 
+            # Create temporary script file
             with tempfile.NamedTemporaryFile(delete=False, mode='w', suffix='.sh') as temp_script_file:
                 temp_script_file.write(generate_inf_script_content)
                 temp_script_path = temp_script_file.name
 
-            self.update_progress(82, "Copying script to container", channel=channel)
-            copy_command = [
-                'docker', 'cp', temp_script_path, f'{takserver_container_name}:/opt/android-sdk/build-tools/33.0.0/generate-inf.sh'
-            ]
-            self.run_command.run_command(
-                copy_command,
-                'copy_script',
-                capture_output=False,
-                emit_event=self.emit_event
-            )
+            try:
+                # Use docker cp command instead of put_archive
+                copy_command = [
+                    'docker', 'cp', 
+                    temp_script_path, 
+                    f"{takserver_container_name}:/opt/android-sdk/build-tools/33.0.0/generate-inf.sh"
+                ]
+                
+                result = await self.run_command.run_command_async(
+                    copy_command,
+                    'ota',
+                    emit_event=self.emit_event,
+                    ignore_errors=True
+                )
+                
+                if not result.success:
+                    raise Exception(f"Failed to copy script to container: {result.stderr}")
 
-            self.update_progress(85, "Setting up script permissions", channel=channel)
-            dos2unix_command = [
-                'docker', 'exec', takserver_container_name, 'dos2unix', '/opt/android-sdk/build-tools/33.0.0/generate-inf.sh'
-            ]
-            chmod_command = [
-                'docker', 'exec', takserver_container_name, 'chmod', '+x', '/opt/android-sdk/build-tools/33.0.0/generate-inf.sh'
-            ]
-            self.run_command.run_command(
-                dos2unix_command,
-                'dos2unix',
-                capture_output=False,
-                emit_event=self.emit_event
-            )
-            self.run_command.run_command(
-                chmod_command,
-                'chmod',
-                capture_output=False,
-                emit_event=self.emit_event
-            )
+                # Convert line endings and make executable
+                container = self.docker_client.containers.get(takserver_container_name)
+                container.exec_run('dos2unix /opt/android-sdk/build-tools/33.0.0/generate-inf.sh')
+                container.exec_run('chmod +x /opt/android-sdk/build-tools/33.0.0/generate-inf.sh')
 
-            self.update_progress(87, "generate-inf.sh script setup completed", channel=channel)
+            except docker.errors.NotFound:
+                logger.error(f"Container {takserver_container_name} not found")
+                raise Exception(f"Container {takserver_container_name} not found")
+            except Exception as e:
+                logger.error(f"Error creating script in container: {str(e)}")
+                raise Exception(f"Error creating script in container: {str(e)}")
+
         except Exception as e:
+            logger.error(f"Error in create_generate_inf_script: {str(e)}")
             raise
         finally:
             if temp_script_path and os.path.exists(temp_script_path):
                 os.remove(temp_script_path)
 
-    def check_and_remove_existing_plugin_folder(self, channel: str = 'ota-update'):
+    async def check_and_remove_existing_plugin_folder(self) -> None:
         try:
-            self.update_progress(90, "Checking plugins folder", channel=channel)
-
-            version = self.tak_status.get_takserver_version()
+            version = self.get_takserver_version()
             takserver_container_name = f"takserver-{version}"
 
             check_command = [
                 'docker', 'exec', takserver_container_name, 'test', '-d', '/opt/tak/webcontent/plugins'
             ]
-            result = self.run_command.run_command(
+            result = await self.run_command.run_command_async(
                 check_command,
-                'check_plugins',
-                capture_output=True,
-                emit_event=self.emit_event
+                'ota',
+                emit_event=self.emit_event,
+                ignore_errors=True
             )
 
-            if result.returncode == 0:
-                self.update_progress(92, "Removing existing plugins folder", channel=channel)
+            if result.success:
                 remove_command = [
                     'docker', 'exec', takserver_container_name, 'rm', '-rf', '/opt/tak/webcontent/plugins'
                 ]
-                self.run_command.run_command(
+                result = await self.run_command.run_command_async(
                     remove_command,
-                    'remove_plugins',
-                    capture_output=False,
-                    emit_event=self.emit_event
+                    'ota',
+                    emit_event=self.emit_event,
+                    ignore_errors=True
                 )
-                self.update_progress(93, "Existing plugins folder removed", channel=channel)
-            else:
-                self.update_progress(93, "No existing plugins folder found", channel=channel)
+                if not result.success:
+                    raise Exception(result.stderr)
         except Exception as e:
             raise
 
-    def extract_and_prepare_plugins(self, ota_zip_path, channel: str = 'ota-update'):
+    async def extract_and_prepare_plugins(self) -> None:
         try:
-            self.update_progress(94, "Extracting OTA zip file", channel=channel)
-
             with tempfile.TemporaryDirectory() as temp_dir:
-                with zipfile.ZipFile(ota_zip_path, 'r') as zip_ref:
+                with zipfile.ZipFile(self.ota_zip_path, 'r') as zip_ref:
                     zip_ref.extractall(temp_dir)
 
-                self.update_progress(95, "Processing extracted files", channel=channel)
                 for root, dirs, files in os.walk(temp_dir, topdown=False):
                     for file in files:
                         file_path = os.path.join(root, file)
@@ -305,115 +274,187 @@ class OTAUpdate:
                     for dir in dirs:
                         os.rmdir(os.path.join(root, dir))
 
-                version = self.tak_status.get_takserver_version()
+                version = self.get_takserver_version()
                 takserver_container_name = f"takserver-{version}"
 
-                self.update_progress(97, "Copying plugins to container", channel=channel)
                 copy_command = [
                     'docker', 'cp', f'{temp_dir}/.', f'{takserver_container_name}:/opt/tak/webcontent/plugins'
                 ]
-                self.run_command.run_command(
+                result = await self.run_command.run_command_async(
                     copy_command,
-                    'copy_plugins',
-                    capture_output=False,
-                    emit_event=self.emit_event
+                    'ota',
+                    emit_event=self.emit_event,
+                    ignore_errors=True
                 )
-
-            self.update_progress(98, "Plugins prepared successfully", channel=channel)
+                if not result.success:
+                    raise Exception(result.stderr)
         except Exception as e:
             raise
 
-    def run_generate_inf_script(self, channel: str = 'ota-update'):
+    async def run_generate_inf_script(self) -> None:
         try:
-            self.update_progress(99, "Running generate-inf.sh script", channel=channel)
-
-            version = self.tak_status.get_takserver_version()
+            version = self.get_takserver_version()
             takserver_container_name = f"takserver-{version}"
 
             command = [
-                'docker', 'exec', takserver_container_name, 'bash', '/opt/android-sdk/build-tools/33.0.0/generate-inf.sh', '/opt/tak/webcontent/plugins', 'true'
+                'docker', 'exec', takserver_container_name,
+                'bash', '/opt/android-sdk/build-tools/33.0.0/generate-inf.sh',
+                '/opt/tak/webcontent/plugins', 'true'
             ]
-            self.run_command.run_command(
+
+            result = await self.run_command.run_command_async(
                 command,
-                'generate_inf',
-                capture_output=False,
-                emit_event=self.emit_event
+                'ota',
+                emit_event=self.emit_event,
+                ignore_errors=True
             )
 
-            self.update_progress(100, "generate-inf.sh script executed successfully", channel=channel)
+            if not result.success:
+                logger.error(f"Error running generate-inf script: {result.stderr}")
+                raise Exception(f"Failed to run generate-inf script: {result.stderr}")
+
         except Exception as e:
+            logger.error(f"Error in run_generate_inf_script: {str(e)}")
             raise
 
-    def restart_takserver_containers(self, channel: str = 'ota-update'):
+    async def restart_takserver_containers(self) -> None:
         """Restart TAKServer containers using TakServerStatus"""
         try:
-            self.update_progress(100, "Restarting TAKServer containers", channel=channel)
             success = self.tak_status.restart_containers()
             if not success:
                 raise Exception("Failed to restart TAKServer containers")
-            self.update_progress(100, "TAKServer containers restarted successfully", channel=channel)
         except Exception as e:
             raise
-
-    def main(self, channel: str = 'ota-update'):
+    async def main(self) -> bool:
         """Main configuration process"""
         try:
-            # Emit initial status
-            self._create_event('ota_status', {
-                'status': 'started',
-                'message': 'Starting OTA configuration process',
-                'progress': 0,
-                'isInProgress': True
-            })
+            # Send initial 0% progress
+            await self.update_status("in_progress", 0, "Initializing OTA configuration process")
 
-            self.check_takserver_running(channel)
-            self.update_dockerfile(channel)
-            self.update_docker_compose_file(channel)
-            self.rebuild_takserver(channel)
-            self.check_and_remove_existing_plugin_folder(channel)
-            self.extract_and_prepare_plugins(self.ota_zip_path, channel)
-            self.create_generate_inf_script(channel)
-            self.run_generate_inf_script(channel)
+            # Define task weights
+            weights = {
+                'setup': 5,          # Initial checks and setup
+                'config': 10,        # Dockerfile and docker-compose updates
+                'docker_build': 50,  # Heaviest weight for docker rebuild
+                'plugins': 25,       # Plugin operations
+                'script': 10         # Generate inf script operations
+            }
+            progress = 0
+
+            # Emit started status
+            await self.update_status("started", progress, "Starting OTA configuration process")
+
+            # Check TAKServer status (0-5%)
+            await self.update_status("in_progress", progress, "Checking TAKServer status")
+            await self.stop_takserver()
+            progress += weights['setup']
+            await self.update_status("in_progress", progress, "TAKServer status verified")
+
+            # Update Docker configs (5-15%)
+            await self.update_status("in_progress", progress, "Updating Docker configurations")
+            await self.update_dockerfile()
+            progress += weights['config'] * 0.5
+            await self.update_status("in_progress", progress, "Dockerfile updated")
+            
+            # Rebuild TAKServer (15-65%)
+            await self.update_status("in_progress", progress, "Starting Docker rebuild process")
+            
+            # Create a background task to update progress during docker build
+            build_start_progress = progress
+            build_weight = weights['docker_build']
+            
+            async def update_build_progress():
+                build_progress = 0
+                while build_progress < build_weight:
+                    await asyncio.sleep(2)  # Update every 2 seconds
+                    build_progress = min(build_progress + 1, build_weight * 0.95)  # Cap at 95% of build weight
+                    await self.update_status("in_progress", build_start_progress + build_progress, 
+                                          "Building Docker containers...")
+            
+            # Start progress updater task
+            progress_task = asyncio.create_task(update_build_progress())
+            
+            # Perform actual docker build
+            await self.rebuild_takserver()
+            
+            # Cancel progress updater and set final build progress
+            progress_task.cancel()
+            try:
+                await progress_task
+            except asyncio.CancelledError:
+                pass
+            
+            progress = build_start_progress + weights['docker_build']
+            await self.update_status("in_progress", progress, "Docker containers rebuilt")
+
+            # Setup generate-inf script (65-75%)
+            await self.update_status("in_progress", progress, "Setting up generate-inf script")
+            await self.create_generate_inf_script()
+            progress += weights['script']
+            await self.update_status("in_progress", progress, "Generate-inf script setup completed")
+
+            # Handle plugins (75-100%)
+            await self.update_status("in_progress", progress, "Processing plugins")
+            await self.check_and_remove_existing_plugin_folder()
+            progress += weights['plugins'] * 0.3
+            await self.update_status("in_progress", progress, "Plugin folder prepared")
+
+            await self.extract_and_prepare_plugins()
+            progress += weights['plugins'] * 0.6
+            await self.update_status("in_progress", progress, "Plugins extracted and prepared")
+
+            await self.run_generate_inf_script()
+            progress = 100
             
             # Emit completion status
-            self._create_event('ota_status', {
-                'status': 'completed',
-                'message': 'Configuration completed successfully',
-                'progress': 100,
-                'isInProgress': False
-            })
-            self.update_progress(100, "Configuration completed successfully", 'complete', channel)
+            await self.update_status("complete", progress, "Configuration completed successfully")
             return True
         except Exception as e:
-            self.set_error(str(e), channel)
+            await self.update_status("error", 100, "Configuration failed", str(e))
             return False
 
-    def update(self, channel: str = 'ota-update'):
+    async def update(self) -> bool:
         """Update plugins process"""
         try:
-            # Emit initial status
-            self._create_event('ota_status', {
-                'status': 'started',
-                'message': 'Starting OTA update process',
-                'progress': 0,
-                'isInProgress': True
-            })
+            # Send initial 0% progress
+            await self.update_status("in_progress", 0, "Initializing OTA update process")
 
-            self.check_takserver_running(channel)
-            self.check_and_remove_existing_plugin_folder(channel)
-            self.extract_and_prepare_plugins(self.ota_zip_path, channel)
-            self.create_generate_inf_script(channel)
-            self.run_generate_inf_script(channel)
+            # Define task weights for update process
+            weights = {
+                'setup': 10,     # Initial checks
+                'plugins': 80,    # Plugin operations (main task for update)
+                'script': 10      # Generate inf script operations
+            }
+            progress = 0
+
+            # Emit started status
+            await self.update_status("started", progress, "Starting OTA update process")
+
+            # Check TAKServer status (0-10%)
+            await self.update_status("in_progress", progress, "Checking TAKServer status")
+            await self.start_takserver()
+            progress += weights['setup']
+            await self.update_status("in_progress", progress, "TAKServer status verified")
+
+            # Handle plugins (10-90%)
+            await self.update_status("in_progress", progress, "Processing plugins")
+            await self.check_and_remove_existing_plugin_folder()
+            progress += weights['plugins'] * 0.3
+            await self.update_status("in_progress", progress, "Plugin folder prepared")
+
+            await self.extract_and_prepare_plugins()
+            progress += weights['plugins'] * 0.7
+            await self.update_status("in_progress", progress, "Plugins extracted and prepared")
+
+            # Generate inf script (90-100%)
+            await self.update_status("in_progress", progress, "Running generate-inf script")
+            await self.create_generate_inf_script()
+            await self.run_generate_inf_script()
+            progress = 100
             
             # Emit completion status
-            self._create_event('ota_status', {
-                'status': 'completed',
-                'message': 'Update completed successfully',
-                'progress': 100,
-                'isInProgress': False
-            })
-            self.update_progress(100, "Update completed successfully", 'complete', channel)
+            await self.update_status("complete", progress, "Update completed successfully")
             return True
         except Exception as e:
-            self.set_error(str(e), channel)
+            await self.update_status("error", 100, "Update failed", str(e))
             return False

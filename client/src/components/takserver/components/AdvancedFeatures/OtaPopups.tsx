@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "../../../shared/ui/shadcn/button";
 import {
   Dialog,
@@ -11,156 +11,315 @@ import {
 import { Progress } from "../../../shared/ui/shadcn/progress";
 import { ScrollArea } from "../../../shared/ui/shadcn/scroll-area";
 
-interface OtaPopupsProps {
-  // Upload progress props
-  showUploadProgress: boolean;
-  uploadProgress: number;
-  uploadError?: string;
-  onUploadProgressClose: () => void;
-  isInitializing?: boolean;
-  
-  // Installation progress props
-  showProgress: boolean;
-  showComplete: boolean;
-  progress: number;
-  error?: string;
-  title: string;
+interface TerminalLine {
   message: string;
-  onProgressClose: () => void;
-  onComplete: () => void;
-  onMoveToComplete: () => void;
-  terminalOutput: string[];
+  isError: boolean;
+  timestamp: number;
+}
+
+interface OtaPopupsProps {
+  onConfigureComplete: () => void;
+  onUpdateComplete: () => void;
+  showConfigureProgress?: boolean;
+  showUpdateProgress?: boolean;
 }
 
 const OtaPopups: React.FC<OtaPopupsProps> = ({
-  // Upload progress props
-  showUploadProgress,
-  uploadProgress,
-  uploadError,
-  onUploadProgressClose,
-  isInitializing,
-  
-  // Installation progress props
-  showProgress,
-  showComplete,
-  progress,
-  error,
-  title,
-  message,
-  onProgressClose,
-  onComplete,
-  onMoveToComplete,
-  terminalOutput,
+  onConfigureComplete,
+  onUpdateComplete,
+  showConfigureProgress = false,
+  showUpdateProgress = false
 }) => {
-  const getProgressDescription = () => {
-    if (progress === 100) {
-      return "Operation complete. Review the logs and click Next to continue.";
+  // Configure state
+  const [showConfigureComplete, setShowConfigureComplete] = useState(false);
+  const [configureProgress, setConfigureProgress] = useState(0);
+  const [configureError, setConfigureError] = useState<string>();
+  const [configureTerminalOutput, setConfigureTerminalOutput] = useState<TerminalLine[]>([]);
+  const [isConfigurationComplete, setIsConfigurationComplete] = useState(false);
+
+  // Update state
+  const [showUpdateComplete, setShowUpdateComplete] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState(0);
+  const [updateError, setUpdateError] = useState<string>();
+  const [updateTerminalOutput, setUpdateTerminalOutput] = useState<TerminalLine[]>([]);
+  const [isUpdateComplete, setIsUpdateComplete] = useState(false);
+
+  // Configure status stream
+  useEffect(() => {
+    if (!showConfigureProgress) {
+      return;
     }
-    return message;
+
+    // Clear any previous state when starting a new configuration
+    setConfigureError(undefined);
+    setConfigureProgress(0);
+    setConfigureTerminalOutput([]);
+    setShowConfigureComplete(false);
+    setIsConfigurationComplete(false);
+
+    const configureStatus = new EventSource('/api/ota/status-stream');
+    configureStatus.addEventListener('ota-status', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'terminal') {
+          setConfigureTerminalOutput(prev => [...prev, {
+            message: data.message,
+            isError: data.isError,
+            timestamp: data.timestamp
+          }]);
+        } else {
+          setConfigureProgress(data.progress);
+          if (data.error) {
+            setConfigureError(data.error);
+            setIsConfigurationComplete(true);
+          }
+          if (data.status === 'complete') {
+            setIsConfigurationComplete(true);
+          }
+        }
+      } catch (error) {
+        // Error handling remains but without logging
+      }
+    });
+
+    return () => {
+      if (isConfigurationComplete && showConfigureComplete) {
+        configureStatus.close();
+      }
+    };
+  }, [showConfigureProgress]);
+
+  // Update status stream
+  useEffect(() => {
+    if (!showUpdateProgress) {
+      return;
+    }
+
+    // Clear any previous state when starting a new update
+    setUpdateError(undefined);
+    setUpdateProgress(0);
+    setUpdateTerminalOutput([]);
+    setShowUpdateComplete(false);
+    setIsUpdateComplete(false);
+
+    const updateStatus = new EventSource('/api/ota/status-stream');
+    updateStatus.addEventListener('ota-status', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'terminal') {
+          setUpdateTerminalOutput(prev => [...prev, {
+            message: data.message,
+            isError: data.isError,
+            timestamp: data.timestamp
+          }]);
+        } else {
+          setUpdateProgress(data.progress);
+          if (data.error) {
+            setUpdateError(data.error);
+            setIsUpdateComplete(true);
+          }
+          if (data.status === 'complete') {
+            setIsUpdateComplete(true);
+          }
+        }
+      } catch (error) {
+        // Error handling remains but without logging
+      }
+    });
+
+    return () => {
+      if (isUpdateComplete && showUpdateComplete) {
+        updateStatus.close();
+      }
+    };
+  }, [showUpdateProgress]);
+
+  const resetConfigureState = () => {
+    setShowConfigureComplete(false);
+    setConfigureProgress(0);
+    setConfigureError(undefined);
+    setConfigureTerminalOutput([]);
+    setIsConfigurationComplete(false);
+    onConfigureComplete();
   };
 
-  const getCompleteDescription = () => {
-    if (error) return error;
-    return `${title} completed successfully!`;
+  const resetUpdateState = () => {
+    setShowUpdateComplete(false);
+    setUpdateProgress(0);
+    setUpdateError(undefined);
+    setUpdateTerminalOutput([]);
+    setIsUpdateComplete(false);
+    onUpdateComplete();
   };
 
   return (
     <>
-      {/* File Upload Progress Dialog */}
+      {/* Configure Progress Dialog */}
       <Dialog 
-        open={showUploadProgress} 
-        onOpenChange={uploadProgress < 100 ? undefined : onUploadProgressClose}
+        open={showConfigureProgress && !showConfigureComplete} 
+        onOpenChange={(open) => {
+          // Prevent dialog from being closed except through explicit user action
+          if (!open) {
+            return;
+          }
+        }}
       >
-        <DialogContent>
+        <DialogContent 
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+          className="xl:max-w-3xl"
+        >
           <DialogHeader>
-            <DialogTitle>Uploading File</DialogTitle>
+            <DialogTitle>Configuring OTA</DialogTitle>
             <DialogDescription>
-              {isInitializing 
-                ? "Preparing file upload..."
-                : uploadProgress === 100 
-                ? "Upload complete. Starting configuration..." 
-                : "Please wait while the file is being uploaded..."}
+              {configureProgress === 100 
+                ? "Configuration complete. Review the logs and click Next to continue." 
+                : "Please wait while OTA is being configured..."}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <Progress value={isInitializing ? 0 : uploadProgress} className="w-full" />
-            <div className="mt-2 text-sm text-muted-foreground">
-              Progress: {isInitializing ? 0 : uploadProgress}%
-            </div>
-          </div>
-          {uploadError && (
-            <DialogFooter>
-              <Button onClick={onUploadProgressClose}>
-                Close
-              </Button>
-            </DialogFooter>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Installation Progress Dialog */}
-      <Dialog 
-        open={showProgress} 
-        onOpenChange={progress < 100 ? undefined : onProgressClose}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{title}</DialogTitle>
-            <DialogDescription>
-              {getProgressDescription()}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <Progress value={progress} className="w-full" />
-            <div className="mt-2 text-sm text-muted-foreground">
-              Progress: {progress}%
-            </div>
-            {terminalOutput.length > 0 && (
+            <Progress 
+              value={configureProgress}
+              isIndeterminate={configureProgress === 0}
+              text={configureProgress === 0 
+                ? "Initializing..." 
+                : `Progress: ${configureProgress}%`
+              }
+            />
+            {configureTerminalOutput.length > 0 && (
               <ScrollArea 
-                className="w-full rounded-md border p-4 mt-4"
+                className="w-full rounded-md border p-4 mt-4 h-[300px] bg-background"
+                content={configureTerminalOutput}
                 autoScroll={true}
-                content={terminalOutput}
               >
-                <div className="font-mono text-sm">
-                  {terminalOutput.map((line, index) => (
-                    <div key={index} className="whitespace-pre-wrap">
-                      {line}
+                <div className="space-y-1">
+                  {configureTerminalOutput.map((line, index) => (
+                    <div key={index}>
+                      <div className={`font-mono text-sm whitespace-pre-wrap ${line.isError ? 'text-destructive' : 'text-foreground'}`}>
+                        {line.timestamp && (
+                          <span className="text-muted-foreground mr-2">
+                            {new Date(line.timestamp).toLocaleTimeString()}
+                          </span>
+                        )}
+                        {line.message}
+                      </div>
                     </div>
                   ))}
                 </div>
               </ScrollArea>
             )}
           </div>
-          {progress === 100 && !error && (
-            <DialogFooter>
-              <Button onClick={onMoveToComplete}>
+          <DialogFooter>
+            {isConfigurationComplete && (
+              <Button onClick={() => setShowConfigureComplete(true)}>
                 Next
               </Button>
-            </DialogFooter>
-          )}
-          {error && (
-            <DialogFooter>
-              <Button onClick={onProgressClose}>
-                Close
-              </Button>
-            </DialogFooter>
-          )}
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Complete Dialog */}
-      <Dialog open={showComplete} onOpenChange={onComplete}>
-        <DialogContent>
+      {/* Configure Complete Dialog */}
+      <Dialog open={showConfigureComplete}>
+        <DialogContent 
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>
-              {error ? `${title} Failed` : `${title} Complete`}
+              {configureError ? "Configuration Failed" : "Configuration Complete"}
             </DialogTitle>
             <DialogDescription>
-              {getCompleteDescription()}
+              {configureError ? configureError : "OTA has been successfully configured!"}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button onClick={onComplete}>Close</Button>
+            <Button onClick={resetConfigureState}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Update Progress Dialog */}
+      <Dialog 
+        open={showUpdateProgress && !showUpdateComplete} 
+        onOpenChange={(open) => {
+          // Prevent dialog from being closed except through explicit user action
+          if (!open) {
+            return;
+          }
+        }}
+      >
+        <DialogContent 
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+          className="xl:max-w-3xl"
+        >
+          <DialogHeader>
+            <DialogTitle>Updating OTA</DialogTitle>
+            <DialogDescription>
+              {updateProgress === 100 
+                ? "Update complete. Review the logs and click Next to continue." 
+                : "Please wait while OTA update is being applied..."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Progress 
+              value={updateProgress}
+              isIndeterminate={updateProgress === 0}
+              text={updateProgress === 0 
+                ? "Initializing..." 
+                : `Progress: ${updateProgress}%`
+              }
+            />
+            {updateTerminalOutput.length > 0 && (
+              <ScrollArea 
+                className="w-full rounded-md border p-4 mt-4 h-[300px] bg-background"
+                content={updateTerminalOutput}
+                autoScroll={true}
+              >
+                <div className="space-y-1">
+                  {updateTerminalOutput.map((line, index) => (
+                    <div key={index}>
+                      <div className={`font-mono text-sm whitespace-pre-wrap ${line.isError ? 'text-destructive' : 'text-foreground'}`}>
+                        {line.timestamp && (
+                          <span className="text-muted-foreground mr-2">
+                            {new Date(line.timestamp).toLocaleTimeString()}
+                          </span>
+                        )}
+                        {line.message}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            )}
+          </div>
+          <DialogFooter>
+            {isUpdateComplete && (
+              <Button onClick={() => setShowUpdateComplete(true)}>
+                Next
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Update Complete Dialog */}
+      <Dialog open={showUpdateComplete}>
+        <DialogContent 
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>
+              {updateError ? "Update Failed" : "Update Complete"}
+            </DialogTitle>
+            <DialogDescription>
+              {updateError ? updateError : "OTA update has been successfully applied!"}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={resetUpdateState}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
