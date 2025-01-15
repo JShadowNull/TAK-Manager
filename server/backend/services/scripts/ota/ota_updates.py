@@ -333,30 +333,30 @@ class OTAUpdate:
 
             # Define task weights
             weights = {
-                'setup': 5,          # Initial checks and setup
-                'config': 10,        # Dockerfile and docker-compose updates
-                'docker_build': 50,  # Heaviest weight for docker rebuild
-                'plugins': 25,       # Plugin operations
-                'script': 10         # Generate inf script operations
+                'setup': 2,          # Initial checks and setup
+                'config': 3,         # Dockerfile and docker-compose updates
+                'docker_build': 48,  # Docker rebuild weight
+                'plugins': 45,       # Plugin operations
+                'script': 2          # Generate inf script operations
             }
             progress = 0
 
             # Emit started status
             await self.update_status("started", progress, "Starting OTA configuration process")
 
-            # Check TAKServer status (0-5%)
-            await self.update_status("in_progress", progress, "Checking TAKServer status")
+            # Check TAKServer status (0-2%)
+            await self.update_status("in_progress", progress, "Checking TAKServer status...")
             await self.stop_takserver()
             progress += weights['setup']
             await self.update_status("in_progress", progress, "TAKServer status verified")
 
-            # Update Docker configs (5-15%)
-            await self.update_status("in_progress", progress, "Updating Docker configurations")
+            # Update Docker configs (2-5%)
+            await self.update_status("in_progress", progress, "Updating Docker configurations...")
             await self.update_dockerfile()
             progress += weights['config'] * 0.5
             await self.update_status("in_progress", progress, "Dockerfile updated")
             
-            # Rebuild TAKServer (15-65%)
+            # Rebuild TAKServer (5-53%)
             await self.update_status("in_progress", progress, "Starting Docker rebuild process")
             
             # Create a background task to update progress during docker build
@@ -387,23 +387,37 @@ class OTAUpdate:
             progress = build_start_progress + weights['docker_build']
             await self.update_status("in_progress", progress, "Docker containers rebuilt")
 
-            # Setup generate-inf script (65-75%)
+            # Setup generate-inf script (53-55%)
             await self.update_status("in_progress", progress, "Setting up generate-inf script")
             await self.create_generate_inf_script()
             progress += weights['script']
             await self.update_status("in_progress", progress, "Generate-inf script setup completed")
 
-            # Handle plugins (75-100%)
+            # Handle plugins (55-100%)
             await self.update_status("in_progress", progress, "Processing plugins")
+            plugin_start_progress = progress
+            plugin_weight = weights['plugins']
+
+            async def update_plugin_progress():
+                plugin_progress = 0
+                while plugin_progress < plugin_weight:
+                    await asyncio.sleep(2)  # Update every 2 seconds
+                    plugin_progress = min(plugin_progress + 1, plugin_weight * 0.95)
+                    await self.update_status("in_progress", plugin_start_progress + plugin_progress,
+                                          "Processing plugins...")
+
+            plugin_progress_task = asyncio.create_task(update_plugin_progress())
+
             await self.check_and_remove_existing_plugin_folder()
-            progress += weights['plugins'] * 0.3
-            await self.update_status("in_progress", progress, "Plugin folder prepared")
-
             await self.extract_and_prepare_plugins()
-            progress += weights['plugins'] * 0.6
-            await self.update_status("in_progress", progress, "Plugins extracted and prepared")
-
             await self.run_generate_inf_script()
+
+            plugin_progress_task.cancel()
+            try:
+                await plugin_progress_task
+            except asyncio.CancelledError:
+                pass
+
             progress = 100
             
             # Emit completion status
@@ -431,20 +445,36 @@ class OTAUpdate:
             await self.update_status("started", progress, "Starting OTA update process")
 
             # Check TAKServer status (0-10%)
-            await self.update_status("in_progress", progress, "Checking TAKServer status")
+            await self.update_status("in_progress", progress, "Checking TAKServer status...")
             await self.start_takserver()
             progress += weights['setup']
             await self.update_status("in_progress", progress, "TAKServer status verified")
 
             # Handle plugins (10-90%)
-            await self.update_status("in_progress", progress, "Processing plugins")
-            await self.check_and_remove_existing_plugin_folder()
-            progress += weights['plugins'] * 0.3
-            await self.update_status("in_progress", progress, "Plugin folder prepared")
+            await self.update_status("in_progress", progress, "Processing plugins...")
+            plugin_start_progress = progress
+            plugin_weight = weights['plugins']
 
+            async def update_plugin_progress():
+                plugin_progress = 0
+                while plugin_progress < plugin_weight:
+                    await asyncio.sleep(2)  # Update every 2 seconds
+                    plugin_progress = min(plugin_progress + 1, plugin_weight * 0.95)
+                    await self.update_status("in_progress", plugin_start_progress + plugin_progress,
+                                          "Processing plugins...")
+
+            plugin_progress_task = asyncio.create_task(update_plugin_progress())
+
+            await self.check_and_remove_existing_plugin_folder()
             await self.extract_and_prepare_plugins()
-            progress += weights['plugins'] * 0.7
-            await self.update_status("in_progress", progress, "Plugins extracted and prepared")
+
+            plugin_progress_task.cancel()
+            try:
+                await plugin_progress_task
+            except asyncio.CancelledError:
+                pass
+
+            progress += weights['plugins']
 
             # Generate inf script (90-100%)
             await self.update_status("in_progress", progress, "Running generate-inf script")
