@@ -100,8 +100,9 @@ export function TakServerProvider({ children }: { children: React.ReactNode }) {
     };
 
     // Handle errors and reconnection
-    serverStatus.onerror = (error) => {
-      // Removed console.error
+    serverStatus.onerror = () => {
+      // Handle the error appropriately, e.g., log it or update state
+      console.error("Server status error occurred"); // Log the error
       // The browser will automatically try to reconnect
     };
 
