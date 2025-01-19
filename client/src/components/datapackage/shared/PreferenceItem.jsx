@@ -1,65 +1,74 @@
 import React from 'react';
 import { Input } from '../../shared/ui/shadcn/input';
+import { Checkbox } from '../../shared/ui/shadcn/checkbox';
+import { cn } from '@/lib/utils';
 
 const PreferenceItem = ({
   name,
   label,
   input_type,
   value,
-  checked,
   options = [],
   onChange,
   onBlur,
   onPreferenceEnableChange,
-  isPreferenceEnabled = true,
+  isPreferenceEnabled = false,
   isCertificateDropdown,
   min,
   max,
-  required
+  required,
+  placeholder,
+  showLabel = true,
+  showEnableToggle = true
 }) => {
   return (
-    <div className="preference-item w-full">
-      <div className="flex items-center mb-1 w-full">
-        <input 
-          type="checkbox" 
-          className="preference-inclusion-toggle mr-2 flex-shrink-0"
-          checked={isPreferenceEnabled}
-          onChange={(e) => onPreferenceEnableChange(e.target.checked)}
-          title="Enable/Disable this preference in configuration"
-        />
-        
-        <div className={`input-area flex justify-between items-center w-full ${!isPreferenceEnabled ? 'opacity-50' : ''}`}>
-          <span className="text-sm preference-label truncate mr-4 flex-grow" data-label={label}>
-            {name}
-          </span>
-          
-          <div className="flex-shrink-0 flex justify-end w-48 mr-4">
-            <Input
-              id={label}
-              type={input_type}
-              value={value}
-              checked={checked}
-              onChange={onChange}
-              onBlur={onBlur}
-              options={options}
-              isCertificateDropdown={isCertificateDropdown || label.toLowerCase().includes('certificate') || label.toLowerCase().includes('ca')}
-              disabled={!isPreferenceEnabled}
-              isPreferenceValueCheckbox={input_type === 'checkbox'}
-              min={min}
-              max={max}
-              required={required}
-              className={`cert-select ${input_type === 'select' ? 'dropdown' : ''}`}
-              data-certificate-dropdown={isCertificateDropdown || label.toLowerCase().includes('certificate') || label.toLowerCase().includes('ca')}
+    <div className="preference-item w-full py-2">
+      <div className="flex items-start gap-4">
+        {showEnableToggle && (
+          <div className="flex-none pt-1">
+            <Checkbox
+              checked={isPreferenceEnabled}
+              onCheckedChange={(checked) => onPreferenceEnableChange(checked)}
+              aria-label={`Enable/Disable ${name}`}
             />
           </div>
+        )}
+        
+        <div className={`flex-grow min-w-0 ${!isPreferenceEnabled ? 'opacity-50' : ''}`}>
+          <div className="flex flex-col gap-1">
+            <div className="text-sm font-medium leading-tight break-normal pr-4">
+              {name}
+            </div>
+            
+            {showLabel && label && (
+              <div className="text-xs text-muted-foreground break-normal">
+                {label}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex-none w-[200px]">
+          <Input
+            id={label}
+            type={input_type}
+            value={value}
+            onChange={onChange}
+            onBlur={onBlur}
+            options={options}
+            isCertificateDropdown={isCertificateDropdown}
+            disabled={!isPreferenceEnabled}
+            min={min}
+            max={max}
+            required={required}
+            placeholder={placeholder || (input_type === 'select' ? 'Select item...' : '')}
+            className={cn(
+              "w-full items-end",
+              input_type === "number" && "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            )}
+          />
         </div>
       </div>
-      
-      {label && (
-        <div className="text-xs text-textSecondary ml-6">
-          {label}
-        </div>
-      )}
     </div>
   );
 };

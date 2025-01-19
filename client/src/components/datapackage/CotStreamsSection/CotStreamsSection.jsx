@@ -1,176 +1,187 @@
 import React, { useState, useEffect, useCallback, memo, useRef } from 'react';
+import { Input } from "@/components/shared/ui/shadcn/input";
+import { Label } from "@/components/shared/ui/shadcn/label";
+import { Button } from "@/components/shared/ui/shadcn/button";
+import { ScrollArea } from "@/components/shared/ui/shadcn/scroll-area";
+import { Plus, Minus } from 'lucide-react';
+import { generateCotStreamItems } from './cotStreamConfig';
 import PreferenceItem from '../shared/PreferenceItem';
-import { generateCotStreamItems, validateCotStream } from './cotStreamConfig';
 
 const CotStreamsSection = memo(({ 
   preferences, 
-  onPreferenceChange, 
-  onEnableChange, 
-  onValidationChange,
-  socket,
-  isConnected
+  onPreferenceChange
 }) => {
   const [certOptions, setCertOptions] = useState([]);
   const count = parseInt(preferences.count?.value || "1", 10);
-  const items = generateCotStreamItems(count);
-  const hasRequestedCerts = useRef(false);
-  const certRequestTimeout = useRef(null);
+  const eventSource = useRef(null);
+  const configItems = generateCotStreamItems(count);
 
-  // Request certificates function
-  const requestCertificates = useCallback(() => {
-    if (socket && isConnected && !hasRequestedCerts.current && certOptions.length === 0) {
-      console.log('Requesting certificates...');
-      socket.emit('get_certificate_files');
-      hasRequestedCerts.current = true;
-    }
-  }, [socket, isConnected, certOptions.length]);
-
-  // Handle certificate response
-  const handleCertificateFiles = useCallback((data) => {
-    console.log('Received certificate files response:', data);
-    if (data.files && Array.isArray(data.files)) {
-      const options = data.files.map(file => ({
-        value: `cert/${file}`,
-        text: file
-      }));
-      setCertOptions(options);
-    } else {
-      // If no certificates found, retry after a delay
-      hasRequestedCerts.current = false;
-      if (certRequestTimeout.current) {
-        clearTimeout(certRequestTimeout.current);
-      }
-      certRequestTimeout.current = setTimeout(requestCertificates, 1000);
-    }
-  }, [requestCertificates]);
-
-  // Set up socket event listeners
+  // Initialize preferences only when new ones are added
   useEffect(() => {
-    if (!socket || !isConnected) {
-      hasRequestedCerts.current = false;
-      return;
-    }
-
-    // Request certificates immediately when socket is connected
-    requestCertificates();
-
-    // Set up event listener
-    socket.on('certificate_files', handleCertificateFiles);
-
-    // Cleanup
-    return () => {
-      socket.off('certificate_files', handleCertificateFiles);
-      if (certRequestTimeout.current) {
-        clearTimeout(certRequestTimeout.current);
-      }
-    };
-  }, [socket, isConnected, requestCertificates, handleCertificateFiles]);
-
-  // Request certificates when connection status changes
-  useEffect(() => {
-    if (isConnected) {
-      requestCertificates();
-    } else {
-      hasRequestedCerts.current = false;
-    }
-  }, [isConnected, requestCertificates]);
-
-  // Initialize preferences only when count changes or new preferences are added
-  useEffect(() => {
-    const newItems = items.filter(item => !preferences[item.label]);
+    const newItems = configItems.filter(item => !preferences[item.label]);
     
     if (newItems.length > 0) {
       newItems.forEach((item) => {
-        onPreferenceChange(item.label, item.input_type === 'checkbox' ? true : (item.value || ''));
-        onEnableChange(item.label, true);
+        onPreferenceChange(item.label, '');
       });
     }
-  }, [count, items, preferences, onPreferenceChange, onEnableChange]);
+  }, [preferences, onPreferenceChange, configItems]);
 
-  // Validate all streams whenever relevant preferences change
-  useEffect(() => {
-    let allErrors = {};
-    
-    // Only validate if the stream is enabled
-    for (let i = 0; i < count; i++) {
-      if (preferences[`enabled${i}`]?.value) {
-        const streamErrors = validateCotStream(i, preferences);
-        allErrors = { ...allErrors, ...streamErrors };
+  // Function to fetch certificates initially
+  const fetchCertificates = useCallback(async () => {
+    try {
+      const response = await fetch('/api/datapackage/certificate-files');
+      if (!response.ok) {
+        throw new Error(`Failed to fetch certificates: ${response.statusText}`);
       }
+      const data = await response.json();
+      if (data.success && data.files) {
+        const options = data.files.map(file => ({
+          label: file,
+          value: `cert/${file}`
+        }));
+        setCertOptions(options);
+      }
+    } catch (error) {
+      console.error('Error fetching certificates:', error);
+      setCertOptions([]); // Ensure we always have an array
     }
+  }, []);
 
-    // Report validation errors
-    if (onValidationChange) {
-      onValidationChange('cot_streams', allErrors);
-    }
-  }, [count, preferences, onValidationChange]);
+  // Set up SSE for certificate monitoring
+  useEffect(() => {
+    fetchCertificates();
+    eventSource.current = new EventSource('/api/datapackage/certificate-stream');
+    
+    eventSource.current.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'certificate_list' && Array.isArray(data.certificates)) {
+          const options = data.certificates.map(file => ({
+            label: file,
+            value: `cert/${file}`
+          }));
+          setCertOptions(options);
+        }
+      } catch (error) {
+        console.error('Error parsing certificate update:', error);
+        setCertOptions([]); // Ensure we always have an array
+      }
+    };
 
-  const handleSelectAll = useCallback(() => {
-    items.forEach((item) => {
-      onEnableChange(item.label, true);
-    });
-  }, [items, onEnableChange]);
+    eventSource.current.onerror = (error) => {
+      console.error('SSE connection error:', error);
+      setCertOptions([]); // Ensure we always have an array
+      setTimeout(() => {
+        if (eventSource.current) {
+          eventSource.current.close();
+          eventSource.current = new EventSource('/api/datapackage/certificate-stream');
+        }
+      }, 5000);
+    };
 
-  const handleUnselectAll = useCallback(() => {
-    items.forEach((item) => {
-      onEnableChange(item.label, false);
-    });
-  }, [items, onEnableChange]);
+    return () => {
+      if (eventSource.current) {
+        eventSource.current.close();
+        eventSource.current = null;
+      }
+    };
+  }, [fetchCertificates]);
+
+  const renderStreamConfig = (streamIndex) => {
+    const streamItems = configItems.filter(item => 
+      item.label.endsWith(streamIndex.toString())
+    );
+
+    return (
+      <div key={streamIndex} className="mb-4 p-4 bg-card rounded-lg shadow-lg border border-border">
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold text-primary">TAK Server {streamIndex + 1}</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {streamItems.map((item) => {
+            const pref = preferences[item.label] || {};
+            const fieldValue = pref.value !== undefined ? pref.value : '';
+
+            if (item.label === 'count') return null;
+
+            if (item.isCertificateDropdown) {
+              item.options = certOptions;
+            }
+
+            return (
+              <div key={item.label} className="w-full">
+                <PreferenceItem
+                  name={item.name}
+                  label={item.label}
+                  input_type={item.input_type}
+                  value={fieldValue}
+                  options={item.options || []}
+                  isPreferenceEnabled={true}
+                  required={item.required}
+                  placeholder={item.placeholder}
+                  onChange={(e) => onPreferenceChange(item.label, e.target.value)}
+                  min={item.min}
+                  max={item.max}
+                  showLabel={true}
+                  showEnableToggle={false}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
   return (
-    <div className="p-4 bg-backgroundPrimary">
-      <button 
-        className="hidden cot-streams-select-all"
-        onClick={handleSelectAll}
-      />
-      <button 
-        className="hidden cot-streams-unselect-all"
-        onClick={handleUnselectAll}
-      />
-      <div className="divide-y divide-border">
-        {items.map((item) => {
-          const isCertLocationField = item.label.toLowerCase().includes('location');
-          const pref = preferences[item.label] || {};
-          
-          // Always default to enabled unless explicitly disabled
-          const isPreferenceEnabled = pref.enabled !== undefined ? pref.enabled : true;
-          
-          // Get the current value, using preference value if available
-          const fieldValue = pref.value !== undefined ? pref.value : item.value;
-          
-          // Determine if field is required based on stream enabled state
-          const streamIndex = item.label.match(/\d+$/)?.[0];
-          const isStreamEnabled = streamIndex !== undefined && 
-            preferences[`enabled${streamIndex}`]?.value;
-          const isRequired = item.required && isStreamEnabled;
-          
-          return (
-            <div key={item.label} className="py-2 first:pt-0 last:pb-0">
-              <PreferenceItem
-                name={item.name}
-                label={item.label}
-                input_type={isCertLocationField ? 'select' : item.input_type}
-                value={fieldValue}
-                checked={item.input_type === 'checkbox' ? pref.value : undefined}
-                options={isCertLocationField ? certOptions : item.options || []}
-                isPreferenceEnabled={isPreferenceEnabled}
-                required={isRequired}
-                placeholder={item.placeholder}
-                onChange={(e) => {
-                  const value = item.input_type === 'checkbox' 
-                    ? e.target.checked 
-                    : e.target.value;
-                  onPreferenceChange(item.label, value);
-                }}
-                onPreferenceEnableChange={(enabled) => onEnableChange(item.label, enabled)}
-                isCertificateDropdown={isCertLocationField}
-                min={item.min}
-                max={item.max}
-              />
-            </div>
-          );
-        })}
+    <div className="h-[calc(100vh-200px)]">
+      <div className="bg-background p-4 mb-2">
+        <div className="flex items-center justify-between bg-card p-4 rounded-lg shadow-md border border-border">
+          <Label className="text-lg font-medium">Number of Servers</Label>
+          <div className="flex items-center space-x-4">
+            <Button 
+              onClick={() => {
+                const newCount = Math.max(1, parseInt(preferences.count?.value || "1") - 1);
+                onPreferenceChange('count', newCount.toString());
+              }}
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 rounded-full"
+              disabled={parseInt(preferences.count?.value || "1") <= 1}
+            >
+              <Minus className="h-4 w-4" />
+            </Button>
+            <Input
+              id="stream-count"
+              type="number"
+              min={1}
+              max={10}
+              value={parseInt(preferences.count?.value) || 1}
+              onChange={(e) => onPreferenceChange('count', Math.max(1, Math.min(10, parseInt(e.target.value) || 1)).toString())}
+              className="w-16 text-center bg-input text-foreground [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+            <Button 
+              onClick={() => {
+                const newCount = Math.min(10, parseInt(preferences.count?.value || "1") + 1);
+                onPreferenceChange('count', newCount.toString());
+              }}
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 rounded-full"
+              disabled={parseInt(preferences.count?.value || "1") >= 10}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       </div>
+
+      <ScrollArea className="h-[calc(100%-80px)]">
+        <div className="space-y-4 px-4">
+          {Array.from({ length: count }, (_, i) => renderStreamConfig(i))}
+        </div>
+      </ScrollArea>
     </div>
   );
 });

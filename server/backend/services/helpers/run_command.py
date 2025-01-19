@@ -34,17 +34,31 @@ class RunCommand:
 
             # Stream both stdout and stderr in realtime
             async def read_stream(stream, is_stderr):
+                output_lines = []
                 while True:
                     line = await stream.readline()
                     if not line:
                         break
+                    decoded_line = line.decode().rstrip()
+                    output_lines.append(decoded_line)
                     if emit_event:
                         await emit_event({
                             "type": "terminal",
-                            "message": line.decode().rstrip(),
+                            "message": decoded_line,
                             "isError": is_stderr and not ignore_errors
                         })
-                return await stream.read()
+                remaining = await stream.read()
+                if remaining:
+                    decoded_remaining = remaining.decode().rstrip()
+                    if decoded_remaining:
+                        output_lines.append(decoded_remaining)
+                        if emit_event:
+                            await emit_event({
+                                "type": "terminal",
+                                "message": decoded_remaining,
+                                "isError": is_stderr and not ignore_errors
+                            })
+                return '\n'.join(output_lines)
 
             # Read both streams concurrently
             stdout_data, stderr_data = await asyncio.gather(
@@ -58,8 +72,8 @@ class RunCommand:
             return CommandResult(
                 success=process.returncode == 0 or ignore_errors,
                 returncode=process.returncode,
-                stdout=stdout_data.decode() if stdout_data else "",
-                stderr=stderr_data.decode() if stderr_data else ""
+                stdout=stdout_data if stdout_data else "",
+                stderr=stderr_data if stderr_data else ""
             )
 
         except Exception as e:

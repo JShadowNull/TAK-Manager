@@ -27,7 +27,7 @@ const AdvancedFeatures: React.FC = () => {
 
             <div className="bg-sidebar border border-border p-4 rounded-lg mb-4">
               <p className="text-sm text-primary">
-                Once configured, use https://your-ip-address:8443/ota/plugins in ATAK for update url to check for plugins and install them
+                Once configured, use https://your-ip-address:8443/plugins in ATAK for update url to check for plugins and install them
               </p>
             </div>
           </div>

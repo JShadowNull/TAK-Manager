@@ -1,27 +1,40 @@
-import { ScrollArea } from '@/components/shared/ui/shadcn/scroll-area';
+import React from 'react';
+import { ScrollArea } from '../../shared/ui/shadcn/scroll-area';
 
-export const TransferLog = ({ logs }) => {
+export function TransferLog({ logs = [] }) {
+  const getLogStyle = (log) => {
+    const message = log.message || '';
+    
+    if (message.includes('Error:')) {
+      return 'text-red-500';
+    }
+    if (message.includes('Device connected')) {
+      return 'text-green-500';
+    }
+    if (message.includes('Device disconnected')) {
+      return 'text-yellow-500';
+    }
+    return 'text-gray-500';
+  };
+
   return (
-    <div className="bg-card p-6 rounded-lg shadow-lg foreground border-1 border-border">
-      <h2 className="text-base mb-4">Transfer Log</h2>
-      <div className="h-64 border border-border rounded-lg mt-4">
-        <ScrollArea autoScroll content={logs}>
-          <div className="list-none space-y-2 text-textSecondary text-sm p-2">
-            {logs.map((log, index) => (
-              <div 
-                key={index} 
-                className={`select-text ${
-                  log.includes('Device connected') ? 'text-green-500' :
-                  log.includes('Device disconnected') ? 'text-yellow-500' :
-                  ''
-                }`}
-              >
-                {log}
-              </div>
-            ))}
-          </div>
-        </ScrollArea>
-      </div>
+    <div className="bg-background rounded-lg border p-4">
+      <h2 className="text-lg font-semibold mb-4">Transfer Log</h2>
+      <ScrollArea className="h-[200px] w-full rounded-md border p-4">
+        <div className="space-y-2">
+          {logs.map((log, index) => (
+            <div key={index} className={`text-sm ${getLogStyle(log)}`}>
+              <span className="text-xs text-muted-foreground">
+                {new Date(log.timestamp).toLocaleTimeString()} -{' '}
+              </span>
+              {log.message}
+            </div>
+          ))}
+          {logs.length === 0 && (
+            <div className="text-sm text-muted-foreground">No logs yet...</div>
+          )}
+        </div>
+      </ScrollArea>
     </div>
   );
-}; 
+} 

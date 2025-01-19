@@ -2,9 +2,10 @@ import os
 import subprocess
 import re
 import pexpect
-from backend.services.helpers.run_command import RunCommand
-from typing import Dict, Any, Optional, Callable
+from backend.services.helpers.run_command import RunCommand, CommandResult
+from typing import Dict, Any, Optional, Callable, Tuple
 import time
+import asyncio
 from backend.config.logging_config import configure_logging
 
 # Configure logging using centralized config
@@ -15,86 +16,158 @@ class ADBController:
         self.run_command = RunCommand()
         self.active_push_processes = {}  # Dictionary to track active push processes by device_id
         self.emit_event = emit_event
+        self._last_status = None
+        self.adb_server_port = 5037  # Default ADB server port
 
-    def _create_event(self, event_type: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Create an event object for SSE"""
-        event_data = {
-            'type': event_type,
-            'data': {
-                **data,
-                'timestamp': time.time()
-            }
-        }
-        logger.debug(f"Created event: {event_data}")
-        if self.emit_event:
-            self.emit_event(event_data)
-        return event_data
-
-    def emit_adb_update(self, status_type="status", **data):
-        """Unified ADB status emission using SSE"""
-        update = {
-            'type': status_type,  # 'status', 'progress', or 'error'
-            **data
-        }
-        self._create_event('adb_update', update)
-
-    def get_device_name(self, device_id):
-        """Get device name using ADB"""
+    async def _init_adb_server(self) -> bool:
+        """Initialize ADB server with proper permissions in container"""
         try:
-            result = self.run_command.run_command(
-                ['adb', '-s', device_id, 'shell', 'getprop', 'ro.product.model'],
-                'device_info',
-                capture_output=True,
-                emit_output=False,
+            # Kill any existing ADB server
+            await self.run_command.run_command_async(
+                ['adb', 'kill-server'],
+                'adb_server',
+                emit_event=self.emit_event,
+                ignore_errors=True
+            )
+            
+            # Start ADB server with root permissions
+            result = await self.run_command.run_command_async(
+                ['adb', 'start-server'],
+                'adb_server',
                 emit_event=self.emit_event
             )
-            if result.stdout:
-                output = result.stdout
-                if isinstance(output, bytes):
-                    return output.strip().decode('utf-8')
-                return output.strip()
-            return device_id
-        except Exception:
-            return device_id
-
-    def create_device_directory(self, device_id, directory):
-        """Create directory on device"""
-        try:
-            result = self.run_command.run_command(
-                ['adb', '-s', device_id, 'shell', f'mkdir -p {directory}'],
-                'device_directory',
-                capture_output=True,
-                emit_event=self.emit_event
-            )
+            
             if not result.success:
-                self.emit_adb_update(
-                    status_type="error",
-                    device_id=device_id,
-                    error=f"Failed to create directory: {directory}"
-                )
+                logger.error(f"Failed to start ADB server: {result.stderr}")
                 return False
-            return True
-        except Exception as e:
-            self.emit_adb_update(
-                status_type="error",
-                device_id=device_id,
-                error=f"Error creating directory: {str(e)}"
+                
+            # Wait for server to be fully started
+            await asyncio.sleep(1)
+            
+            # Verify server is running
+            result = await self.run_command.run_command_async(
+                ['adb', 'devices'],
+                'adb_server',
+                emit_event=self.emit_event
             )
+            
+            return result.success
+            
+        except Exception as e:
+            logger.error(f"Error initializing ADB server: {str(e)}")
             return False
 
-    def push_file(self, device_id, src_file, dest_file, callback=None):
-        """Push file to device with progress monitoring"""
-        cmd = f'adb -s {device_id} push "{src_file}" "{dest_file}"'
-        child = pexpect.spawn(cmd)
-        pattern = re.compile(r'\[.*?(\d+)%\]')
-        last_progress = -1
-
-        # Store the process
-        if device_id not in self.active_push_processes:
-            self.active_push_processes[device_id] = []
-        self.active_push_processes[device_id].append(child)
-
+    async def _ensure_adb_server(self) -> bool:
+        """Ensure ADB server is running and accessible"""
         try:
+            result = await self.run_command.run_command_async(
+                ['adb', 'get-state'],
+                'adb_server',
+                emit_event=self.emit_event,
+                ignore_errors=True
+            )
+            
+            if not result.success:
+                logger.info("ADB server not responding, attempting to initialize...")
+                return await self._init_adb_server()
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error checking ADB server: {str(e)}")
+            return False
+
+    async def update_status(self, status: str, progress: float, message: str, error: Optional[str] = None, device_id: Optional[str] = None) -> None:
+        """Update ADB operation status."""
+        if self.emit_event:
+            new_status = {
+                "type": "adb_status",
+                "status": status,
+                "progress": progress,
+                "message": message,
+                "error": error,
+                "isError": error is not None,
+                "timestamp": int(time.time() * 1000)
+            }
+            
+            if device_id:
+                new_status["device_id"] = device_id
+            
+            # Only emit if status has changed
+            if new_status != self._last_status:
+                await self.emit_event(new_status)
+                self._last_status = new_status
+
+    async def get_device_name(self, device_id: str) -> str:
+        """Get device name using ADB"""
+        try:
+            if not await self._ensure_adb_server():
+                return device_id
+                
+            result = await self.run_command.run_command_async(
+                ['adb', '-s', device_id, 'shell', 'getprop', 'ro.product.model'],
+                'device_info',
+                emit_event=self.emit_event
+            )
+            
+            if result.success and result.stdout:
+                return result.stdout.strip()
+            
+            logger.error(f"Failed to get device name: {result.stderr}")
+            return device_id
+            
+        except Exception as e:
+            logger.error(f"Error getting device name: {str(e)}")
+            return device_id
+
+    async def create_device_directory(self, device_id: str, directory: str) -> bool:
+        """Create directory on device"""
+        try:
+            if not await self._ensure_adb_server():
+                return False
+                
+            await self.update_status("creating_directory", 0, f"Creating directory {directory} on device {device_id}", device_id=device_id)
+            
+            result = await self.run_command.run_command_async(
+                ['adb', '-s', device_id, 'shell', f'mkdir -p {directory}'],
+                'device_directory',
+                emit_event=self.emit_event
+            )
+            
+            if not result.success:
+                error_msg = f"Failed to create directory: {directory}"
+                if result.stderr:
+                    error_msg += f" - {result.stderr}"
+                await self.update_status("error", 0, error_msg, error=error_msg, device_id=device_id)
+                return False
+                
+            await self.update_status("directory_created", 100, f"Created directory {directory}", device_id=device_id)
+            return True
+            
+        except Exception as e:
+            error_msg = f"Error creating directory: {str(e)}"
+            await self.update_status("error", 0, error_msg, error=error_msg, device_id=device_id)
+            return False
+
+    async def push_file(self, device_id: str, src_file: str, dest_file: str, callback: Optional[Callable[[int], None]] = None) -> bool:
+        """Push file to device with progress monitoring"""
+        try:
+            if not await self._ensure_adb_server():
+                return False
+                
+            await self.update_status("pushing_file", 0, f"Starting file transfer: {os.path.basename(src_file)}", device_id=device_id)
+            
+            # Create the adb push command
+            cmd = f'adb -s {device_id} push "{src_file}" "{dest_file}"'
+            child = pexpect.spawn(cmd)
+            pattern = re.compile(r'\[.*?(\d+)%\]')
+            last_progress = -1
+
+            # Store the process
+            if device_id not in self.active_push_processes:
+                self.active_push_processes[device_id] = []
+            self.active_push_processes[device_id].append(child)
+
             while True:
                 try:
                     index = child.expect([r'\[.*%\]', pexpect.EOF], timeout=1)
@@ -102,17 +175,17 @@ class ADBController:
                     if index == 0:
                         line = child.after.decode('utf-8')
                         match = pattern.search(line)
-                        if match and callback:
+                        if match:
                             progress = int(match.group(1))
                             if progress != last_progress:
                                 last_progress = progress
-                                callback(progress)
-                                # Emit progress via SSE
-                                self.emit_adb_update(
-                                    status_type="progress",
-                                    device_id=device_id,
-                                    progress=progress,
-                                    file=os.path.basename(src_file)
+                                if callback:
+                                    callback(progress)
+                                await self.update_status(
+                                    "transferring", 
+                                    progress,
+                                    f"Transferring {os.path.basename(src_file)}: {progress}%",
+                                    device_id=device_id
                                 )
                     else:
                         break
@@ -123,44 +196,60 @@ class ADBController:
             # Remove process from tracking once complete
             if device_id in self.active_push_processes and child in self.active_push_processes[device_id]:
                 self.active_push_processes[device_id].remove(child)
-            return child.exitstatus == 0
+                
+            if child.exitstatus == 0:
+                await self.update_status(
+                    "complete", 
+                    100,
+                    f"Successfully transferred {os.path.basename(src_file)}",
+                    device_id=device_id
+                )
+                return True
+            else:
+                error_msg = f"Failed to transfer {os.path.basename(src_file)}"
+                await self.update_status("error", 0, error_msg, error=error_msg, device_id=device_id)
+                return False
+                
         except Exception as e:
-            self.emit_adb_update(
-                status_type="error",
-                device_id=device_id,
-                error=f"Error pushing file: {str(e)}"
-            )
-            # Clean up tracking on error
-            if device_id in self.active_push_processes and child in self.active_push_processes[device_id]:
-                self.active_push_processes[device_id].remove(child)
+            error_msg = f"Error during file transfer: {str(e)}"
+            await self.update_status("error", 0, error_msg, error=error_msg, device_id=device_id)
             return False
 
-    def start_device_monitoring(self):
+    async def start_device_monitoring(self) -> Optional[subprocess.Popen]:
         """Start ADB device monitoring"""
         try:
-            self.emit_adb_update(
-                status_type="status",
-                state="monitoring",
-                message="Starting device monitoring"
-            )
-            return self.run_command.stream_output(
+            await self.update_status("monitoring", 0, "Starting device monitoring")
+            
+            # Initialize ADB server
+            if not await self._init_adb_server():
+                error_msg = "Failed to initialize ADB server"
+                await self.update_status("error", 0, error_msg, error=error_msg)
+                return None
+            
+            # Start device monitoring
+            process = subprocess.Popen(
                 ['adb', 'track-devices'],
-                'device_monitoring',
-                capture_output=True,
-                check=False,
-                stream_output=True,
-                emit_event=self.emit_event
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                universal_newlines=True
             )
+            
+            await self.update_status("monitoring", 100, "Device monitoring started")
+            return process
+            
         except Exception as e:
-            self.emit_adb_update(
-                status_type="error",
-                error=f"Error starting device monitoring: {str(e)}"
-            )
+            error_msg = f"Error starting device monitoring: {str(e)}"
+            await self.update_status("error", 0, error_msg, error=error_msg)
             return None
 
-    def kill_adb_push_processes(self, device_id=None):
+    async def kill_adb_push_processes(self, device_id: Optional[str] = None) -> Tuple[bool, str]:
         """Kill ADB push processes for a specific device or all devices"""
         try:
+            if device_id:
+                await self.update_status("terminating", 0, f"Terminating processes for device {device_id}", device_id=device_id)
+            else:
+                await self.update_status("terminating", 0, "Terminating all ADB processes")
+                
             if device_id:
                 # Kill processes for specific device
                 if device_id in self.active_push_processes:
@@ -171,11 +260,11 @@ class ADBController:
                         except:
                             pass  # Ignore errors in process termination
                     self.active_push_processes[device_id] = []
-                    self.emit_adb_update(
-                        status_type="status",
-                        state="terminated",
-                        device_id=device_id,
-                        message=f"Terminated push processes for device {device_id}"
+                    await self.update_status(
+                        "terminated", 
+                        100,
+                        f"Terminated push processes for device {device_id}",
+                        device_id=device_id
                     )
             else:
                 # Kill all processes
@@ -187,21 +276,20 @@ class ADBController:
                         except:
                             pass  # Ignore errors in process termination
                 self.active_push_processes.clear()
-                self.emit_adb_update(
-                    status_type="status",
-                    state="terminated",
-                    message="Terminated all push processes"
-                )
+                
+                # Kill adb server to ensure clean state
+                await self._init_adb_server()
+                
+                await self.update_status("terminated", 100, "Terminated all push processes")
             
             return True, 'killed'
+            
         except Exception as e:
-            self.emit_adb_update(
-                status_type="error",
-                error=f"Error killing ADB push processes: {str(e)}"
-            )
+            error_msg = f"Error killing ADB push processes: {str(e)}"
+            await self.update_status("error", 0, error_msg, error=error_msg)
             return False, 'error'
 
-    def parse_device_line(self, line):
+    def parse_device_line(self, line: str) -> Tuple[Optional[str], Optional[str]]:
         """Parse device line from ADB output"""
         parts = line.split('\t')
         if len(parts) != 2:

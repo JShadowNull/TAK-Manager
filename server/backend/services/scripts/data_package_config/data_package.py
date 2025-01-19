@@ -5,90 +5,143 @@ from backend.services.helpers.run_command import RunCommand
 from typing import Dict, Any, AsyncGenerator, Optional, Callable
 import json
 import logging
-import shutil
 from xml.dom import minidom
 import zipfile
 import tempfile
 import uuid
 import time
 import asyncio
+from backend.config.logging_config import configure_logging
 
-logger = logging.getLogger(__name__)
+logger = configure_logging(__name__)
 
 class DataPackage:
     def __init__(self, emit_event: Optional[Callable[[Dict[str, Any]], None]] = None):
         self.run_command = RunCommand()
         self.stop_event = False
         self.emit_event = emit_event
+        self._last_status = None
+        self._progress = 0
+        self._last_cert_list = None
+        self.working_dir = self.get_default_working_directory()
 
     def stop(self):
         """Stop the current configuration process"""
         self.stop_event = True
-        self._create_event(
-            'stop',
-            'stopped',
-            'Configuration stopped by user',
-            {'isInProgress': False}
-        )
+        self.update_status("stopped", 100, "Configuration stopped by user")
 
     def check_stop(self):
         """Check if the operation should be stopped"""
         if self.stop_event:
             raise Exception("Configuration stopped by user")
 
-    def _create_event(self, operation_type: str, status: str, message: str, details: dict = None) -> Dict[str, Any]:
-        """Create an event object for SSE"""
-        event_data = {
-            'status': status,
-            'operation': operation_type,
-            'message': message,
-            'details': details or {},
-            'timestamp': time.time()
-        }
-        logger.debug(f"Created operation status event: {event_data}")
+    async def update_status(self, status: str, progress: float, message: str, error: Optional[str] = None) -> None:
+        """Update configuration status."""
         if self.emit_event:
-            self.emit_event(event_data)
-        return event_data
+            new_status = {
+                "type": "status",
+                "status": status,
+                "progress": progress,
+                "message": message,
+                "error": error,
+                "isError": error is not None,
+                "timestamp": int(time.time() * 1000)
+            }
+            
+            # Only emit if status has changed
+            if new_status != self._last_status:
+                await self.emit_event(new_status)
+                self._last_status = new_status
+                self._progress = progress
 
-    def _create_files_event(self, files: list) -> Dict[str, Any]:
-        """Create a files update event"""
-        event_data = {
-            'status': 'update',
-            'type': 'files_update',
-            'files': files,
-            'timestamp': time.time()
-        }
-        logger.debug(f"Created files update event")
-        if self.emit_event:
-            self.emit_event(event_data)
-        return event_data
+    async def read_version_txt(self):
+        """Get TAK Server version from version.txt."""
+        version_file_path = os.path.join(self.working_dir, "version.txt")
 
-    async def status_generator(self) -> AsyncGenerator[Dict[str, Any], None]:
-        """Generate data package status events."""
+        if os.path.exists(version_file_path):
+            try:
+                with open(version_file_path, "r") as version_file:
+                    version = version_file.read().strip()
+                    return version if version else None
+            except Exception:
+                return None
+        return None
+
+    async def list_cert_files(self, container_name) -> list:
+        """Lists certificate files in the specified container's /opt/tak/certs/files directory."""
+        try:
+            logger.debug(f"Listing certificate files in container {container_name}")
+            list_files_command = [
+                'docker', 'exec', container_name,
+                'ls', '/opt/tak/certs/files'
+            ]
+            
+            result = await self.run_command.run_command_async(
+                list_files_command,
+                'data-package',
+                emit_event=self.emit_event,
+                ignore_errors=True
+            )
+            
+            if result.success and result.stdout:
+                cert_files = result.stdout.splitlines()
+                logger.debug(f"Found certificate files: {cert_files}")
+                return cert_files
+            
+            logger.debug("No certificate files found")
+            return []
+
+        except Exception as e:
+            logger.error(f"Error listing certificate files: {str(e)}")
+            return []
+
+    async def certificate_monitor(self) -> AsyncGenerator[Dict[str, Any], None]:
+        """Generate certificate list update events."""
         while True:
             try:
-                files = self.get_certificate_files()
-                event_data = {
-                    'type': 'data_package_status',
-                    'files': files,
-                    'timestamp': time.time()
-                }
-                yield {
-                    "event": "data_package_status",
-                    "data": json.dumps(event_data)
-                }
+                version = await self.read_version_txt()
+                if version:
+                    container_name = f"takserver-{version}"
+                    cert_files = await self.list_cert_files(container_name)
+                    
+                    # Only emit if the certificate list has changed
+                    cert_list = sorted(cert_files) if cert_files else []
+                    if cert_list != self._last_cert_list:
+                        self._last_cert_list = cert_list
+                        event_data = {
+                            'type': 'certificate_list',
+                            'certificates': cert_list,
+                            'timestamp': time.time()
+                        }
+                        yield {
+                            "event": "certificate_list",
+                            "data": json.dumps(event_data)
+                        }
+                else:
+                    # Reset last cert list if server is not running
+                    if self._last_cert_list is not None:
+                        self._last_cert_list = None
+                        yield {
+                            "event": "certificate_list",
+                            "data": json.dumps({
+                                'type': 'certificate_list',
+                                'certificates': [],
+                                'timestamp': time.time()
+                            })
+                        }
             except Exception as e:
-                logger.error(f"Error generating data package status: {str(e)}")
-                yield {
-                    "event": "data_package_status",
-                    "data": json.dumps({
-                        'type': 'error',
-                        'message': f'Error getting data package status: {str(e)}',
-                        'files': [],
-                        'timestamp': time.time()
-                    })
-                }
-            await asyncio.sleep(5)  # Update every 5 seconds
+                logger.error(f"Error monitoring certificates: {str(e)}")
+                if self._last_cert_list is not None:
+                    self._last_cert_list = None
+                    yield {
+                        "event": "certificate_list",
+                        "data": json.dumps({
+                            'type': 'certificate_list',
+                            'certificates': [],
+                            'timestamp': time.time()
+                        })
+                    }
+            await asyncio.sleep(2)  # Check every 2 seconds
 
     def get_default_working_directory(self):
         """Get the working directory from environment variable."""
@@ -97,6 +150,66 @@ class DataPackage:
         if not os.path.exists(working_dir):
             os.makedirs(working_dir, exist_ok=True)
         return working_dir
+
+    async def copy_certificates_from_container(self, temp_dir, ca_certs, client_certs, channel: str = 'data-package'):
+        """
+        Copies the specified certificates from the container to the temporary directory.
+        Only copies certificates if valid names are provided.
+        """
+        self.check_stop()
+        version = await self.read_version_txt()
+        container_name = f"takserver-{version}"
+
+        # Create cert directory in temp directory
+        cert_dir = os.path.join(temp_dir, 'cert')
+        os.makedirs(cert_dir, exist_ok=True)
+
+        # Only copy certificates if valid names are provided
+        if ca_certs:
+            for ca_cert in ca_certs:
+                await self.update_status(
+                    "in_progress",
+                    self._progress,
+                    f"Copying CA certificate: {ca_cert}"
+                )
+                ca_cert_src = f"/opt/tak/certs/files/{ca_cert}"
+                ca_cert_dest = os.path.join(cert_dir, ca_cert)
+                copy_ca_cert_command = [
+                    'docker', 'cp', f"{container_name}:{ca_cert_src}", ca_cert_dest
+                ]
+                result = await self.run_command.run_command_async(
+                    copy_ca_cert_command, 
+                    'data-package',
+                    emit_event=self.emit_event
+                )
+                if not result.success:
+                    raise Exception(f"Failed to copy CA certificate {ca_cert}: {result.stderr}")
+
+        if client_certs:
+            for client_cert in client_certs:
+                await self.update_status(
+                    "in_progress",
+                    self._progress,
+                    f"Copying client certificate: {client_cert}"
+                )
+                client_cert_src = f"/opt/tak/certs/files/{client_cert}"
+                client_cert_dest = os.path.join(cert_dir, client_cert)
+                copy_client_cert_command = [
+                    'docker', 'cp', f"{container_name}:{client_cert_src}", client_cert_dest
+                ]
+                result = await self.run_command.run_command_async(
+                    copy_client_cert_command, 
+                    'data-package',
+                    emit_event=self.emit_event
+                )
+                if not result.success:
+                    raise Exception(f"Failed to copy client certificate {client_cert}: {result.stderr}")
+
+        await self.update_status(
+            "in_progress",
+            self._progress,
+            f"Copied all certificates to {cert_dir}"
+        )
 
     def generate_config_pref(self, preferences_data, temp_dir, channel: str = 'data-package'):
         """
@@ -185,29 +298,8 @@ class DataPackage:
         
         # Write to file
         config_pref_path = os.path.join(temp_dir, 'initial.pref')
-        
-        self._create_event(
-            'config',
-            'in_progress',
-            f'Creating config file at: {config_pref_path}',
-            {'isInProgress': True}
-        )
-        
         with open(config_pref_path, 'w', encoding='utf-8') as file:
             file.write(xml_content)
-            
-        self._create_event(
-            'config',
-            'in_progress',
-            'Config file created successfully',
-            {'isInProgress': True}
-        )
-
-    def generate_uuid(self):
-        """
-        Generates a random UUID for the manifest file.
-        """
-        return str(uuid.uuid4())
 
     def create_manifest_file(self, temp_dir, zip_name, ca_certs, client_certs, channel: str = 'data-package'):
         """
@@ -218,7 +310,7 @@ class DataPackage:
         os.makedirs(manifest_dir, exist_ok=True)
         
         # Generate a random UUID
-        package_uid = self.generate_uuid()
+        package_uid = str(uuid.uuid4())
         
         # Start building the manifest content
         manifest_content = f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -247,148 +339,8 @@ class DataPackage:
         manifest_path = os.path.join(manifest_dir, 'manifest.xml')
         with open(manifest_path, 'w', encoding='utf-8') as f:
             f.write(manifest_content)
-        
-        self.run_command.emit_log_output(f'Manifest file created at: {manifest_path}', channel='data-package')
 
-    def get_takserver_container_name(self):
-        """Get the TAK Server container name based on version"""
-        try:
-            version = self.read_version_txt()
-            return f"takserver-{version}"
-        except Exception as e:
-            self.run_command.emit_log_output(
-                f"Error getting container name: {str(e)}", 
-                'data-package'
-            )
-            raise
-
-    def copy_certificates_from_container(self, temp_dir, ca_certs, client_certs, channel: str = 'data-package'):
-        """
-        Copies the specified certificates from the container to the temporary directory.
-        Only copies certificates if valid names are provided.
-        """
-        self.check_stop()
-        container_name = self.get_takserver_container_name()
-
-        # Create cert directory in temp directory
-        cert_dir = os.path.join(temp_dir, 'cert')
-        os.makedirs(cert_dir, exist_ok=True)
-
-        # Only copy certificates if valid names are provided
-        if ca_certs:
-            for ca_cert in ca_certs:
-                ca_cert_src = f"/opt/tak/certs/files/{ca_cert}"
-                ca_cert_dest = os.path.join(cert_dir, ca_cert)
-                copy_ca_cert_command = [
-                    'docker', 'cp', f"{container_name}:{ca_cert_src}", ca_cert_dest
-                ]
-                self.run_command.run_command(copy_ca_cert_command, channel='data-package')
-
-        if client_certs:
-            for client_cert in client_certs:
-                client_cert_src = f"/opt/tak/certs/files/{client_cert}"
-                client_cert_dest = os.path.join(cert_dir, client_cert)
-                copy_client_cert_command = [
-                    'docker', 'cp', f"{container_name}:{client_cert_src}", client_cert_dest
-                ]
-                self.run_command.run_command(copy_client_cert_command, channel='data-package')
-
-        self.run_command.emit_log_output(f'Copied certificates to {cert_dir}', channel='data-package')
-
-    def read_version_txt(self):
-        """
-        Reads the version.txt file located in the working directory and returns the version.
-        """
-        self.check_stop()
-        working_dir = self.get_default_working_directory()
-        version_file_path = os.path.join(working_dir, "version.txt")
-
-        if not os.path.exists(version_file_path):
-            raise FileNotFoundError(f"version.txt not found in {working_dir}")
-
-        with open(version_file_path, 'r') as version_file:
-            version = version_file.read().strip()
-
-        self.run_command.emit_log_output(
-            f'Read version: {version} from version.txt',
-            channel='data-package'
-        )
-        return version
-
-    def list_cert_files(self, container_name) -> list:
-        """Lists certificate files in the specified container's /opt/tak/certs/files directory."""
-        self.check_stop()
-        try:
-            self._create_event(
-                'files',
-                'in_progress',
-                f'Listing certificate files from container {container_name}...',
-                {'isInProgress': True}
-            )
-
-            # First check if the directory exists
-            check_dir_command = [
-                'docker', 'exec', container_name,
-                'sh', '-c', 'test -d /opt/tak/certs/files && echo "exists"'
-            ]
-            self.run_command.emit_log_output(f"Executing command: {' '.join(check_dir_command)}", 'data-package')
-            try:
-                result = self.run_command.run_command(check_dir_command, channel='data-package', capture_output=True)
-                output = result.stdout.decode() if isinstance(result.stdout, bytes) else result.stdout
-                if 'exists' not in output:
-                    raise Exception("Certificate directory not found in container")
-            except Exception as e:
-                raise Exception(f"Error checking certificate directory: {str(e)}")
-
-            # List the files
-            list_files_command = [
-                'docker', 'exec', container_name,
-                'sh', '-c', 'find /opt/tak/certs/files -type f -name "*.p12" -o -name "*.pem" -o -name "*.jks" | xargs -n1 basename'
-            ]
-            self.run_command.emit_log_output(f"Executing command: {' '.join(list_files_command)}", 'data-package')
-            result = self.run_command.run_command(list_files_command, channel='data-package', capture_output=True)
-            
-            output = result.stdout.decode() if isinstance(result.stdout, bytes) else result.stdout
-            
-            if output:
-                cert_files = [line.strip() for line in output.split('\n') if line.strip()]
-                
-                self._create_event(
-                    'files',
-                    'in_progress',
-                    f'Found certificate files: {cert_files}',
-                    {
-                        'isInProgress': True,
-                        'files': cert_files
-                    }
-                )
-                return cert_files
-            else:
-                self._create_event(
-                    'files',
-                    'in_progress',
-                    'No certificate files found',
-                    {
-                        'isInProgress': True,
-                        'files': []
-                    }
-                )
-                return []
-
-        except Exception as e:
-            error_msg = f"Error listing certificate files: {str(e)}"
-            self._create_event(
-                'files',
-                'error',
-                error_msg,
-                {
-                    'isInProgress': False,
-                    'error': str(e)
-                }
-            )
-            raise Exception(error_msg)
-
-    def create_zip_file(self, temp_dir, zip_name, channel: str = 'data-package'):
+    async def create_zip_file(self, temp_dir, zip_name, channel: str = 'data-package'):
         """
         Creates a clean zip file for ATAK data package from the temporary directory.
         """
@@ -405,12 +357,11 @@ class DataPackage:
         # Remove existing zip if it exists
         if os.path.exists(zip_path):
             os.remove(zip_path)
-        
-        self._create_event(
-            'config',
-            'in_progress',
-            f'Creating data package: {zip_path}',
-            {'isInProgress': True}
+
+        await self.update_status(
+            "in_progress",
+            self._progress,
+            f"Creating data package: {zip_path}"
         )
         
         try:
@@ -425,77 +376,40 @@ class DataPackage:
                         file_path = os.path.join(root, file)
                         arc_name = os.path.relpath(file_path, temp_dir).replace(os.sep, '/')
                         zipf.write(file_path, arc_name)
-
-            self._create_event(
-                'config',
-                'in_progress',
-                'Data package created successfully',
-                {'isInProgress': True}
-            )
                          
         except Exception as e:
             error_msg = f'Error creating data package: {str(e)}'
-            self.run_command.emit_log_output(
+            await self.update_status(
+                "error",
+                self._progress,
                 error_msg,
-                'data-package'
-            )
-            self._create_event(
-                'config',
-                'error',
-                error_msg,
-                {
-                    'isInProgress': False,
-                    'error': str(e)
-                }
+                str(e)
             )
             raise
 
-    def get_certificate_files(self) -> list:
-        """Get certificate files from the container"""
-        try:
-            version = self.read_version_txt()
-            container_name = f"takserver-{version}"
-            cert_files = self.list_cert_files(container_name)
-            
-            # Create files update event
-            self._create_files_event(cert_files)
-            
-            return cert_files
-
-        except Exception as e:
-            error_msg = f"Error getting certificate files: {str(e)}"
-            self.run_command.emit_log_output(
-                error_msg,
-                'data-package'
-            )
-            self._create_event(
-                'files',
-                'error',
-                error_msg,
-                {
-                    'error': str(e),
-                    'files': []
-                }
-            )
-            return []
-
-    def main(self, preferences_data) -> Dict[str, Any]:
+    async def main(self, preferences_data) -> Dict[str, Any]:
         """Main function to handle data package configuration"""
         try:
             self.stop_event = False
+            self._progress = 0
+            
+            # Define task weights and initial progress
+            weights = {
+                'setup': 10,
+                'config': 30,
+                'certificates': 30,
+                'packaging': 30
+            }
             
             # Create a temporary directory for all operations
             with tempfile.TemporaryDirectory() as temp_dir:
-                # Emit operation started event
-                self._create_event(
-                    'config',
-                    'started',
-                    'Starting data package configuration...',
-                    {'isInProgress': True}
-                )
-
+                # Initial setup
+                await self.update_status("in_progress", self._progress, "Starting data package configuration...")
+                
                 # Get zip name from preferences
                 zip_name = preferences_data.get('#zip_file_name', 'data_package')
+                self._progress += weights['setup']
+                await self.update_status("in_progress", self._progress, "Initialized configuration")
                 
                 # Extract certificate names for all streams
                 stream_count = int(preferences_data.get('count', 1))
@@ -513,41 +427,26 @@ class DataPackage:
                 # Remove special markers from preferences
                 preferences_data = {k: v for k, v in preferences_data.items() if not k.startswith('#')}
 
-                # Generate config file in temp directory
+                # Generate config file
                 self.generate_config_pref(preferences_data, temp_dir)
+                self._progress += weights['config']
+                await self.update_status("in_progress", self._progress, "Generated configuration file")
                 
-                # Create manifest file in temp directory with all certificates
+                # Create manifest and handle certificates
                 self.create_manifest_file(temp_dir, zip_name, ca_certs, client_certs)
-                
-                # Copy all certificates if any are present
                 if ca_certs or client_certs:
-                    self.copy_certificates_from_container(temp_dir, ca_certs, client_certs)
+                    await self.copy_certificates_from_container(temp_dir, ca_certs, client_certs)
+                self._progress += weights['certificates']
+                await self.update_status("in_progress", self._progress, "Processed certificates")
                 
-                # Create final zip file from temp directory
-                self.create_zip_file(temp_dir, zip_name)
-                
-                self._create_event(
-                    'config',
-                    'completed',
-                    'Data package configuration completed successfully',
-                    {'isInProgress': False}
-                )
+                # Create final package
+                await self.create_zip_file(temp_dir, zip_name)
+                self._progress = 100
+                await self.update_status("complete", self._progress, "Data package configuration completed successfully")
                 
                 return {'status': 'Data package configuration completed successfully'}
 
         except Exception as e:
             error_msg = f'Error during configuration: {str(e)}'
-            self.run_command.emit_log_output(
-                error_msg,
-                'data-package'
-            )
-            self._create_event(
-                'config',
-                'error',
-                error_msg,
-                {
-                    'isInProgress': False,
-                    'error': str(e)
-                }
-            )
+            await self.update_status("error", 100, "Configuration failed", str(e))
             return {'error': error_msg}

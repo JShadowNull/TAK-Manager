@@ -10,10 +10,14 @@ import {
 } from '../components/shared/ui/shadcn/dialog';
 import { Progress } from '../components/shared/ui/shadcn/progress';
 import { ScrollArea } from '@/components/shared/ui/shadcn/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/shared/ui/shadcn/tabs";
+import { Button } from '@/components/shared/ui/shadcn/button';
+import { Input } from "@/components/shared/ui/shadcn/input";
+import { Label } from "@/components/shared/ui/shadcn/label";
 import ZipNameSection from '../components/datapackage/ZipNameSection/ZipNameSection';
 import CotStreamsSection from '../components/datapackage/CotStreamsSection/CotStreamsSection';
 import AtakPreferencesSection from '../components/datapackage/AtakPreferencesSection/AtakPreferencesSection';
-import { Button } from '../components/shared/ui/shadcn/button';
+import BulkGeneratorSection from '../components/datapackage/BulkGeneratorSection/BulkGeneratorSection';
 import axios from 'axios';
 
 function DataPackage() {
@@ -219,215 +223,230 @@ function DataPackage() {
     }
   };
 
+  const handleBulkGenerate = async (packages) => {
+    try {
+      setOperationStatus({
+        isInProgress: true,
+        isComplete: false,
+        isSuccess: false,
+        errorMessage: null
+      });
+      setShowPopup(true);
+
+      for (const pkg of packages) {
+        const response = await axios.post('/api/datapackage/generate', {
+          preferences: pkg,
+          zipFileName: pkg.zipName
+        });
+
+        if (!response.data.success) {
+          throw new Error(response.data.error || 'Failed to generate data package');
+        }
+      }
+
+      setOperationStatus({
+        isInProgress: false,
+        isComplete: true,
+        isSuccess: true,
+        errorMessage: null
+      });
+    } catch (error) {
+      setOperationStatus({
+        isInProgress: false,
+        isComplete: true,
+        isSuccess: false,
+        errorMessage: error.message
+      });
+    }
+  };
+
   return (
-    <div className="flex flex-col gap-8 pt-14">
-      {/* Zip Name Section */}
-      <div className="rounded-lg border border-border">
-        <ZipNameSection 
-          zipName={zipFileName}
-          onZipNameChange={setZipFileName}
-        />
-      </div>
-
-      {/* CoT Streams Section */}
-      <div className="h-[400px] overflow-x-hidden relative border border-border rounded-lg">
-        <div className="absolute inset-x-0 top-0 z-20 bg-backgroundPrimary">
-          <div className="p-4 flex justify-between items-center">
-            <div className="text-base text-medium">CoT Streams</div>
-            <div className="space-x-2">
-              <Button 
-                variant="secondary"
-                onClick={() => document.querySelector('.cot-streams-select-all')?.click()}
-                tooltip="Enable all COT streams"
-                tooltipStyle="shadcn"
-                tooltipDelay={1000}
-                tooltipPosition="bottom"
-              >
-                Select All
-              </Button>
-              <Button 
-                variant="secondary"
-                onClick={() => document.querySelector('.cot-streams-unselect-all')?.click()}
-                tooltip="Disable all COT streams"
-                tooltipStyle="shadcn"
-                tooltipDelay={1000}
-                tooltipPosition="bottom"
-              >
-                Unselect All
-              </Button>
-            </div>
-          </div>
-        </div>
-        <div className="h-full pt-16">
-          <ScrollArea>
-            <CotStreamsSection
-              preferences={memoizedPreferences}
-              onPreferenceChange={handlePreferenceChange}
-              onEnableChange={handlePreferenceEnable}
-              onValidationChange={handleValidationChange}
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="mx-auto space-y-8">
+        {/* Zip Name Section with Generate Button */}
+        <div className="bg-card p-2 rounded-lg shadow-md border border-border">
+          <div className="flex flex-col">
+            <ZipNameSection 
+              zipName={zipFileName}
+              onZipNameChange={setZipFileName}
             />
-          </ScrollArea>
-        </div>
-      </div>
-
-      {/* ATAK Preferences Section */}
-      <div className="h-[400px] overflow-x-hidden relative border border-border rounded-lg">
-        <div className="absolute inset-x-0 top-0 z-20 bg-backgroundPrimary">
-          <div className="p-4 flex justify-between items-center">
-            <div className="text-base text-medium">ATAK Preferences</div>
-            <div className="space-x-2">
-              <Button 
-                variant="secondary"
-                onClick={() => document.querySelector('.atak-prefs-select-all')?.click()}
-                tooltip="Enable all ATAK preferences"
-                tooltipStyle="shadcn"
-                tooltipDelay={1000}
-                tooltipPosition="bottom"
-              >
-                Select All
-              </Button>
-              <Button 
-                variant="secondary"
-                onClick={() => document.querySelector('.atak-prefs-unselect-all')?.click()}
-                tooltip="Disable all ATAK preferences"
-                tooltipStyle="shadcn"
-                tooltipDelay={1000}
-                tooltipPosition="bottom"
-              >
-                Unselect All
-              </Button>
-            </div>
-          </div>
-        </div>
-        <div className="h-full pt-16">
-          <ScrollArea>
-            <AtakPreferencesSection
-              preferences={memoizedPreferences}
-              onPreferenceChange={handlePreferenceChange}
-              onEnableChange={handlePreferenceEnable}
-              onValidationChange={handleValidationChange}
-            />
-          </ScrollArea>
-        </div>
-      </div>
-
-      {/* Generate Button with validation messages */}
-      <div className="flex justify-center mt-4">
-        <Button
-          variant="primary"
-          onClick={handleGenerateDataPackage}
-          disabled={!isFormValid}
-          tooltip={!isFormValid && validationMessages.length > 0 ? (
-            <div>
-              <div className="font-semibold mb-1">Please fix the following:</div>
-              <ul className="list-disc pl-4 max-h-60 overflow-y-auto">
-                {validationMessages.map((message, index) => (
-                  <li 
-                    key={index}
-                    className={message.startsWith('❌') ? 'text-red-300' : ''}
-                  >
-                    {message}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : undefined}
-          tooltipStyle="shadcn"
-          tooltipDelay={500}
-          triggerMode="hover"
-        >
-          Generate Data Package
-        </Button>
-      </div>
-
-      {/* Progress Dialog */}
-      <Dialog 
-        open={showPopup} 
-        onOpenChange={operationStatus.isInProgress ? undefined : () => {
-          setShowPopup(false);
-          clearTerminal();
-          setOperationStatus({
-            isInProgress: false,
-            isComplete: false,
-            isSuccess: false,
-            errorMessage: null
-          });
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {isConfiguring 
-                ? "Generating Data Package"
-                : operationStatus.isComplete
-                  ? operationStatus.isSuccess
-                    ? "Data Package Complete"
-                    : "Data Package Failed"
-                  : "Operation Progress"}
-            </DialogTitle>
-            <DialogDescription>
-              {operationStatus.isInProgress
-                ? "Please wait while your data package is being generated..."
-                : operationStatus.isComplete && operationStatus.isSuccess
-                ? "Review the logs and click Next to continue."
-                : operationStatus.errorMessage || "Operation in progress"}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <ScrollArea 
-              className="w-full rounded-md border p-4"
-              autoScroll={true}
-              content={terminalOutput}
-            >
-              <div className="font-mono text-sm">
-                {terminalOutput.map((line, index) => (
-                  <div key={index} className="whitespace-pre-wrap">
-                    {line}
+            <div className="flex justify-end p-4">
+              <Button
+                onClick={handleGenerateDataPackage}
+                disabled={!isFormValid}
+                variant="primary"
+                tooltip={!isFormValid && validationMessages.length > 0 ? (
+                  <div>
+                    <div className="font-semibold mb-1">Please fix the following:</div>
+                    <ul className="list-disc pl-4 max-h-60 overflow-y-auto">
+                      {validationMessages.map((message, index) => (
+                        <li 
+                          key={index}
+                          className={message.startsWith('❌') ? 'text-red-300' : ''}
+                        >
+                          {message}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                ))}
-              </div>
-            </ScrollArea>
+                ) : undefined}
+                tooltipStyle="shadcn"
+                tooltipDelay={500}
+                triggerMode="hover"
+              >
+                Generate Data Package
+              </Button>
+            </div>
           </div>
-          <DialogFooter>
-            {operationStatus.isComplete && operationStatus.isSuccess && (
-              <Button onClick={handleNext}>
-                Next
-              </Button>
-            )}
-            {operationStatus.isInProgress && (
-              <Button variant="destructive" onClick={handleStopOperation}>
-                Stop
-              </Button>
-            )}
-            {operationStatus.errorMessage && (
-              <Button onClick={() => setShowPopup(false)}>
+        </div>
+
+        {/* Main Content Tabs */}
+        <Tabs defaultValue="cot-streams" className="w-full">
+          <div className="flex justify-center mb-8">
+            <TabsList className="bg-muted">
+              <TabsTrigger 
+                value="cot-streams" 
+                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:rounded-lg"
+              >
+                Configure TAK Servers
+              </TabsTrigger>
+              <TabsTrigger 
+                value="atak-preferences" 
+                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:rounded-lg"
+              >
+                ATAK Settings
+              </TabsTrigger>
+              <TabsTrigger 
+                value="bulk-generator" 
+                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:rounded-lg"
+              >
+                Bulk Package Generator
+              </TabsTrigger>
+            </TabsList>
+          </div>
+
+          <div className="w-full">
+            <TabsContent value="cot-streams" className="w-full">
+              <div className="bg-card rounded-lg">
+                <CotStreamsSection
+                  preferences={memoizedPreferences}
+                  onPreferenceChange={handlePreferenceChange}
+                  onEnableChange={handlePreferenceEnable}
+                  onValidationChange={handleValidationChange}
+                />
+              </div>
+            </TabsContent>
+            <TabsContent value="atak-preferences" className="w-full">
+              <div className="bg-card rounded-lg">
+                <AtakPreferencesSection
+                  preferences={memoizedPreferences}
+                  onPreferenceChange={handlePreferenceChange}
+                  onEnableChange={handlePreferenceEnable}
+                  onValidationChange={handleValidationChange}
+                />
+              </div>
+            </TabsContent>
+            <TabsContent value="bulk-generator" className="w-full">
+              <div className="bg-card rounded-lg">
+                <BulkGeneratorSection
+                  preferences={memoizedPreferences}
+                  onGeneratePackages={handleBulkGenerate}
+                  disabled={!isFormValid}
+                />
+              </div>
+            </TabsContent>
+          </div>
+        </Tabs>
+
+        {/* Progress Dialog */}
+        <Dialog 
+          open={showPopup} 
+          onOpenChange={operationStatus.isInProgress ? undefined : () => {
+            setShowPopup(false);
+            clearTerminal();
+            setOperationStatus({
+              isInProgress: false,
+              isComplete: false,
+              isSuccess: false,
+              errorMessage: null
+            });
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {isConfiguring 
+                  ? "Generating Data Package"
+                  : operationStatus.isComplete
+                    ? operationStatus.isSuccess
+                      ? "Data Package Complete"
+                      : "Data Package Failed"
+                    : "Operation Progress"}
+              </DialogTitle>
+              <DialogDescription>
+                {operationStatus.isInProgress
+                  ? "Please wait while your data package is being generated..."
+                  : operationStatus.isComplete && operationStatus.isSuccess
+                  ? "Review the logs and click Next to continue."
+                  : operationStatus.errorMessage || "Operation in progress"}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <ScrollArea 
+                className="w-full rounded-md border p-4"
+                autoScroll={true}
+                content={terminalOutput}
+              >
+                <div className="font-mono text-sm">
+                  {terminalOutput.map((line, index) => (
+                    <div key={index} className="whitespace-pre-wrap">
+                      {line}
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
+            <DialogFooter>
+              {operationStatus.isComplete && operationStatus.isSuccess && (
+                <Button onClick={handleNext}>
+                  Next
+                </Button>
+              )}
+              {operationStatus.isInProgress && (
+                <Button variant="destructive" onClick={handleStopOperation}>
+                  Stop
+                </Button>
+              )}
+              {operationStatus.errorMessage && (
+                <Button onClick={() => setShowPopup(false)}>
+                  Close
+                </Button>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Completion Dialog */}
+        <Dialog open={showCompletionPopup} onOpenChange={handleComplete}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Data Package Complete</DialogTitle>
+              <DialogDescription>
+                Your data package has been created and is ready to use in ATAK.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="text-center py-4">
+              <p className="text-green-500 font-semibold text-xl">✓</p>
+              <p className="text-green-500 font-semibold">Data Package Generated Successfully</p>
+            </div>
+            <DialogFooter>
+              <Button onClick={handleComplete}>
                 Close
               </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Completion Dialog */}
-      <Dialog open={showCompletionPopup} onOpenChange={handleComplete}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Data Package Complete</DialogTitle>
-            <DialogDescription>
-              Your data package has been created and is ready to use in ATAK.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="text-center py-4">
-            <p className="text-green-500 font-semibold text-xl">✓</p>
-            <p className="text-green-500 font-semibold">Data Package Generated Successfully</p>
-          </div>
-          <DialogFooter>
-            <Button onClick={handleComplete}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
     </div>
   );
 }

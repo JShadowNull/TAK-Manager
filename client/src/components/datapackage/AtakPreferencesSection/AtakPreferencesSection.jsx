@@ -1,6 +1,7 @@
 import React, { useEffect, memo } from 'react';
 import PreferenceItem from '../shared/PreferenceItem';
-import { ATAK_PREFERENCES, validateAtakPreferences } from './atakPreferencesConfig';
+import { ATAK_PREFERENCES, PREFERENCE_CATEGORIES, validateAtakPreferences } from './atakPreferencesConfig';
+import { ScrollArea } from "@/components/shared/ui/shadcn/scroll-area";
 
 const AtakPreferencesSection = memo(({ 
   preferences, 
@@ -14,8 +15,8 @@ const AtakPreferencesSection = memo(({
     
     if (newItems.length > 0) {
       newItems.forEach((item) => {
-        onPreferenceChange(item.label, item.input_type === 'checkbox' ? true : (item.value || ''));
-        onEnableChange(item.label, true);
+        onPreferenceChange(item.label, item.defaultValue || '');
+        onEnableChange(item.label, false); // Start disabled by default
       });
     }
   }, [preferences, onPreferenceChange, onEnableChange]);
@@ -35,65 +36,58 @@ const AtakPreferencesSection = memo(({
     }
   }, [preferences, onValidationChange]);
 
-  const handleSelectAll = () => {
-    ATAK_PREFERENCES.forEach((item) => {
-      onEnableChange(item.label, true);
-    });
-  };
-
-  const handleUnselectAll = () => {
-    ATAK_PREFERENCES.forEach((item) => {
-      onEnableChange(item.label, false);
-    });
-  };
+  // Group preferences by category
+  const preferencesByCategory = ATAK_PREFERENCES.reduce((acc, item) => {
+    if (!acc[item.category]) {
+      acc[item.category] = [];
+    }
+    acc[item.category].push(item);
+    return acc;
+  }, {});
 
   return (
-    <div className="p-4 bg-backgroundPrimary">
-      <button 
-        className="hidden atak-prefs-select-all"
-        onClick={handleSelectAll}
-      />
-      <button 
-        className="hidden atak-prefs-unselect-all"
-        onClick={handleUnselectAll}
-      />
+    <div className="h-[calc(100vh-200px)] overflow-hidden">
+      <ScrollArea className="h-full">
+        <div className="space-y-6 px-4">
+          {Object.entries(PREFERENCE_CATEGORIES).map(([categoryKey, categoryName]) => {
+            const categoryPreferences = preferencesByCategory[categoryKey] || [];
+            if (categoryPreferences.length === 0) return null;
 
-      <div className="divide-y divide-border">
-        {ATAK_PREFERENCES.map((item) => {
-          const pref = preferences[item.label] || {};
-          
-          // Always default to enabled unless explicitly disabled
-          const isPreferenceEnabled = pref.enabled !== undefined ? pref.enabled : true;
-          
-          // Get the current value, using preference value if available
-          const fieldValue = pref.value !== undefined ? pref.value : item.value;
-          
-          return (
-            <div key={item.label} className="py-2 first:pt-0 last:pb-0">
-              <PreferenceItem
-                name={item.name}
-                label={item.label}
-                input_type={item.input_type}
-                value={fieldValue}
-                checked={item.input_type === 'checkbox' ? pref.value : undefined}
-                options={item.options || []}
-                isPreferenceEnabled={isPreferenceEnabled}
-                required={item.required}
-                placeholder={item.placeholder}
-                onChange={(e) => {
-                  const value = item.input_type === 'checkbox' 
-                    ? e.target.checked 
-                    : e.target.value;
-                  onPreferenceChange(item.label, value);
-                }}
-                onPreferenceEnableChange={(enabled) => onEnableChange(item.label, enabled)}
-                min={item.min}
-                max={item.max}
-              />
-            </div>
-          );
-        })}
-      </div>
+            return (
+              <div key={categoryKey} className="bg-card p-4 rounded-lg shadow-lg border border-border">
+                <h3 className="text-xl font-semibold text-primary mb-4">{categoryName}</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {categoryPreferences.map((item) => {
+                    const pref = preferences[item.label] || {};
+                    const isPreferenceEnabled = pref.enabled !== undefined ? pref.enabled : false;
+                    const fieldValue = pref.value !== undefined ? pref.value : '';
+
+                    return (
+                      <PreferenceItem
+                        key={item.label}
+                        name={item.name}
+                        label={item.label}
+                        input_type={item.input_type}
+                        value={fieldValue}
+                        options={item.options || []}
+                        isPreferenceEnabled={isPreferenceEnabled}
+                        required={item.required}
+                        placeholder={item.placeholder}
+                        onChange={(e) => onPreferenceChange(item.label, e.target.value)}
+                        onPreferenceEnableChange={(enabled) => onEnableChange(item.label, enabled)}
+                        min={item.min}
+                        max={item.max}
+                        showLabel={true}
+                        showEnableToggle={true}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </ScrollArea>
     </div>
   );
 });

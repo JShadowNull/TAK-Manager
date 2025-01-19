@@ -8,7 +8,7 @@ import { HelpIconTooltip } from './tooltip/HelpIconTooltip';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip/tooltip';
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 break-words whitespace-normal rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 min-w-fit min-h-fit",
+  "inline-flex items-center justify-center gap-2 break-words whitespace-normal rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
@@ -20,7 +20,7 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        default: "px-4 py-2",
+        default: "px-2 py-2 min-h-fit",
         icon: "w-10 h-10",
       },
     },

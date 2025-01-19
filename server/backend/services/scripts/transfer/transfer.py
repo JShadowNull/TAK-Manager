@@ -1,5 +1,4 @@
 import os
-from backend.services.helpers.run_command import RunCommand
 from typing import Dict, Any, AsyncGenerator, Optional, Callable
 import json
 import time
@@ -13,7 +12,6 @@ logger = configure_logging(__name__)
 
 class RapidFileTransfer:
     def __init__(self, emit_event: Optional[Callable[[Dict[str, Any]], None]] = None):
-        self.run_command = RunCommand()
         self.device_states = {}  # Single state tracking dictionary
         self.monitoring = False
         self.working_dir = self.get_default_working_directory()
@@ -22,6 +20,7 @@ class RapidFileTransfer:
         self.transferred_files = {}  # Track transferred files per device
         self.device_progress = {}  # Add this to track progress per device
         self.emit_event = emit_event
+        self._last_status = None
         
         # File path mappings
         self.file_paths = {
@@ -35,83 +34,30 @@ class RapidFileTransfer:
         if not os.path.exists(self.temp_dir):
             os.makedirs(self.temp_dir)
 
-        self.adb = ADBController()
+        self.adb = ADBController(emit_event=self.emit_event)
 
-    def _create_event(self, event_type: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Create an event object for SSE"""
-        event_data = {
-            'type': event_type,
-            'data': {
-                **data,
-                'timestamp': time.time()
-            }
-        }
-        logger.debug(f"Created event: {event_data}")
+    async def update_status(self, status: str, progress: float, message: str, error: Optional[str] = None, device_id: Optional[str] = None) -> None:
+        """Update transfer status."""
         if self.emit_event:
-            self.emit_event(event_data)
-        return event_data
-
-    def emit_transfer_update(self, status_type="status", device_id=None, **data):
-        """Unified transfer status/progress emission using SSE"""
-        base_status = {
-            'type': status_type,  # 'status', 'progress', or 'error'
-            'isRunning': self.is_transfer_running,
-        }
-        
-        if device_id:
-            base_status['device_id'] = device_id
+            new_status = {
+                "type": "transfer_status",
+                "status": status,
+                "progress": progress,
+                "message": message,
+                "error": error,
+                "isError": error is not None,
+                "isRunning": self.is_transfer_running,
+                "timestamp": int(time.time() * 1000)
+            }
             
-        status = {**base_status, **data}
-        self._create_event('transfer_update', status)
-
-    def emit_device_update(self, event_type, device_data):
-        """Unified device state emission using SSE"""
-        update = {
-            'type': event_type,  # 'connection', 'state_change'
-            'devices': device_data if isinstance(device_data, list) else [device_data]
-        }
-        self._create_event('device_update', update)
-
-    def emit_file_update(self, event_type, files_data):
-        """Unified file system update emission using SSE"""
-        update = {
-            'type': event_type,  # 'list', 'change'
-            'files': files_data
-        }
-        self._create_event('file_update', update)
-
-    async def status_generator(self) -> AsyncGenerator[Dict[str, Any], None]:
-        """Generate transfer status events."""
-        while True:
-            try:
-                status = {
-                    'isRunning': self.is_transfer_running,
-                    'devices': [
-                        {
-                            'id': device_id,
-                            'name': data['name'],
-                            'status': data['status'],
-                            'progress': self.device_progress.get(device_id, {})
-                        }
-                        for device_id, data in self.device_states.items()
-                    ]
-                }
-                yield {
-                    "event": "transfer_status",
-                    "data": json.dumps(status)
-                }
-            except Exception as e:
-                logger.error(f"Error generating transfer status: {str(e)}")
-                yield {
-                    "event": "transfer_status",
-                    "data": json.dumps({
-                        'type': 'error',
-                        'message': f'Error getting transfer status: {str(e)}',
-                        'isRunning': self.is_transfer_running,
-                        'devices': []
-                    })
-                }
-            await asyncio.sleep(1)  # Update every second
+            if device_id:
+                new_status["device_id"] = device_id
+                new_status["device_progress"] = self.device_progress.get(device_id, {})
+            
+            # Only emit if status has changed
+            if new_status != self._last_status:
+                await self.emit_event(new_status)
+                self._last_status = new_status
 
     def get_default_working_directory(self):
         """Get the working directory from environment variable."""
@@ -122,24 +68,9 @@ class RapidFileTransfer:
         return working_dir
 
     def get_device_name(self, device_id):
-        try:
-            result = self.run_command.run_command(
-                ['adb', '-s', device_id, 'shell', 'getprop', 'ro.product.model'],
-                'device_info',
-                capture_output=True,
-                emit_output=False,
-                emit_event=self.emit_event
-            )
-            if result.stdout:
-                output = result.stdout
-                if isinstance(output, bytes):
-                    return output.strip().decode('utf-8')
-                return output.strip()
-            return device_id
-        except Exception:
-            return device_id
+        return self.adb.get_device_name(device_id)
 
-    def copy_file(self, device_id, src_file, files_completed, total_files):
+    async def copy_file(self, device_id, src_file, files_completed, total_files):
         try:
             dest_path = self.get_file_destination(src_file)
             filename = os.path.basename(src_file)
@@ -155,12 +86,12 @@ class RapidFileTransfer:
                 }
 
             # Create destination directory
-            self.adb.create_device_directory(device_id, dest_path)
+            success = await self.adb.create_device_directory(device_id, dest_path)
+            if not success:
+                return False
 
             def progress_callback(progress):
                 device_state = self.device_progress[device_id]
-                
-                # Ensure progress is monotonically increasing per device
                 if progress < device_state['last_progress']:
                     return
                     
@@ -170,36 +101,24 @@ class RapidFileTransfer:
                 # Calculate overall progress for this specific device
                 overall_progress = min(int((files_completed * 100 + progress) / total_files), 100)
                 
-                self.emit_transfer_update(
-                    device_id=device_id,
-                    status_type="progress",
-                    current_file=filename,
-                    file_progress=progress,
-                    overall_progress=overall_progress,
-                    files_completed=files_completed + 1,
-                    total_files=total_files
-                )
+                self.device_progress[device_id].update({
+                    'file_progress': progress,
+                    'overall_progress': overall_progress,
+                    'current_file': filename,
+                    'files_completed': files_completed + 1,
+                    'total_files': total_files
+                })
 
-            success = self.adb.push_file(device_id, src_file, dest_file, progress_callback)
-            
-            if not success:
-                # Preserve the current progress state for failed device
-                failed_progress = self.device_progress.get(device_id, {})
-                self.emit_transfer_update(
-                    device_id=device_id,
-                    status_type="error",
-                    state="failed",
-                    error=f"Failed to push file {filename}",
-                    last_progress=failed_progress.get('last_progress', 0)
-                )
-                
+            success = await self.adb.push_file(device_id, src_file, dest_file, progress_callback)
             return success
 
         except Exception as e:
-            self.emit_transfer_update(
-                device_id=device_id,
-                status_type="error",
-                error=f"Error during file transfer: {str(e)}"
+            await self.update_status(
+                "error",
+                0,
+                f"Error during file transfer: {str(e)}",
+                error=str(e),
+                device_id=device_id
             )
             return False
 
@@ -217,18 +136,14 @@ class RapidFileTransfer:
 
     async def monitor_devices(self):
         """Monitor devices asynchronously."""
-        self.emit_transfer_update(
-            status_type="status",
-            state="starting",
-            message="Starting device monitoring..."
-        )
+        await self.update_status("starting", 0, "Starting device monitoring...")
         self.monitoring = True
-        last_device_states = {}  # Track last known device states
+        last_device_states = {}
         
         try:
-            process = self.adb.start_device_monitoring()
+            process = await self.adb.start_device_monitoring()
             
-            while self.monitoring:
+            while self.monitoring and process:
                 try:
                     line = process.stdout.readline()
                     if not line:
@@ -241,22 +156,25 @@ class RapidFileTransfer:
                     if line and not line.startswith('List'):
                         device_id, new_state = self.adb.parse_device_line(line)
                         if device_id:
-                            # Only process state change if it's different from last known state
                             if device_id not in last_device_states or last_device_states[device_id] != new_state:
                                 last_device_states[device_id] = new_state
                                 await self.handle_device_update(device_id, new_state)
                     
                     await asyncio.sleep(0.1)
                 except Exception as line_error:
-                    self.emit_transfer_update(
-                        status_type="error",
-                        error=f"Error reading device update: {str(line_error)}"
+                    await self.update_status(
+                        "error",
+                        0,
+                        f"Error reading device update: {str(line_error)}",
+                        error=str(line_error)
                     )
                     await asyncio.sleep(1)
         except Exception as e:
-            self.emit_transfer_update(
-                status_type="error",
-                error=f"Error during device monitoring: {str(e)}"
+            await self.update_status(
+                "error",
+                0,
+                f"Error during device monitoring: {str(e)}",
+                error=str(e)
             )
         finally:
             if process:
@@ -265,16 +183,16 @@ class RapidFileTransfer:
     async def handle_device_update(self, device_id, new_state):
         """Handle device state updates asynchronously."""
         try:
-            device_name = self.adb.get_device_name(device_id)
+            device_name = self.get_device_name(device_id)
             device_display = f"{device_name} ({device_id})"
 
             if new_state == 'device':
-                self.emit_device_update('connection', {
-                    'id': device_id,
-                    'name': device_name,
-                    'status': 'connected',
-                    'message': f'📱 Device connected: {device_display}'
-                })
+                await self.update_status(
+                    "device_connected",
+                    100,
+                    f"Device connected: {device_display}",
+                    device_id=device_id
+                )
                 
                 # Initialize device state
                 self.device_states[device_id] = {
@@ -290,36 +208,36 @@ class RapidFileTransfer:
                     remaining_files = all_files - transferred
                     
                     if remaining_files:
-                        # Clear any previous failed state for this device
                         if device_id in self.device_progress:
                             del self.device_progress[device_id]
                         if device_id in self.transferred_files:
                             del self.transferred_files[device_id]
                             
-                        self.emit_transfer_update(
-                            device_id=device_id,
-                            status_type="status",
-                            state="preparing"
+                        await self.update_status(
+                            "preparing",
+                            0,
+                            f"Preparing transfer for device {device_display}",
+                            device_id=device_id
                         )
                         
                         await self.start_transfer(device_id)
 
             elif new_state in ['offline', 'unauthorized']:
-                self.emit_device_update('connection', {
-                    'id': device_id,
-                    'name': device_name,
-                    'status': 'disconnected',
-                    'message': f'📱 Device disconnected: {device_display}'
-                })
+                await self.update_status(
+                    "device_disconnected",
+                    0,
+                    f"Device disconnected: {device_display}",
+                    device_id=device_id
+                )
                 
                 # Mark transfer as failed if device was transferring
                 if device_id in self.device_states and self.device_states[device_id].get('status') == 'transferring':
-                    self.emit_transfer_update(
-                        device_id=device_id,
-                        status_type="error",
-                        state="failed",
-                        error="Device Disconnected",
-                        last_progress=self.device_progress.get(device_id, {}).get('last_progress', 0)
+                    await self.update_status(
+                        "failed",
+                        self.device_progress.get(device_id, {}).get('last_progress', 0),
+                        "Device Disconnected",
+                        error="Device disconnected during transfer",
+                        device_id=device_id
                     )
 
                 # Remove device from tracking
@@ -328,60 +246,70 @@ class RapidFileTransfer:
                 self.device_progress.pop(device_id, None)
 
             # Update connected devices list
-            self.emit_connected_devices()
+            await self.emit_connected_devices()
 
         except Exception as e:
-            self.emit_transfer_update(
-                status_type="error",
-                error=f"Error handling device update: {str(e)}"
+            await self.update_status(
+                "error",
+                0,
+                f"Error handling device update: {str(e)}",
+                error=str(e),
+                device_id=device_id
             )
 
     def start_monitoring(self):
         """Signal that monitoring should start"""
         if not self.monitoring:
             self.monitoring = True
-            self.emit_transfer_update(
-                status_type="status",
-                state="starting",
-                message="Starting monitoring..."
-            )
 
-    def start_transfer_all_devices(self):
+    async def start_transfer_all_devices(self):
         """Prepare transfer for all connected devices"""
-        # Set transfer running state first
-        self.is_transfer_running = True
-        
-        # Get list of files to transfer
-        files = [f for f in os.listdir(self.temp_dir) 
-                if os.path.isfile(os.path.join(self.temp_dir, f))]
-        
-        if not files:
-            self.emit_transfer_update(
-                status_type="error",
-                error="No files to transfer"
+        try:
+            # Set transfer running state first
+            self.is_transfer_running = True
+            
+            # Get list of files to transfer
+            files = [f for f in os.listdir(self.temp_dir) 
+                    if os.path.isfile(os.path.join(self.temp_dir, f))]
+            
+            if not files:
+                await self.update_status(
+                    "error",
+                    0,
+                    "No files to transfer",
+                    error="No files found in temp directory"
+                )
+                return None
+            
+            await self.update_status(
+                "starting",
+                0,
+                f"Starting transfer of {len(files)} files"
+            )
+                
+            # Return list of device IDs that need transfer
+            return [
+                device_id for device_id, data in self.device_states.items()
+                if data['state'] == 'device'
+            ]
+        except Exception as e:
+            await self.update_status(
+                "error",
+                0,
+                f"Error starting transfer: {str(e)}",
+                error=str(e)
             )
             return None
-        
-        self.emit_transfer_update(
-            status_type="status",
-            state="starting",
-            total_files=len(files)
-        )
-            
-        # Return list of device IDs that need transfer
-        return [
-            device_id for device_id, data in self.device_states.items()
-            if data['state'] == 'device'
-        ]
 
     async def start_transfer(self, device_id):
         """Start transfer for a specific device asynchronously."""
         try:
             if not self.is_transfer_running:
                 self.is_transfer_running = True
-                self.emit_transfer_update(
-                    status_type="status",
-                    state="preparing"
+                await self.update_status(
+                    "preparing",
+                    0,
+                    "Preparing transfer"
                 )
             
             if device_id not in self.transferred_files:
@@ -391,11 +319,11 @@ class RapidFileTransfer:
             files_to_transfer = [f for f in all_files if f not in self.transferred_files[device_id]]
 
             if not files_to_transfer:
-                self.emit_transfer_update(
-                    device_id=device_id,
-                    status_type="status",
-                    state="completed",
-                    message=f'No new files to transfer for device {device_id}'
+                await self.update_status(
+                    "completed",
+                    100,
+                    f"No new files to transfer for device {device_id}",
+                    device_id=device_id
                 )
                 return
 
@@ -404,36 +332,37 @@ class RapidFileTransfer:
             
             # Check if device is still connected before proceeding
             if device_id not in self.device_states:
-                self.emit_transfer_update(
-                    device_id=device_id,
-                    status_type="error",
-                    state="failed",
-                    error="Device Disconnected",
-                    last_progress=self.device_progress.get(device_id, {}).get('last_progress', 0)
+                await self.update_status(
+                    "failed",
+                    0,
+                    "Device Disconnected",
+                    error="Device disconnected before transfer started",
+                    device_id=device_id
                 )
                 return
 
             self.device_states[device_id]['status'] = 'transferring'
-            self.emit_device_update('state_change', {
-                'id': device_id,
-                'status': 'transferring',
-                'message': f'Starting transfer of {total_files} file/s'
-            })
+            await self.update_status(
+                "transferring",
+                0,
+                f"Starting transfer of {total_files} file/s",
+                device_id=device_id
+            )
 
             for filename in files_to_transfer:
                 # Check if device is still connected before each file
                 if not self.is_transfer_running or device_id not in self.device_states:
-                    self.emit_transfer_update(
-                        device_id=device_id,
-                        status_type="error",
-                        state="failed",
-                        error="Device Disconnected",
-                        last_progress=self.device_progress.get(device_id, {}).get('last_progress', 0)
+                    await self.update_status(
+                        "failed",
+                        self.device_progress.get(device_id, {}).get('last_progress', 0),
+                        "Device Disconnected",
+                        error="Device disconnected during transfer",
+                        device_id=device_id
                     )
                     return
                 
                 src_file = os.path.join(self.temp_dir, filename)
-                success = await asyncio.to_thread(self.copy_file, device_id, src_file, files_completed, total_files)
+                success = await self.copy_file(device_id, src_file, files_completed, total_files)
                 
                 if success:
                     self.transferred_files[device_id].add(filename)
@@ -442,42 +371,44 @@ class RapidFileTransfer:
                     # Only try to update device state if it still exists
                     if device_id in self.device_states:
                         self.device_states[device_id]['status'] = 'failed'
-                    self.emit_transfer_update(
-                        device_id=device_id,
-                        status_type="error",
-                        state="failed",
-                        error=f"Failed to transfer {filename}"
+                    await self.update_status(
+                        "failed",
+                        self.device_progress.get(device_id, {}).get('last_progress', 0),
+                        f"Failed to transfer {filename}",
+                        error=f"Failed to transfer {filename}",
+                        device_id=device_id
                     )
                     return
                     
             # Only emit completed if device is still connected and all files transferred
             if self.is_transfer_running and device_id in self.device_states and files_completed == total_files:
                 self.device_states[device_id]['status'] = 'completed'
-                self.emit_transfer_update(
-                    device_id=device_id,
-                    status_type="status",
-                    state="completed",
-                    files_transferred=files_completed
+                await self.update_status(
+                    "completed",
+                    100,
+                    f"Successfully transferred {files_completed} files",
+                    device_id=device_id
                 )
                 
         except Exception as e:
-            self.emit_transfer_update(
-                device_id=device_id,
-                status_type="error",
-                state="failed",
-                error=str(e)
+            await self.update_status(
+                "error",
+                0,
+                f"Error during transfer: {str(e)}",
+                error=str(e),
+                device_id=device_id
             )
             # Only try to update device state if it still exists
             if device_id in self.device_states:
                 self.device_states[device_id]['status'] = 'failed'
 
-    def stop_transfer(self):
+    async def stop_transfer(self):
         """Stop all active transfers."""
         try:
-            self.emit_transfer_update(
-                status_type="status",
-                state="stopping",
-                message="Stopping active transfers..."
+            await self.update_status(
+                "stopping",
+                0,
+                "Stopping active transfers..."
             )
             
             # Store current progress only for actively transferring devices
@@ -492,7 +423,7 @@ class RapidFileTransfer:
                     }
             
             # Kill active push processes first
-            self.adb.kill_adb_push_processes()
+            await self.adb.kill_adb_push_processes()
             
             # Reset transfer-related state variables
             self.is_transfer_running = False
@@ -504,63 +435,56 @@ class RapidFileTransfer:
                 if device_id in self.device_states:
                     # Update device state to failed only if it was transferring
                     self.device_states[device_id]['status'] = 'failed'
-                    self.emit_transfer_update(
-                        device_id=device_id,
-                        status_type="error",
-                        state="failed",
-                        error="Transfer stopped",
-                        last_file=state['current_file'],
-                        last_progress=state['progress']
+                    await self.update_status(
+                        "failed",
+                        state['progress'],
+                        "Transfer stopped",
+                        error="Transfer was manually stopped",
+                        device_id=device_id
                     )
             
             # Emit final transfer stopped status
-            self.emit_transfer_update(
-                status_type="status",
-                state="stopped"
+            await self.update_status(
+                "stopped",
+                100,
+                "All transfers stopped"
             )
             
             # Update connected devices list
-            self.emit_connected_devices()
+            await self.emit_connected_devices()
             
         except Exception as e:
-            self.emit_transfer_update(
-                status_type="error",
-                error=f"Error stopping transfer: {str(e)}"
+            await self.update_status(
+                "error",
+                0,
+                f"Error stopping transfer: {str(e)}",
+                error=str(e)
             )
 
     def stop_monitoring(self):
         """Stop device monitoring."""
         self.monitoring = False
-        self.emit_transfer_update(
-            status_type="status",
-            state="stopping",
-            message="Stopping monitoring..."
-        )
 
-    def get_transfer_status(self):
+    async def get_transfer_status(self):
         """Get current transfer status."""
-        self.emit_transfer_update(
-            status_type="status",
-            state="current",
-            is_running=self.is_transfer_running
+        await self.update_status(
+            "current",
+            100 if not self.is_transfer_running else 0,
+            "Current transfer status"
         )
         
         # Re-emit current progress for all devices if transfer is running
         if self.is_transfer_running:
             for device_id, progress in self.device_progress.items():
                 if device_id in self.device_states:
-                    self.emit_transfer_update(
-                        device_id=device_id,
-                        status_type="progress",
-                        current_file=progress.get('current_file', ''),
-                        file_progress=progress.get('last_progress', 0),
-                        overall_progress=min(int((progress.get('files_completed', 0) * 100 + progress.get('last_progress', 0)) / progress.get('total_files', 1)), 100),
-                        files_completed=progress.get('files_completed', 0) + 1,
-                        total_files=progress.get('total_files', 1),
-                        state=self.device_states[device_id].get('status', 'transferring')
+                    await self.update_status(
+                        self.device_states[device_id].get('status', 'transferring'),
+                        progress.get('last_progress', 0),
+                        f"Transferring {progress.get('current_file', '')}",
+                        device_id=device_id
                     )
 
-    def emit_connected_devices(self):
+    async def emit_connected_devices(self):
         """Emit current device list to clients."""
         devices = [
             {
@@ -572,4 +496,10 @@ class RapidFileTransfer:
             if data['state'] == 'device'
         ]
         
-        self.emit_device_update('list', devices)
+        await self.update_status(
+            "device_list",
+            100,
+            f"Connected devices: {len(devices)}",
+            device_id=None,
+            devices=devices
+        )

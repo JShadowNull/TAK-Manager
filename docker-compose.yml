@@ -7,6 +7,7 @@ services:
     container_name: tak-manager-${MODE:-dev}
     restart: ${RESTART_POLICY}
     env_file: .env
+    privileged: true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./logs:/app/logs:rw
@@ -17,7 +18,7 @@ services:
       - ${TAK_SERVER_INSTALL_DIR}:/home/tak-manager:rw
     ports:
       - "${BACKEND_PORT}:${BACKEND_PORT}"
-      - "5173:5173"
+      - "5174:5174"
     networks:
       - tak-manager-network
     healthcheck:

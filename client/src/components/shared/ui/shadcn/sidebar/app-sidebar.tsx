@@ -266,7 +266,7 @@ export function AppSidebar() {
         <Sidebar 
           variant="floating" 
           collapsible="icon"
-          className="!w-[16rem]"
+          className="!w-[18rem]"
         >
           <SidebarHeader className="flex items-center justify-between p-4 border-b border-border">
             <h1 className="text-lg font-bold text-foreground">{getTitle()}</h1>
