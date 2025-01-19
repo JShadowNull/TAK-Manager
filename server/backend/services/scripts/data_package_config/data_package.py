@@ -234,61 +234,102 @@ class DataPackage:
         count_entry.set('class', 'class java.lang.Integer')
         count_entry.text = str(stream_count)
         
-        # Base entries for each stream with default values
-        base_entries = [
-            ('description', 'String', ''),
-            ('enabled', 'Boolean', 'False'),
-            ('connectString', 'String', ''),
-            ('caLocation', 'String', ''),
-            ('certificateLocation', 'String', ''),
-            ('clientPassword', 'String', ''),
-            ('caPassword', 'String', '')
-        ]
-        
-        # Add entries for each stream
+        # Process each stream's configuration
         for i in range(stream_count):
-            for base_key, class_type, default_value in base_entries:
-                key = f"{base_key}{i}"
-                entry = ET.SubElement(cot_streams, 'entry')
-                entry.set('key', key)
-                entry.set('class', f"class java.lang.{class_type}")
-                
-                # Get value from preferences or use default
-                value = preferences_data.get(key, default_value)
-                
-                # Handle certificate paths
-                if base_key in ['caLocation', 'certificateLocation'] and value:
-                    # Remove any existing 'cert/' prefix to avoid duplication
-                    clean_value = value.replace('cert/', '')
-                    entry.text = f'cert/{clean_value}'
-                else:
-                    entry.text = str(value)
-        
-        # Create the main preferences section
+            # Get stream details with proper error handling
+            description = preferences_data.get(f'description{i}', '')
+            ip_address = preferences_data.get(f'ipAddress{i}', '')
+            port = preferences_data.get(f'port{i}', '')
+            protocol = preferences_data.get(f'protocol{i}', '')
+            ca_location = preferences_data.get(f'caLocation{i}', '')
+            cert_location = preferences_data.get(f'certificateLocation{i}', '')
+            client_password = preferences_data.get(f'clientPassword{i}', '')
+            ca_password = preferences_data.get(f'caPassword{i}', client_password)  # Use client password as CA password if not specified
+
+            # Log the stream configuration for debugging
+            logger.debug(f"Processing stream {i} configuration:")
+            logger.debug(f"Description: {description}")
+            logger.debug(f"IP Address: {ip_address}")
+            logger.debug(f"Port: {port}")
+            logger.debug(f"Protocol: {protocol}")
+            logger.debug(f"CA Location: {ca_location}")
+            logger.debug(f"Client Password: {'*' * len(client_password) if client_password else 'None'}")
+
+            # Add description entry
+            desc_entry = ET.SubElement(cot_streams, 'entry')
+            desc_entry.set('key', f'description{i}')
+            desc_entry.set('class', 'class java.lang.String')
+            desc_entry.text = description
+
+            # Add enabled entry (always true for configured streams)
+            enabled_entry = ET.SubElement(cot_streams, 'entry')
+            enabled_entry.set('key', f'enabled{i}')
+            enabled_entry.set('class', 'class java.lang.Boolean')
+            enabled_entry.text = 'true'
+
+            # Only add connect string if we have all required parts
+            if ip_address and port and protocol:
+                connect_string = f"{ip_address}:{port}:{protocol}"
+                connect_entry = ET.SubElement(cot_streams, 'entry')
+                connect_entry.set('key', f'connectString{i}')
+                connect_entry.set('class', 'class java.lang.String')
+                connect_entry.text = connect_string
+
+            # Add certificate entries if they exist
+            if ca_location:
+                ca_entry = ET.SubElement(cot_streams, 'entry')
+                ca_entry.set('key', f'caLocation{i}')
+                ca_entry.set('class', 'class java.lang.String')
+                ca_entry.text = ca_location
+
+            if cert_location:
+                cert_entry = ET.SubElement(cot_streams, 'entry')
+                cert_entry.set('key', f'certificateLocation{i}')
+                cert_entry.set('class', 'class java.lang.String')
+                cert_entry.text = cert_location
+
+            # Add password entries if they exist
+            if client_password:
+                client_pass_entry = ET.SubElement(cot_streams, 'entry')
+                client_pass_entry.set('key', f'clientPassword{i}')
+                client_pass_entry.set('class', 'class java.lang.String')
+                client_pass_entry.text = client_password
+
+            if ca_password:
+                ca_pass_entry = ET.SubElement(cot_streams, 'entry')
+                ca_pass_entry.set('key', f'caPassword{i}')
+                ca_pass_entry.set('class', 'class java.lang.String')
+                ca_pass_entry.text = ca_password
+
+        # Create the main preferences section for ATAK settings
         main_pref = ET.SubElement(preferences, 'preference')
         main_pref.set('name', 'com.atakmap.app.civ_preferences')
         main_pref.set('version', '1')
         
-        # Read the template file to get the correct order
-        template_path = os.path.join(os.path.dirname(__file__), 'preferences.xml')
-        template_tree = ET.parse(template_path)
-        template_root = template_tree.getroot()
+        # Process ATAK preferences as direct entries
+        for key, value in preferences_data.items():
+            # Skip CoT stream related keys and special keys
+            if (any(key.startswith(prefix) for prefix in ['description', 'ipAddress', 'port', 'protocol', 
+                'caLocation', 'certificateLocation', 'clientPassword', 'caPassword', 'certPassword', 'count']) or 
+                key.startswith('#')):
+                continue
+
+            # Add the preference entry
+            entry = ET.SubElement(main_pref, 'entry')
+            entry.set('key', key)
+            
+            # Determine the class type based on the value
+            if isinstance(value, bool) or str(value).lower() in ('true', 'false'):
+                entry.set('class', 'class java.lang.Boolean')
+                entry.text = str(value).lower()
+            elif str(value).isdigit():
+                entry.set('class', 'class java.lang.Integer')
+                entry.text = str(value)
+            else:
+                entry.set('class', 'class java.lang.String')
+                entry.text = str(value)
         
-        # Find the com.atakmap.app.civ_preferences section in template
-        template_main = template_root.find(".//preference[@name='com.atakmap.app.civ_preferences']")
-        
-        # Add entries in the same order as template
-        if template_main is not None:
-            for template_entry in template_main.findall('entry'):
-                key = template_entry.get('key')
-                if key in preferences_data:
-                    class_type = template_entry.get('class').split('.')[-1]
-                    entry = ET.SubElement(main_pref, 'entry')
-                    entry.set('key', key)
-                    entry.set('class', f"class java.lang.{class_type}")
-                    entry.text = str(preferences_data[key])
-        
-        # Convert to string
+        # Convert to string with proper formatting
         rough_string = ET.tostring(preferences, 'utf-8')
         reparsed = minidom.parseString(rough_string)
         
@@ -300,6 +341,9 @@ class DataPackage:
         config_pref_path = os.path.join(temp_dir, 'initial.pref')
         with open(config_pref_path, 'w', encoding='utf-8') as file:
             file.write(xml_content)
+            
+        # Log the generated XML for debugging
+        logger.debug(f"Generated XML configuration:\n{xml_content}")
 
     def create_manifest_file(self, temp_dir, zip_name, ca_certs, client_certs, channel: str = 'data-package'):
         """
@@ -322,15 +366,17 @@ class DataPackage:
     </Configuration>
     <Contents>"""
         
-        # Only add certificate entries if valid names are provided
+        # Add all CA certificates first
         if ca_certs:
             for ca_cert in ca_certs:
                 manifest_content += f'\n        <Content ignore="false" zipEntry="cert/{ca_cert}"/>'
+        
+        # Then add all client certificates
         if client_certs:
             for client_cert in client_certs:
                 manifest_content += f'\n        <Content ignore="false" zipEntry="cert/{client_cert}"/>'
         
-        # Always add the initial.pref entry
+        # Always add the initial.pref entry last
         manifest_content += f'\n        <Content ignore="false" zipEntry="initial.pref"/>'
         
         # Close the manifest content
@@ -339,6 +385,9 @@ class DataPackage:
         manifest_path = os.path.join(manifest_dir, 'manifest.xml')
         with open(manifest_path, 'w', encoding='utf-8') as f:
             f.write(manifest_content)
+            
+        # Log the generated manifest for debugging
+        logger.debug(f"Generated manifest:\n{manifest_content}")
 
     async def create_zip_file(self, temp_dir, zip_name, channel: str = 'data-package'):
         """
@@ -347,12 +396,16 @@ class DataPackage:
         self.check_stop()
         working_dir = self.get_default_working_directory()
         
+        # Create datapackages subdirectory
+        packages_dir = os.path.join(working_dir, 'datapackages')
+        os.makedirs(packages_dir, exist_ok=True)
+        
         # Ensure clean zip_name
         zip_name = zip_name.replace(' ', '_')
         if zip_name.lower().endswith('.zip'):
             zip_name = zip_name[:-4]
         
-        zip_path = os.path.join(working_dir, f"{zip_name}.zip")
+        zip_path = os.path.join(packages_dir, f"{zip_name}.zip")
         
         # Remove existing zip if it exists
         if os.path.exists(zip_path):
@@ -415,20 +468,39 @@ class DataPackage:
                 stream_count = int(preferences_data.get('count', 1))
                 ca_certs = []
                 client_certs = []
-                
+
+                # Get the client cert from the main request
+                main_client_cert = preferences_data.get('certificateLocation0', '').replace('cert/', '')
+                if main_client_cert:
+                    client_certs.append(main_client_cert)
+
+                # Process certificates for each stream
                 for i in range(stream_count):
-                    ca_cert = preferences_data.get(f'#ca_cert_name{i}')
-                    client_cert = preferences_data.get(f'#client_cert_name{i}')
-                    if ca_cert:
+                    # Get CA cert for this stream
+                    ca_cert = preferences_data.get(f'caLocation{i}', '').replace('cert/', '')
+                    if ca_cert and ca_cert not in ca_certs:
                         ca_certs.append(ca_cert)
-                    if client_cert:
-                        client_certs.append(client_cert)
+
+                    # For stream 0, we already have the client cert
+                    if i > 0:
+                        client_cert = preferences_data.get(f'certificateLocation{i}', '').replace('cert/', '')
+                        if client_cert and client_cert not in client_certs:
+                            client_certs.append(client_cert)
+
+                logger.debug(f"Certificates to process - CA: {ca_certs}, Client: {client_certs}")
                 
-                # Remove special markers from preferences
-                preferences_data = {k: v for k, v in preferences_data.items() if not k.startswith('#')}
+                # Remove special markers from preferences but keep all stream data
+                clean_preferences = {}
+                for key, value in preferences_data.items():
+                    if not key.startswith('#'):
+                        if isinstance(value, dict):
+                            if value.get('enabled', False) and 'value' in value:
+                                clean_preferences[key] = value['value']
+                        else:
+                            clean_preferences[key] = value
 
                 # Generate config file
-                self.generate_config_pref(preferences_data, temp_dir)
+                self.generate_config_pref(clean_preferences, temp_dir)
                 self._progress += weights['config']
                 await self.update_status("in_progress", self._progress, "Generated configuration file")
                 

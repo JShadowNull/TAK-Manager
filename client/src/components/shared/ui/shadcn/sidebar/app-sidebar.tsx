@@ -52,7 +52,7 @@ export function TakServerProvider({ children }: { children: React.ReactNode }) {
       try {
         return JSON.parse(savedState)
       } catch (error) {
-        console.error('[AppSidebar] Error parsing saved state:', error)
+        // Removed console.error
       }
     }
     // Default state if nothing in localStorage
@@ -80,7 +80,7 @@ export function TakServerProvider({ children }: { children: React.ReactNode }) {
         const data = await response.json();
         setServerState(data);
       } catch (error) {
-        console.error('Error fetching server status:', error);
+        // Removed console.error
         setServerState(prev => ({ 
           ...prev, 
           error: error instanceof Error ? error.message : 'Failed to fetch server status' 
@@ -92,17 +92,16 @@ export function TakServerProvider({ children }: { children: React.ReactNode }) {
     fetchStatus();
 
     // Setup SSE with reconnection logic
-    console.debug('[AppSidebar] Starting server status stream connection');
     const serverStatus = new EventSource('/api/takserver/server-status-stream');
 
     // Handle connection open
     serverStatus.onopen = () => {
-      console.debug('[AppSidebar] Server status stream connected');
+      // Removed console.debug
     };
 
     // Handle errors and reconnection
     serverStatus.onerror = (error) => {
-      console.error('[AppSidebar] Server status stream error:', error);
+      // Removed console.error
       // The browser will automatically try to reconnect
     };
 
@@ -110,18 +109,18 @@ export function TakServerProvider({ children }: { children: React.ReactNode }) {
     serverStatus.addEventListener('server-status', (event) => {
       try {
         const data = JSON.parse(event.data);
-        console.debug('[AppSidebar] Server status update received:', data);
+        // Removed console.debug
         if (data.isInstalled !== undefined && data.isRunning !== undefined) {
           setServerState(data);
         }
       } catch (error) {
-        console.error('[AppSidebar] Error parsing server status:', error);
+        // Removed console.error
       }
     });
 
     // Cleanup on unmount
     return () => {
-      console.debug('[AppSidebar] Closing server status stream connection');
+      // Removed console.debug
       serverStatus.close();
     };
   }, []);
@@ -282,15 +281,6 @@ export function AppSidebar() {
                       <SidebarMenuItem key={item.title}>
                         <Link
                           to={item.url}
-                          onClick={(e) => {
-                            if (
-                              location.pathname === item.url &&
-                              item.url === "/data-package"
-                            ) {
-                              e.preventDefault()
-                              return
-                            }
-                          }}
                           className="w-full"
                         >
                           <SidebarMenuButton
