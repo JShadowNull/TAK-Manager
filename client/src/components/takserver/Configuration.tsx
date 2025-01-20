@@ -19,7 +19,7 @@ const Configuration: React.FC = () => {
           </Button>
           <Button
             variant="primary" 
-            onClick={() => console.log('make certs')}
+            onClick={() => navigate('/cert-manager')}
             className="w-full lg:w-auto"
           >
             Generate Certs
