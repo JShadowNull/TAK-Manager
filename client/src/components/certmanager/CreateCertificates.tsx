@@ -257,7 +257,6 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
 
       // Reset form on success will be handled by SSE complete event
     } catch (error) {
-      console.error('Operation error:', error);
       setError(error instanceof Error ? error.message : 'Operation failed');
       setIsOperationInProgress(false);
       setCurrentOperation(null);
@@ -313,7 +312,6 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
           onOperationProgress(progress);
         }
       } catch (error) {
-        console.error('Error parsing SSE data:', error);
         setIsOperationInProgress(false);
         setCurrentOperation(null);
       }

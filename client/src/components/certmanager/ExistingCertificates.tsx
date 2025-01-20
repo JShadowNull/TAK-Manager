@@ -74,17 +74,14 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
 
   // Setup SSE for certificate status updates
   useEffect(() => {
-    console.debug('[ExistingCertificates] Starting EventSource connection');
     const eventSource = new EventSource('/api/certmanager/certificates/status-stream');
 
     eventSource.addEventListener('certificate-status', (event) => {
       try {
         const data = JSON.parse(event.data);
-        console.debug('[ExistingCertificates] Status event received:', data);
         
         // Handle certificate updates
         if (data.type === 'certificates_update' && Array.isArray(data.certificates)) {
-          console.debug('[ExistingCertificates] Updating certificates list');
           setCertificates(data.certificates);
         }
         
@@ -92,23 +89,14 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
         if (data.type === 'status') {
           // Handle operation start
           if (data.status === 'in_progress') {
-            console.debug('[ExistingCertificates] Operation in progress:', data.operation);
-            
             if (data.operation === 'delete_certs_batch') {
-              // Start of batch delete
-              console.debug('[ExistingCertificates] Starting batch delete');
               setCurrentOperation('delete_certs_batch');
               setIsOperationInProgress(true);
             } 
             else if (data.operation === 'delete_certs' && data.details?.username) {
-              // Individual cert deletion (either standalone or part of batch)
               if (currentOperation === 'delete_certs_batch') {
-                // Part of batch delete - just add to deleting certs
-                console.debug('[ExistingCertificates] Adding cert to deleting set:', data.details.username);
                 setDeletingCerts(prev => new Set([...prev, data.details.username]));
               } else {
-                // Standalone delete
-                console.debug('[ExistingCertificates] Starting individual delete:', data.details.username);
                 setCurrentOperation('delete_certs');
                 setIsOperationInProgress(true);
                 setDeletingCerts(new Set([data.details.username]));
@@ -118,8 +106,6 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
           
           // Handle operation completion
           if (data.status === 'complete' || data.status === 'error') {
-            console.debug('[ExistingCertificates] Operation completed/errored:', data.operation);
-            
             if (data.error) {
               setError(data.error);
               setSuccessfulDelete(null);
@@ -130,8 +116,6 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
               setError(null);
               
               if (data.operation === 'delete_certs' && data.details?.username) {
-                // Individual delete completion
-                console.debug('[ExistingCertificates] Individual delete completed:', data.details.username);
                 setSuccessfulDelete(data.details.username);
                 setDeletingCerts(prev => {
                   const next = new Set(prev);
@@ -140,13 +124,10 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
                 });
                 
                 if (currentOperation !== 'delete_certs_batch') {
-                  // Only clear states if not part of batch
                   setIsOperationInProgress(false);
                   setCurrentOperation(null);
                   
-                  // Refresh after individual delete
                   setTimeout(() => {
-                    console.debug('[ExistingCertificates] Clearing success state and refreshing');
                     setSuccessfulDelete(null);
                     fetchCertificates();
                   }, 2000);
@@ -154,8 +135,6 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
               }
               
               if (data.operation === 'delete_certs_batch') {
-                // Batch delete completion
-                console.debug('[ExistingCertificates] Batch delete completed, refreshing certificates');
                 setDeletingCerts(new Set());
                 setSelectedCerts(new Set());
                 setIsOperationInProgress(false);
@@ -171,7 +150,6 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
           }
         }
       } catch (error) {
-        console.error('[ExistingCertificates] Error processing status:', error);
         setIsOperationInProgress(false);
         setCurrentOperation(null);
         setSuccessfulDelete(null);
@@ -179,15 +157,13 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
       }
     });
 
-    eventSource.onerror = (error) => {
-      console.error('[ExistingCertificates] SSE connection error:', error);
+    eventSource.onerror = () => {
       setTimeout(() => {
         eventSource.close();
       }, 5000);
     };
 
     return () => {
-      console.debug('[ExistingCertificates] Closing EventSource connection');
       eventSource.close();
     };
   }, [onOperationProgress]);
@@ -240,7 +216,6 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
         throw new Error(errorData.detail || 'Failed to delete certificate(s)');
       }
     } catch (error) {
-      console.error('[ExistingCertificates] Operation error:', error);
       setError(error instanceof Error ? error.message : 'Operation failed');
       setIsOperationInProgress(false);
       setCurrentOperation(null);
