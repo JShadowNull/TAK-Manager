@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faPlay, faStop, faSpinner } from '@fortawesome/free-solid-svg-icons';
+import { faPlay, faStop} from '@fortawesome/free-solid-svg-icons';
 import { Button } from '../shadcn/button';
 import { cn } from '../../../../lib/utils';
 
