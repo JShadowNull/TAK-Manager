@@ -7,34 +7,11 @@ import { cn } from "../../../../../lib/utils"
 
 const TooltipProvider = TooltipPrimitive.Provider
 
-interface TooltipProps extends React.ComponentProps<typeof TooltipPrimitive.Root> {
-  disableHover?: boolean;
-  delayDuration?: number;
-}
-
 // Add helper type for tooltip placement
 export type TooltipSide = 'top' | 'right' | 'bottom' | 'left';
 export type TooltipTriggerMode = 'click' | 'hover';
 
-const Tooltip: React.ForwardRefExoticComponent<
-  TooltipProps & React.RefAttributes<HTMLElement>
-> = React.forwardRef(({ disableHover, delayDuration = 200, ...props }, /* ref */) => (
-  <TooltipPrimitive.Root 
-    {...props}
-    delayDuration={disableHover ? 0 : delayDuration}
-    // Disable hover behavior if disableHover is true
-    disableHoverableContent={disableHover}
-    onOpenChange={(open) => {
-      if (disableHover) {
-        // In click mode, let the component handle its own open state
-        props.onOpenChange?.(open);
-      } else {
-        // In hover mode, allow all state changes
-        props.onOpenChange?.(open);
-      }
-    }}
-  />
-))
+const Tooltip = TooltipPrimitive.Root;
 Tooltip.displayName = TooltipPrimitive.Root.displayName
 
 const TooltipTrigger = TooltipPrimitive.Trigger

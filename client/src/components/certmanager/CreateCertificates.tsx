@@ -90,7 +90,6 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
   const [currentOperation, setCurrentOperation] = useState<Operation>(null);
   const [isOperationInProgress, setIsOperationInProgress] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [operationStatus, setOperationStatus] = useState<any>(null);
 
   // Single certificate state
   const [certFields, setCertFields] = useState([{
@@ -300,7 +299,6 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
           }
         }
         
-        setOperationStatus(data);
         // Call onOperationProgress with the status data
         if (onOperationProgress && data.type === 'status') {
           const progress: OperationProgress = {
@@ -325,9 +323,6 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
       eventSource.close();
     };
   }, [isBatchMode, onOperationProgress]);
-
-  const isCreating = operationStatus?.operation?.includes('create_certs') && 
-                    ['in_progress'].includes(operationStatus?.status);
 
   return (
     <Card className="w-full max-w-6xl mx-auto">

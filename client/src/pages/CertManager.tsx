@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent } from "@/components/shared/ui/shadcn/card/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/shared/ui/shadcn/tabs";
 import CreateCertificates from '../components/certmanager/CreateCertificates';
 import ExistingCertificates from '../components/certmanager/ExistingCertificates';
@@ -56,25 +55,17 @@ const CertManager: React.FC = () => {
 
           <div className="w-full">
             <TabsContent value="create-certs" className="w-full">
-              <Card>
-                <CardContent>
-                  <CreateCertificates 
-                    onOperationProgress={handleOperationProgress}
-                  />
-                </CardContent>
-              </Card>
+              <CreateCertificates 
+                onOperationProgress={handleOperationProgress}
+              />
             </TabsContent>
             <TabsContent value="existing-certs" className="w-full">
-              <Card>
-                <CardContent className="p-6">
-                  <ExistingCertificates
-                    certificates={certData.certificates}
-                    onCreateDataPackage={handleBatchDataPackage}
-                    onOperationProgress={handleOperationProgress}
-                    isLoading={isLoading}
-                  />
-                </CardContent>
-              </Card>
+              <ExistingCertificates
+                certificates={certData.certificates}
+                onCreateDataPackage={handleBatchDataPackage}
+                onOperationProgress={handleOperationProgress}
+                isLoading={isLoading}
+              />
             </TabsContent>
           </div>
         </Tabs>
