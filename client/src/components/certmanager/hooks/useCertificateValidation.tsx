@@ -1,112 +1,194 @@
-import { useMemo } from 'react';
+import { z } from 'zod';
+import { useCallback } from 'react';
 
-interface ValidationErrors {
-  name?: string;
-  group?: string;
-  password?: string;
-}
+// Custom password validation
+const passwordSchema = z.string()
+  .optional()
+  .refine(
+    (pass) => {
+      if (!pass) return true; // Allow empty password
+      return pass.length >= 15;
+    },
+    { message: 'Must be at least 15 characters' }
+  )
+  .refine(
+    (pass) => {
+      if (!pass) return true;
+      return /[A-Z]/.test(pass);
+    },
+    { message: 'Must contain at least 1 uppercase letter' }
+  )
+  .refine(
+    (pass) => {
+      if (!pass) return true;
+      return /[a-z]/.test(pass);
+    },
+    { message: 'Must contain at least 1 lowercase letter' }
+  )
+  .refine(
+    (pass) => {
+      if (!pass) return true;
+      return /[0-9]/.test(pass);
+    },
+    { message: 'Must contain at least 1 number' }
+  )
+  .refine(
+    (pass) => {
+      if (!pass) return true;
+      return /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>/?]+/.test(pass);
+    },
+    { message: 'Must contain at least 1 special character' }
+  );
 
-interface ValidationState {
-  errors: ValidationErrors;
-  isValid: boolean;
-}
+// Group validation
+const groupSchema = z.string()
+  .refine(
+    (group) => {
+      if (!group || group === '__ANON__') return true;
+      // Split by comma and check each group
+      const groups = group.split(',');
+      // Check for spaces after comma and valid characters
+      return groups.every(g => {
+        if (g.length === 0) return false; // Empty group not allowed
+        if (g !== g.trim()) return false; // No spaces allowed at start/end
+        return /^[a-zA-Z0-9_-]+$/.test(g);
+      });
+    },
+    { message: 'Groups must be comma-separated with no spaces, using only letters, numbers, underscores, and hyphens' }
+  )
+  .transform(str => str === '' ? '__ANON__' : str);
 
-// Pure validation functions
-const validateCertificateName = (name: string, existingCertificates: string[] = []): string | null => {
-  if (!name) return null;
-  if (existingCertificates.includes(name)) return 'Certificate name already exists';
-  if (name.includes(' ')) return 'Spaces are not allowed';
-  if (!/^[a-zA-Z0-9_-]+$/.test(name)) return 'Only alphanumeric characters, underscores, and hyphens are allowed';
-  return null;
-};
+// Certificate validation schema
+export const certificateSchema = z.object({
+  name: z.string()
+    .refine(
+      (name) => {
+        if (!name) return true; // Allow empty name
+        return name.length >= 3;
+      },
+      { message: "Certificate name must be at least 3 characters" }
+    )
+    .refine(
+      (name) => {
+        if (!name) return true;
+        return /^[a-zA-Z0-9-_]+$/.test(name);
+      },
+      { message: "Only letters, numbers, hyphens and underscores are allowed" }
+    ),
+  group: groupSchema,
+  password: passwordSchema,
+  isAdmin: z.boolean()
+});
 
-const validateGroupName = (group: string): string | null => {
-  if (!group) return null;
-  const groupNames = group.split(',').map(g => g.trim());
-  
-  if (group.includes(' ')) return 'Spaces are not allowed in group names';
-  if (groupNames.some(g => !/^[a-zA-Z0-9_-]+$/.test(g))) {
-    return 'Groups can only contain letters, numbers, underscores, and hyphens';
-  }
-  return null;
-};
+// Batch certificate validation schema
+export const batchCertificateSchema = z.object({
+  name: z.string()
+    .min(3, "Base name must be at least 3 characters")
+    .regex(/^[a-zA-Z0-9-_]+$/, "Only letters, numbers, hyphens and underscores are allowed")
+    .nonempty("Base name is required"),
+  group: groupSchema
+});
 
-const validatePassword = (password: string): string | null => {
-  if (!password) return null;
-  
-  const requirements = [
-    { test: (p: string) => p.length >= 15, message: 'Must be at least 15 characters' },
-    { test: (p: string) => /[A-Z]/.test(p), message: 'Must contain at least 1 uppercase letter' },
-    { test: (p: string) => /[a-z]/.test(p), message: 'Must contain at least 1 lowercase letter' },
-    { test: (p: string) => /[0-9]/.test(p), message: 'Must contain at least 1 number' },
-    { test: (p: string) => /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+/.test(p), message: 'Must contain at least 1 special character' }
-  ];
-
-  const failedRequirements = requirements
-    .filter(req => !req.test(password))
-    .map(req => req.message);
-
-  return failedRequirements.length > 0 ? failedRequirements.join(', ') : null;
-};
-
-export const validateCertificateField = (
-  name: string,
-  group: string,
-  password: string | undefined,
-  existingCertificates: string[] = []
-): ValidationState => {
-  const errors: ValidationErrors = {};
-  
-  const nameError = validateCertificateName(name, existingCertificates);
-  const groupError = validateGroupName(group);
-  const passwordError = password ? validatePassword(password) : null;
-
-  if (nameError) errors.name = nameError;
-  if (groupError) errors.group = groupError;
-  if (passwordError) errors.password = passwordError;
-
-  return {
-    errors,
-    isValid: Object.keys(errors).length === 0
-  };
-};
-
-// Batch validation
-export const validateBatchName = (name: string, existingCertificates: string[] = []): string | null => {
-  if (!name) return 'Name is required';
-  return validateCertificateName(name, existingCertificates);
-};
-
-export const validateBatchGroup = (group: string): string | null => {
-  if (!group) return null;
-  return validateGroupName(group);
-};
-
-// Custom hook for certificate validation
 export const useCertificateValidation = (certFields: Array<{
   name: string;
   group: string;
   password?: string;
-}>, existingCertificates: string[] = []) => {
-  return useMemo(() => {
-    return certFields.map(field => 
-      validateCertificateField(field.name, field.group, field.password, existingCertificates)
-    );
-  }, [certFields, existingCertificates]);
+  isAdmin: boolean;
+}>, existingCertificates: string[]) => {
+  const validateField = useCallback((field: {
+    name: string;
+    group: string;
+    password?: string;
+    isAdmin: boolean;
+  }) => {
+    try {
+      // Skip validation if fields are empty (except for batch mode)
+      if (!field.name && !field.password && (!field.group || field.group === '__ANON__')) {
+        return { isValid: true, errors: {} };
+      }
+
+      // First validate against schema
+      certificateSchema.parse(field);
+
+      // Then check for duplicate names only if name is not empty
+      if (field.name && existingCertificates.includes(field.name)) {
+        return {
+          isValid: false,
+          errors: {
+            name: "Certificate name already exists"
+          }
+        };
+      }
+
+      return { isValid: true, errors: {} };
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const errors = error.errors.reduce((acc, curr) => {
+          const field = curr.path[0] as string;
+          acc[field] = curr.message;
+          return acc;
+        }, {} as Record<string, string>);
+
+        return {
+          isValid: false,
+          errors
+        };
+      }
+      return {
+        isValid: false,
+        errors: {
+          name: "Invalid certificate data"
+        }
+      };
+    }
+  }, [existingCertificates]);
+
+  return certFields.map(validateField);
 };
 
-// Custom hook for batch validation
-export const useBatchValidation = (batchName: string, batchGroup: string, existingCertificates: string[] = []) => {
-  return useMemo(() => {
-    const nameError = validateBatchName(batchName, existingCertificates);
-    const groupError = validateBatchGroup(batchGroup);
-    
-    return {
-      errors: {
-        name: nameError,
-        group: groupError
-      },
-      isValid: !nameError && !groupError
-    };
-  }, [batchName, batchGroup, existingCertificates]); 
+export const useBatchValidation = (batchName: string, batchGroup: string, existingCertificates: string[]) => {
+  const validate = useCallback(() => {
+    try {
+      // Skip validation if fields are empty
+      if (!batchName && (!batchGroup || batchGroup === '__ANON__')) {
+        return { isValid: true, errors: {} };
+      }
+
+      // First validate against schema
+      batchCertificateSchema.parse({ name: batchName, group: batchGroup });
+
+      // Then check for potential name conflicts
+      if (batchName && existingCertificates.some(cert => cert.startsWith(batchName))) {
+        return {
+          isValid: false,
+          errors: {
+            name: "Certificate names with this base name may conflict with existing certificates"
+          }
+        };
+      }
+
+      return { isValid: true, errors: {} };
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const errors = error.errors.reduce((acc, curr) => {
+          const field = curr.path[0] as string;
+          acc[field] = curr.message;
+          return acc;
+        }, {} as Record<string, string>);
+
+        return {
+          isValid: false,
+          errors
+        };
+      }
+      return {
+        isValid: false,
+        errors: {
+          name: "Invalid batch certificate data"
+        }
+      };
+    }
+  }, [batchName, batchGroup, existingCertificates]);
+
+  return validate();
 }; 

@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import ContainerStateIcon from '../components/shared/ui/inputs/ContainerStartStopButton';
-import useFetch from '../components/shared/hooks/useFetch';
 import { AnalyticsChart } from '../components/shared/ui/shadcn/charts/AnalyticsChart';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/shared/ui/shadcn/card/card';
 
@@ -48,7 +47,6 @@ export const Dashboard: React.FC = () => {
   });
 
   const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({});
-  const fetch = useFetch();
 
   // Load historical data from localStorage
   const [cpuHistory, setCpuHistory] = useState<number[]>(() => {
@@ -111,14 +109,24 @@ export const Dashboard: React.FC = () => {
         setupDockerEventSource();
 
         // Get initial metrics
-        const metricsResponse = await fetch.post('/api/dashboard/monitoring/start');
-        if (!metricsResponse.ok && !metricsResponse.status) {
-          throw new Error(metricsResponse.data?.message || 'Failed to get initial metrics');
+        const response = await fetch('/api/dashboard/monitoring/start', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to get initial metrics');
         }
-        const initialMetrics = metricsResponse.data?.data || metricsResponse.data;
+
+        const data = await response.json();
+        const initialMetrics = data?.data || data;
+        
         if (!initialMetrics) {
           throw new Error('No metrics data received from server');
         }
+
         setMetrics(initialMetrics);
         setCpuHistory(prev => [...prev.slice(-MAX_HISTORY_LENGTH), initialMetrics.totalCpu]);
         setMemoryHistory(prev => [...prev.slice(-MAX_HISTORY_LENGTH), initialMetrics.totalMemory]);
@@ -237,7 +245,16 @@ export const Dashboard: React.FC = () => {
         return newState;
       });
 
-      await fetch.post(`/api/docker-manager/containers/${name}/${action}`);
+      const response = await fetch(`/api/docker-manager/containers/${name}/${action}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to ${action} container: ${response.statusText}`);
+      }
     } catch (error) {
       console.error(`Failed to ${action} container:`, {
         container: name,
