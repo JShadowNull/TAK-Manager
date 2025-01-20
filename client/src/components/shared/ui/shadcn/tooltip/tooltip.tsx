@@ -16,10 +16,9 @@ interface TooltipProps extends React.ComponentProps<typeof TooltipPrimitive.Root
 export type TooltipSide = 'top' | 'right' | 'bottom' | 'left';
 export type TooltipTriggerMode = 'click' | 'hover';
 
-const Tooltip = React.forwardRef<
-  React.ElementRef<typeof TooltipPrimitive.Root>,
-  TooltipProps
->(({ disableHover, delayDuration = 200, ...props }, ref) => (
+const Tooltip: React.ForwardRefExoticComponent<
+  TooltipProps & React.RefAttributes<HTMLElement>
+> = React.forwardRef(({ disableHover, delayDuration = 200, ...props }, /* ref */) => (
   <TooltipPrimitive.Root 
     {...props}
     delayDuration={disableHover ? 0 : delayDuration}
