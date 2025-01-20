@@ -195,7 +195,7 @@ const DataPackage: React.FC = () => {
 
           <div className="w-full">
             <TabsContent value="cot-streams" className="w-full">
-              <div className="bg-background rounded-lg">
+              <div className="bg-card rounded-lg">
                 <CotStreamsSection
                   preferences={preferences}
                   onPreferenceChange={handlePreferenceChange}
