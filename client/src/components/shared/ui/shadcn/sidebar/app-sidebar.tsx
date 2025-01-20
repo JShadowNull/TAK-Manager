@@ -5,7 +5,6 @@ import {
   Wrench,
   Key,
   Database,
-  ArrowLeftRight,
   Menu,
 } from "lucide-react"
 import { ModeToggle } from "@/components/shared/ui/shadcn/mode-toggle"
@@ -163,13 +162,6 @@ const items = [
     iconColor: "text-pink-500",
     alwaysShow: false,
     showWhen: (takServerInstalled: boolean) => takServerInstalled,
-  },
-  {
-    title: "Rapid Transfer",
-    url: "/transfer",
-    icon: ArrowLeftRight,
-    iconColor: "text-yellow-500",
-    alwaysShow: true,
   },
 ]
 

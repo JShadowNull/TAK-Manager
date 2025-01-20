@@ -5,7 +5,6 @@ import Layout from './components/shared/ui/layout/Layout'
 import Dashboard from './pages/Dashboard'
 import Takserver from './pages/Takserver'
 import DataPackage from './pages/DataPackage'
-import Transfer from './pages/Transfer'
 import CertManager from './pages/CertManager'
 
 function App() {
@@ -18,7 +17,6 @@ function App() {
               <Route index element={<Dashboard />} />
               <Route path="takserver" element={<Takserver />} />
               <Route path="data-package" element={<DataPackage />} />
-              <Route path="transfer" element={<Transfer />} />
               <Route path="cert-manager" element={<CertManager />} />
             </Route>
           </Routes>

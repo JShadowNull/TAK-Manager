@@ -4,6 +4,8 @@ import CotStreamsSection from '../components/datapackage/CotStreamsSection/CotSt
 import AtakPreferencesSection from '../components/datapackage/AtakPreferencesSection/AtakPreferencesSection';
 import BulkGeneratorSection from '../components/datapackage/BulkGeneratorSection/PackageGenerator';
 import { PreferenceState } from '../components/datapackage/AtakPreferencesSection/atakPreferencesConfig';
+import { useTakServerRequired } from '../components/shared/hooks/useTakServerRequired';
+import TakServerRequiredDialog from '../components/shared/TakServerRequiredDialog';
 
 interface ValidationErrors {
   cotStreams: Record<string, string>;
@@ -11,6 +13,19 @@ interface ValidationErrors {
 }
 
 const DataPackage: React.FC = () => {
+  // TAK Server check
+  const { showDialog, dialogProps, isServerRunning } = useTakServerRequired({
+    title: "TAK Server Required for Data Package Management",
+    description: "Data package operations require TAK Server to be running. Would you like to start it now?",
+  });
+
+  // Show dialog immediately if server is not running
+  useEffect(() => {
+    if (!isServerRunning) {
+      showDialog(true);
+    }
+  }, [isServerRunning, showDialog]);
+
   // State management
   const [preferences, setPreferences] = useState<Record<string, PreferenceState>>(() => {
     const cotStreams = localStorage.getItem('cotStreamsPreferences');
@@ -166,8 +181,8 @@ const DataPackage: React.FC = () => {
     };
   }, [validationErrors, preferences]);
 
-  return (
-    <div className="bg-background text-foreground pt-4">
+  const renderContent = () => (
+    <div className={`bg-background text-foreground pt-4 ${!isServerRunning ? 'pointer-events-none opacity-50' : ''}`}>
       <div className="mx-auto space-y-8">
         <Tabs defaultValue={currentTab} onValueChange={setCurrentTab} className="w-full">
           <div className="flex justify-center mb-8">
@@ -227,6 +242,13 @@ const DataPackage: React.FC = () => {
         </Tabs>
       </div>
     </div>
+  );
+
+  return (
+    <>
+      {renderContent()}
+      <TakServerRequiredDialog {...dialogProps} />
+    </>
   );
 };
 
