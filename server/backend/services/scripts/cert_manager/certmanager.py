@@ -17,7 +17,7 @@ class CertManager:
         self._last_status = None
         self._last_certificates = None
         self._monitor_task = None
-        logger.info("CertManager initialized with working directory: %s", self.working_dir)
+        logger.debug("CertManager initialized with working directory: %s", self.working_dir)
 
     async def start_monitoring(self):
         """Start monitoring certificates for changes."""

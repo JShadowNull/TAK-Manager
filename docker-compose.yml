@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: tak-manager-${MODE:-dev}
+    container_name: tak-manager-${MODE}
     restart: ${RESTART_POLICY}
     env_file: .env
     privileged: true
@@ -18,7 +18,7 @@ services:
       - ${TAK_SERVER_INSTALL_DIR}:/home/tak-manager:rw
     ports:
       - "${BACKEND_PORT}:${BACKEND_PORT}"
-      - "5174:5174"
+      ## Add in dev mode - "5174:5174"
     networks:
       - tak-manager-network
     healthcheck:

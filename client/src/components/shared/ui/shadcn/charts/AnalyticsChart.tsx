@@ -47,7 +47,7 @@ const gradientColors = {
   }
 } as const
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload?.length > 0 && payload[0]?.value != null) {
     return (
       <div className="rounded-lg border bg-background p-2 shadow-sm">

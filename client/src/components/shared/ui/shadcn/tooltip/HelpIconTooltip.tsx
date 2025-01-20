@@ -58,7 +58,6 @@ export const HelpIconTooltip = ({
     <TooltipProvider>
       <Tooltip 
         open={triggerMode === 'click' ? isOpen : undefined} 
-        disableHover={triggerMode === 'click'}
         delayDuration={tooltipDelay}
       >
         <TooltipTrigger asChild>
