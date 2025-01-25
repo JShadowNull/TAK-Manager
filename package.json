@@ -1,0 +1,26 @@
+{
+  "name": "tak-manager-root",
+  "version": "1.0.2",
+  "private": true,
+  "workspaces": [
+    "client",
+    "electron"
+  ],
+  "scripts": {
+    "start:client": "npm run start --workspace=client",
+    "start:electron": "npm run start --workspace=electron",
+    "build:client": "npm run build --workspace=client",
+    "build:css": "npm run build:css --workspace=client",
+    "package:win": "npm run package:win --workspace=electron",
+    "package:mac": "npm run package:mac --workspace=electron",
+    "docker:image": "npm run docker:image-create --workspace=client",
+    "docker:dev": "npm run docker:dev --workspace=client",
+    "update:version": "node version/update-version.js",
+    "dev": "npm run dev --workspace=client"
+  },
+  "devDependencies": {
+    "js-yaml": "^4.1.0"
+  },
+  "author": "Jacob Olsen",
+  "description": "TAK Manager - A comprehensive TAK Server management solution"
+}
