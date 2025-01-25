@@ -1,5 +1,6 @@
 {
   "name": "tak-manager",
+  "productName": "Tak Manager",
   "version": "1.0.0",
   "description": "This is a modular Flask-based application that monitors CPU, RAM usage, and running services. It provides a simple interface for viewing system metrics using a Flask backend and a PyWebview frontend.",
   "type": "module",
@@ -16,7 +17,10 @@
     "dev": "concurrently \"npm run start\" \"npm run watch:css\" --kill-others --handle-input",
     "preview": "vite preview",
     "storybook": "storybook dev -p 6006 -h 0.0.0.0",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "docker:image-create": "docker build -t tak-manager:${npm_package_version} -f ../DockerfileProd .. && mkdir -p ../dist && docker save tak-manager:${npm_package_version} | gzip > ../dist/tak-manager-${npm_package_version}.tar.gz",
+    "docker:dev": "docker compose -f ../docker-compose.dev.yml --env-file ../.env.dev up",
+    "update:version": "node ../version/update-version.js"
   },
   "keywords": [],
   "author": "",

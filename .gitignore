@@ -16,11 +16,7 @@ node_modules/
 
 # Environment variables
 .env
-.env.local
-.env.*.local
-.env.development
-.env.production
-.env.test
+.env.dev
 !.env.example
 
 # IDE files
@@ -34,6 +30,5 @@ node_modules/
 Thumbs.db
 
 # Server logs
-server/app_dev.log
-server/app.log
-*.log
+logs/
+app.log

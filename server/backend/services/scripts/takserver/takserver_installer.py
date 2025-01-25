@@ -13,6 +13,10 @@ from typing import Dict, Any, Optional, Callable
 import asyncio
 import docker
 import xml.etree.ElementTree as ET
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 class TakServerInstaller:
     def __init__(
@@ -115,7 +119,7 @@ class TakServerInstaller:
                 shell=True  # Set shell=True for shell commands
             )
             if not result.success:
-                raise Exception(result.error_message)
+                raise Exception(result.stderr)
 
             self.extracted_folder_name = zip_filename.replace(".zip", "")
             self.tak_dir = os.path.join(self.working_dir, self.extracted_folder_name, "tak")
@@ -272,8 +276,12 @@ class TakServerInstaller:
         try:
             env_path = os.path.join(self.working_dir, self.extracted_folder_name, ".env")
             
-            host_base_dir = os.getenv('TAK_SERVER_INSTALL_DIR', '/home/tak-manager')
-            host_tak_dir = os.path.join(host_base_dir, 'takserver-docker', self.extracted_folder_name, "tak")
+            # Get base directory from environment, with fallback
+            host_base_dir = os.getenv('TAK_SERVER_INSTALL_DIR')
+            if not host_base_dir:
+                raise ValueError("TAK_SERVER_INSTALL_DIR environment variable is not set")
+                
+            host_tak_dir = os.path.join(host_base_dir, 'tak-manager', 'data', 'takserver-docker', self.extracted_folder_name, "tak")
             host_plugins_dir = os.path.join(host_tak_dir, "webcontent")
             
             env_content = f"""TAK_DIR={host_tak_dir}
@@ -290,8 +298,8 @@ PLUGINS_DIR={host_plugins_dir}
         try:
             docker_compose_path = os.path.join(self.working_dir, self.extracted_folder_name, "docker-compose.yml")
             
-            host_base_dir = os.getenv('TAK_SERVER_INSTALL_DIR', '/home/tak-manager')
-            host_tak_dir = os.path.join(host_base_dir, 'takserver-docker', self.extracted_folder_name, "tak")
+            host_base_dir = os.getenv('TAK_SERVER_INSTALL_DIR')
+            host_tak_dir = os.path.join(host_base_dir, 'tak-manager', 'data', 'takserver-docker', self.extracted_folder_name, "tak")
             host_plugins_dir = os.path.join(host_tak_dir, "webcontent")
             
             docker_compose_content = f"""version: '3.8'
@@ -442,7 +450,7 @@ volumes:
                 working_dir=docker_compose_dir
             )
             if not result.success:
-                raise Exception(result.error_message)
+                raise Exception(result)
             
         except Exception as e:
             raise Exception(f"Error verifying containers: {str(e)}")

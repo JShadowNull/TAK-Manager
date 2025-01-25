@@ -21,7 +21,7 @@ def start_server():
     """Start the FastAPI server."""
     try:
         # Get configuration
-        port = int(os.environ.get('BACKEND_PORT', 8989))
+        port = int(os.environ.get('BACKEND_PORT'))
         is_dev = os.environ.get('MODE', 'development') == 'development'
         
         # Create and configure FastAPI app

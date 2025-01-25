@@ -1,24 +1,26 @@
 services:
   app:
-    image: tak-manager:1.0.0
     build:
       context: .
-      dockerfile: Dockerfile
-    container_name: tak-manager-${MODE}
+      dockerfile: DockerfileDev
+    image: tak-manager-development:latest
+    container_name: tak-manager-development
     restart: ${RESTART_POLICY}
-    env_file: .env
     privileged: true
+    env_file: .env.dev
+    environment:
+      - TAK_SERVER_INSTALL_DIR=${TAK_SERVER_INSTALL_DIR}
+      - FRONTEND_PORT=${FRONTEND_PORT}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./logs:/app/logs:rw
       - ./server:/app/server:rw
       - ./client:/app/client:rw
       - node_modules:/app/client/node_modules
-      - /proc:/host/proc:ro
-      - ${TAK_SERVER_INSTALL_DIR}:/home/tak-manager:rw
+      - ${TAK_SERVER_INSTALL_DIR}/tak-manager/data:/home/tak-manager:rw
     ports:
       - "${BACKEND_PORT}:${BACKEND_PORT}"
-      ## Add in dev mode - "5174:5174"
+      - "${FRONTEND_PORT}:${FRONTEND_PORT}"
     networks:
       - tak-manager-network
     healthcheck:

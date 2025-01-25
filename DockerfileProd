@@ -3,8 +3,12 @@
 # Build stage for frontend
 FROM node:20-slim AS frontend-builder
 WORKDIR /app/client
+
+# Install dependencies first (better layer caching)
 COPY client/package*.json ./
 RUN npm install
+
+# Build the frontend
 COPY client/ .
 RUN npm run build
 
@@ -13,23 +17,27 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Start of Selection
 # Install required system dependencies
 RUN apt-get update && apt-get install -y \
+    build-essential \
     curl \
+    zip \
+    unzip \
     docker.io \
     docker-compose \
     libxml2-utils \
+    sed \
     && rm -rf /var/lib/apt/lists/*
+# End of Selection
 
-# Install Python dependencies
+# Install Python dependencies first (better layer caching)
 COPY server/requirements.txt .
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy built frontend
+# Copy built frontend and backend files
 COPY --from=frontend-builder /app/client/build /app/client/build
-
-# Copy only necessary backend files
 COPY server/ /app/server/
 
 # Create required directories
@@ -41,5 +49,4 @@ ENV MODE=production
 
 EXPOSE 8989
 
-# Simplified start script for production only
 CMD ["python", "/app/server/app.py"] 
