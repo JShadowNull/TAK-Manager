@@ -3,7 +3,7 @@
   "productName": "TAK Manager",
   "description": "TAK Manager",
   "author": "Jacob Olsen",
-  "version": "1.0.2",
+  "version": "1.0.0",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
