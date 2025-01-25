@@ -1,0 +1,40 @@
+{
+  "win": {
+    "target": "nsis",
+    "icon": "build/icons/icon.ico",
+    "extraResources": [
+      {
+        "from": "assets/installers",
+        "to": "installers",
+        "filter": ["*.exe"]
+      },
+      {
+        "from": "..",
+        "to": ".",
+        "filter": [
+          "docker-compose.prod.yml",
+          ".env"
+        ]
+      },
+      {
+        "from": "../dist",
+        "to": "dist",
+        "filter": ["*.tar.gz"]
+      }
+    ]
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "TAK Manager",
+    "installerIcon": "build/icons/icon.ico",
+    "uninstallerIcon": "build/icons/icon.ico",
+    "installerHeaderIcon": "build/icons/icon.ico",
+    "deleteAppDataOnUninstall": true
+  },
+  "files": [
+    "**/*"
+  ]
+} 

@@ -21,7 +21,12 @@ def start_server():
     """Start the FastAPI server."""
     try:
         # Get configuration
-        port = int(os.environ.get('BACKEND_PORT'))
+        port = os.environ.get('BACKEND_PORT')
+        if port is None:
+            logger.error("BACKEND_PORT environment variable is not set.")
+            raise ValueError("BACKEND_PORT must be set.")
+        port = int(port)
+        
         is_dev = os.environ.get('MODE', 'development') == 'development'
         
         # Create and configure FastAPI app

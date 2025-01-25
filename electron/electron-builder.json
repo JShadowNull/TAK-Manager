@@ -1,0 +1,12 @@
+{
+    "appId": "com.tak.manager",
+    "productName": "TAK Manager",
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "files": [
+      "**/*"
+    ],
+    "asar": true
+}
