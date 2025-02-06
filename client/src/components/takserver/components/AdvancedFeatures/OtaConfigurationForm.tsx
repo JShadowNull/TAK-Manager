@@ -131,7 +131,7 @@ const OtaConfigurationForm: React.FC<OtaConfigurationFormProps> = ({ onClose, on
               name="ota_zip_file"
               accept=".zip"
               onChange={handleInputChange}
-              className="w-full text-sm p-2 rounded-lg bg-sidebar border border-inputBorder focus:border-accentBorder focus:outline-none"
+              className="w-full text-sm p-2 rounded-lg bg-sidebar border border-inputBorder focus:border-accentBorder focus:outline-hidden"
               required
             />
             {errors.ota_zip_file && (

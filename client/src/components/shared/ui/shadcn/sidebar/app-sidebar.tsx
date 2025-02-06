@@ -178,7 +178,7 @@ export function AppSidebar() {
   return (
     <div className="flex flex-col min-h-screen">
       {/* Mobile Header */}
-      <div className="xl:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-sm border-b border-border">
+      <div className="xl:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xs border-b border-border">
         <div className="relative flex items-center h-14">
           <div className="absolute left-4">
             {!isOpen && (
@@ -258,7 +258,7 @@ export function AppSidebar() {
         <Sidebar 
           variant="floating" 
           collapsible="icon"
-          className="!w-[18rem]"
+          className="w-[18rem]!"
         >
           <SidebarHeader className="flex items-center justify-between p-4 border-b border-border">
             <h1 className="text-lg font-bold text-foreground">{getTitle()}</h1>

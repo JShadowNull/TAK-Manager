@@ -50,7 +50,7 @@ const gradientColors = {
 const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload?.length > 0 && payload[0]?.value != null) {
     return (
-      <div className="rounded-lg border bg-background p-2 shadow-sm">
+      <div className="rounded-lg border bg-background p-2 shadow-2xs">
         <div className="grid grid-cols-2 gap-2">
           <div className="flex flex-col">
             <span className="text-[0.70rem] uppercase text-muted-foreground">

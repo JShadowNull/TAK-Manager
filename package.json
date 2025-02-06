@@ -4,19 +4,17 @@
   "private": true,
   "workspaces": [
     "client",
-    "electron"
+    "tauri-wrapper"
   ],
   "scripts": {
     "start:client": "npm run start --workspace=client",
-    "start:electron": "npm run start --workspace=electron",
     "build:client": "npm run build --workspace=client",
     "build:css": "npm run build:css --workspace=client",
-    "package:win": "npm run docker:image-create --workspace=client && npm run package:win --workspace=electron",
-    "package:mac": "npm run docker:image-create --workspace=client && npm run package:mac --workspace=electron",
     "docker:image": "npm run docker:image-create --workspace=client",
     "docker:dev": "npm run docker:dev --workspace=client",
     "update:version": "node version/update-version.js",
-    "dev": "npm run dev --workspace=client"
+    "dev": "npm run docker:dev --workspace=client",
+    "tauri:dev": "npm run tauri dev --workspace=tauri-wrapper"
   },
   "devDependencies": {
     "js-yaml": "^4.1.0"

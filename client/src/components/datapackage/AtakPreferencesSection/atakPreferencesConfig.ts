@@ -32,7 +32,8 @@ export const PREFERENCE_CATEGORIES = {
   NOTIFICATIONS: "Notifications",
   CONTROLS: "Controls & Navigation",
   LOGGING: "Logging & Debug",
-  SYSTEM: "System Settings"
+  SYSTEM: "System Settings",
+  CUSTOM: "Custom Settings"
 } as const;
 
 // Rest of the ATAK_PREFERENCES array stays the same...
@@ -1573,4 +1574,46 @@ export const validateAtakPreferences = (preferences: Record<string, PreferenceSt
   });
 
   return errors;
+};
+
+export const addCustomPreference = (
+  preferences: AtakPreference[],
+  name: string,
+  label: string,
+  input_type: 'text' | 'select' | 'number' | 'password',
+  options?: PreferenceOption[],
+  defaultValue?: string
+): AtakPreference[] => {
+  const newPreference: AtakPreference = {
+    name,
+    label,
+    input_type,
+    options,
+    category: 'CUSTOM',
+    defaultValue
+  };
+  
+  return [...preferences, newPreference];
+};
+
+export const removeCustomPreference = (
+  preferences: AtakPreference[],
+  labelToRemove: string
+): AtakPreference[] => {
+  return preferences.filter(pref => pref.label !== labelToRemove);
+};
+
+export const CUSTOM_PREFERENCES_KEY = 'custom_atak_preferences';
+
+export const loadCustomPreferences = (): AtakPreference[] => {
+  try {
+    const saved = localStorage.getItem(CUSTOM_PREFERENCES_KEY);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveCustomPreferences = (preferences: AtakPreference[]) => {
+  localStorage.setItem(CUSTOM_PREFERENCES_KEY, JSON.stringify(preferences));
 }; 

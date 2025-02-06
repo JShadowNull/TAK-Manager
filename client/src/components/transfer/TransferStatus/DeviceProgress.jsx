@@ -78,7 +78,7 @@ export const DeviceProgress = ({ deviceId, progress, onRemoveFailed, isTransferR
                 <TooltipTrigger asChild>
                   <button
                     onClick={() => onRemoveFailed(deviceId)}
-                    className="focus:outline-none hover:opacity-80 transition-opacity"
+                    className="focus:outline-hidden hover:opacity-80 transition-opacity"
                     aria-label="Remove failed transfer"
                   >
                     <CloseIcon 

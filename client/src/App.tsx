@@ -9,7 +9,7 @@ import CertManager from './pages/CertManager'
 
 function App() {
   return (
-    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <BrowserRouter>
       <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
         <TakServerProvider>
           <Routes>

@@ -327,7 +327,7 @@ export const Dashboard: React.FC = () => {
               ) : (
                 containers.map((container) => (
                   <li key={container.id} className="p-4 rounded flex justify-between items-center space-x-4">
-                    <div className="flex-grow">
+                    <div className="grow">
                       <div className="font-medium">{container.name}</div>
                       <div className="text-sm text-muted-foreground">
                         Status: {container.status} | Image: {container.image}
