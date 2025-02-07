@@ -12,7 +12,7 @@
   "scripts": {
     "start": "vite",
     "build": "tsc && vite build",
-    "docker:image-create": "docker build -t tak-manager:${npm_package_version} -f ../DockerfileProd .. && mkdir -p ../docker && docker save tak-manager:${npm_package_version} | gzip > ../docker/tak-manager-${npm_package_version}.tar.gz",
+    "docker:image-create-mac": "docker build -t tak-manager:${npm_package_version} -f ../DockerfileProd .. && mkdir -p ../docker && docker save tak-manager:${npm_package_version} | gzip > ../docker/tak-manager-${npm_package_version}.tar.gz",
     "docker:dev": "docker compose -f ../docker-compose.dev.yml --env-file ../.env.dev up"
   },
   "keywords": [],
