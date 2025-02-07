@@ -52,8 +52,8 @@ A comprehensive TAK Server management solution that provides a modern web interf
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/tak-manager.git
-cd tak-manager
+git clone https://gitea.ubuntuserver.buzz/Jake/Tak-Manager.git
+cd Tak-Manager
 ```
 
 2. Create environment file:
@@ -74,12 +74,34 @@ npm run dev
 
 ### Production Deployment
 
-Build the production Docker image:
+1. Create production environment file:
+```bash
+cp .env.prod.example .env
+```
+Edit the `.env` file with your specific configuration.
+
+2. Build the production Docker image:
 ```bash
 npm run docker:image
 ```
+This will create a compressed image file in the `dist` directory.
 
-The built image will be available in the `dist` directory as a compressed tar file.
+3. Load the Docker image:
+```bash
+docker load < dist/tak-manager-*.tar.gz
+```
+
+4. Start the production container:
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env up -d
+```
+
+The application will be available at `http://localhost:8989` (or your configured port).
+
+To stop the production container:
+```bash
+docker compose -f docker-compose.prod.yml down
+```
 
 ## Project Structure
 
