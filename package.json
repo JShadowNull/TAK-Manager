@@ -17,7 +17,8 @@
     "build:web": "npm run build --workspace=tak-manager-wrapper/web",
     "dev:web": "npm run dev --workspace=tak-manager-wrapper/web",
     "wrapper:dev": "npm run start:dev --workspace=tak-manager-wrapper/web",
-    "wrapper:prod": "npm run start:prod --workspace=tak-manager-wrapper/web"
+    "wrapper:prod": "npm run start:prod --workspace=tak-manager-wrapper/web",
+    "package": "npm run package --workspace=tak-manager-wrapper/web"
   },
   "devDependencies": {
     "js-yaml": "^4.1.0"
