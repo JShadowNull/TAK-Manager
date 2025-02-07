@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "workspaces": [
-    "client"
+    "client",
+    "tak-manager-wrapper/web"
   ],
   "scripts": {
     "start:client": "npm run start --workspace=client",
@@ -12,7 +13,11 @@
     "docker:image": "npm run docker:image-create --workspace=client",
     "docker:dev": "npm run docker:dev --workspace=client",
     "update:version": "node version/update-version.js",
-    "dev": "npm run docker:dev --workspace=client"
+    "dev": "npm run docker:dev --workspace=client",
+    "build:web": "npm run build --workspace=tak-manager-wrapper/web",
+    "dev:web": "npm run dev --workspace=tak-manager-wrapper/web",
+    "wrapper:dev": "npm run start:dev --workspace=tak-manager-wrapper/web",
+    "wrapper:prod": "npm run start:prod --workspace=tak-manager-wrapper/web"
   },
   "devDependencies": {
     "js-yaml": "^4.1.0"

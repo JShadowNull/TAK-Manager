@@ -1,0 +1,3 @@
+[submodule "tak-manager-wrapper"]
+	path = tak-manager-wrapper
+	url = https://gitea.local.ubuntuserver.buzz/Jake/tak-manager-wrapper.git
