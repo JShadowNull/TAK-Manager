@@ -62,12 +62,7 @@ cp .env.example .env.dev
 ```
 Edit the `.env.dev` file with your specific configuration.
 
-3. Install dependencies:
-```bash
-npm install
-```
-
-4. Start the development environment:
+3. Start the development environment:
 ```bash
 npm run dev
 ```
