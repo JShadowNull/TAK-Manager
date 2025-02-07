@@ -102,11 +102,16 @@ docker compose -f docker-compose.prod.yml down
 
 ```
 tak-manager/
-├── client/             # Frontend React application
-├── server/             # Backend FastAPI application
-├── docker-compose.yml  # Docker compose configuration
-├── DockerfileProd     # Production Docker configuration
-└── DockerfileDev      # Development Docker configuration
+├── client/                     # Frontend React application
+├── server/                     # Backend FastAPI application
+├── dist/                       
+│   └── tak-manager-*.tar.gz    # Production Docker image
+├── docker-compose.dev.yml      # Docker compose configuration
+├── docker-compose.prod.yml     # Production Docker compose configuration
+├── DockerfileProd              # Production Docker configuration
+├── DockerfileDev               # Development Docker configuration
+├── .env.dev                    # Development environment variables
+└── .env                        # Production environment variables
 ```
 
 ## Environment Variables
@@ -114,9 +119,9 @@ tak-manager/
 Key environment variables that need to be configured:
 
 - `MODE`: Application mode (development/production)
-- `FRONTEND_PORT`: Frontend application port
+- `FRONTEND_PORT`: Frontend application port for development
 - `BACKEND_PORT`: Backend API port
-- `TAK_SERVER_INSTALL_DIR`: TAK Server installation directory
+- `TAK_SERVER_INSTALL_DIR`: TAK Server installation directory on host machine
 - `RESTART_POLICY`: Docker container restart policy
 - See `.env.example` for all available options
 
