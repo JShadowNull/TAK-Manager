@@ -3,8 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "workspaces": [
-    "client",
-    "tauri-wrapper"
+    "client"
   ],
   "scripts": {
     "start:client": "npm run start --workspace=client",
@@ -13,8 +12,7 @@
     "docker:image": "npm run docker:image-create --workspace=client",
     "docker:dev": "npm run docker:dev --workspace=client",
     "update:version": "node version/update-version.js",
-    "dev": "npm run docker:dev --workspace=client",
-    "tauri:dev": "npm run tauri dev --workspace=tauri-wrapper"
+    "dev": "npm run docker:dev --workspace=client"
   },
   "devDependencies": {
     "js-yaml": "^4.1.0"
