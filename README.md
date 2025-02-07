@@ -1,252 +1,134 @@
-# System Monitor Flask Application
+# TAK Manager
 
-This is a modular Flask-based application that monitors CPU, RAM usage, and running services. It provides a simple interface for viewing system metrics using a Flask backend and a PyWebview frontend. This guide will help you add new functionality and ensure everything is properly configured.
+A comprehensive TAK Server management solution that provides a modern web interface for managing and monitoring TAK (Team Awareness Kit) servers.
 
-## Table of Contents
+## Features
 
-1. [Project Structure](#project-structure)
-2. [Prerequisites](#prerequisites)
-3. [Getting Started](#getting-started)
-4. [Adding New Python Scripts](#adding-new-python-scripts)
-5. [Configuring Routes and Blueprints](#configuring-routes-and-blueprints)
-6. [Difference Between `services/` and `routes/`](#difference-between-services-and-routes)
-7. [Running the Application](#running-the-application)
-8. [Troubleshooting](#troubleshooting)
+- Modern web-based interface built with React and TypeScript
+- Real-time system monitoring (CPU, RAM usage)
+- Service management capabilities
+- Docker-ready deployment with health checks
+- Responsive design with a beautiful UI using Tailwind CSS and Shadcn UI
+- Built with security and performance in mind
+- Progressive Web App (PWA) support for mobile devices
+- Dark/Light mode support
+- Advanced TAK Server management features:
+  - Certificate management and configuration
+  - Data Package management
+  - ATAK preferences configuration
+  - File sharing configuration
+  - Team color management
+  - Logging configuration
+- Real-time monitoring and alerts
+- Docker container management
+- Secure environment configuration
 
----
+## Tech Stack
 
-## Project Structure
+### Frontend
+- React 19
+- TypeScript
+- Tailwind CSS
+- Shadcn UI components
+- Chart.js for data visualization
+- Vite for build tooling
 
-Here is the complete project structure based on the relevant files:
-
-```
-your_project/
-├── app.py                    # Entry point for the application
-├── backend/                  # Backend logic (routes, services)
-│   ├── __init__.py           # Initializes Flask app and registers blueprints
-│   ├���─ routes/               # Folder containing route definitions (URLs for API)
-│   │   ├── __init__.py
-│   │   ├── dashboard_routes.py       # Routes for system monitoring dashboard
-│   │   ├── docker_manager_routes.py  # Routes for Docker management
-│   │   └── installer_routes.py       # Routes for installer management
-│   ├── services/             # Contains system-level service logic (business logic)
-│   │   ├── __init__.py
-│   │   ├── run_command_helper.py     # Helper for running system commands
-│   │   ├── socketio_handler.py       # Socket.IO integration for real-time communication
-│   │   └── scripts/          # Additional scripts for Docker and TAK server
-│   │       ├── certconfig.py         # Certificate configuration logic
-│   │       ├── docker_installer.py   # Docker installation logic
-│   │       ├── docker_manager.py     # Docker management logic
-│   │       ├── os_detector.py        # OS detection script
-│   │       ├── system_monitor.py     # System monitoring logic
-│   │       └── takserver_installer.py# TAK server installation logic
-├── frontend/                 # Frontend files (HTML, CSS, JS)
-│   ├── static/
-│   │   ├── css/
-│   │   │   └── styles.css
-│   │   └── js/
-│   │       ├── dashboard.js  # JavaScript for dashboard functionality
-│   │       ├── docker.js     # JavaScript for Docker control
-│   │       ├── terminal_window.js # JavaScript for terminal output streaming
-│   │       └── services.js   # JavaScript for services management
-│   └── templates/
-│       ├── base.html         # Base HTML template
-│       ├── index.html        # Dashboard template
-│       ├── installers.html   # Docker installer template
-│       └── services.html     # Services management template
-├── config.py                 # Configuration settings
-├── requirements.txt          # List of required Python packages
-├── package.json              # Node.js package configuration
-├── tailwind.config.js        # Tailwind CSS configuration
-└── README.md                 # Documentation for the project
-
----
+### Backend
+- Python 3.11
+- FastAPI
+- Docker support
+- SSE (Server-Sent Events) for real-time updates
 
 ## Prerequisites
 
-Make sure you have the following installed on your system:
-
-- **Python 3.x**: Install the latest version of Python.
-- **Pip**: Ensure pip is installed for managing Python packages.
-- **Virtual Environment**: Set up a virtual environment to isolate dependencies.
-
-### Installing Dependencies
-
-1. Create a virtual environment:
-   ```bash
-   python3 -m venv .venv
-   ```
-
-2. Activate the virtual environment:
-   - On macOS/Linux:
-     ```bash
-     source .venv/bin/activate
-     ```
-   - On Windows:
-     ```bash
-     .venv\Scripts\activate
-     ```
-
-3. Install the required Python packages:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
----
+- Node.js >= 20.0.0
+- npm >= 10.0.0
+- Docker and Docker Compose (for containerized deployment)
+- Python 3.11 or higher (for local development)
 
 ## Getting Started
 
-1. **Clone the repository** or download the project files.
+### Development Setup
 
-2. **Set up the virtual environment and install dependencies** as described in the [Prerequisites](#prerequisites) section.
+1. Clone the repository:
+```bash
+git clone https://gitea.ubuntuserver.buzz/Jake/Tak-Manager.git
+cd Tak-Manager
+```
 
-3. **Run the application**:
-   ```bash
-   python app.py
-   ```
+2. Create environment file:
+```bash
+cp .env.example .env.dev
+```
+Edit the `.env.dev` file with your specific configuration.
 
----
+3. Start the development environment:
+```bash
+npm run dev
+```
 
-## Adding New Python Scripts
+### Production Deployment
 
-You can easily add new Python scripts to extend the functionality of the application. Follow these steps:
+1. Create production environment file:
+```bash
+cp .env.prod.example .env
+```
+Edit the `.env` file with your specific configuration.
 
-### Step 1: Add Your Python Script
+2. Build the production Docker image:
+```bash
+npm run docker:image
+```
+This will create a compressed image file in the `dist` directory.
 
-1. **Determine where your script belongs**:
-   - If the script is **business logic** (e.g., fetching system metrics, managing services), it belongs in the `backend/services/` directory.
-   - If the script is related to handling **routes** (e.g., responding to API requests for `/cpu` or `/ram`), it belongs in the `backend/routes/` directory.
+3. Load the Docker image:
+```bash
+docker load < dist/tak-manager-*.tar.gz
+```
 
-2. **Place your script in the appropriate folder**:
-   - For example, if you're adding a Python script to fetch disk usage, it would go in `backend/services/disk_usage.py`.
+4. Start the production container:
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env up -d
+```
 
-   ```bash
-   touch backend/services/disk_usage.py
-   ```
+The application will be available at `http://localhost:8989` (or your configured port).
 
-   Inside `disk_usage.py`, you can write logic to fetch disk usage stats using a library like `psutil`.
+To stop the production container:
+```bash
+docker compose -f docker-compose.prod.yml down
+```
 
-   ```python
-   import psutil
+## Project Structure
 
-   def get_disk_usage():
-       return psutil.disk_usage('/')
-   ```
+```
+tak-manager/
+├── client/                     # Frontend React application
+├── server/                     # Backend FastAPI application
+├── dist/                       
+│   └── tak-manager-*.tar.gz    # Production Docker image
+├── docker-compose.dev.yml      # Docker compose configuration
+├── docker-compose.prod.yml     # Production Docker compose configuration
+├── DockerfileProd              # Production Docker configuration
+├── DockerfileDev               # Development Docker configuration
+├── .env.dev                    # Development environment variables
+└── .env                        # Production environment variables
+```
 
-3. **Define a route to access your script**:
-   Once your script is in the `services/` directory, you need to create or update a route in `backend/routes/` that calls your script when an API request is made.
+## Environment Variables
 
-   For example, in `backend/routes/disk_routes.py`:
-   ```python
-   from flask import Blueprint, jsonify
-   from backend.services.disk_usage import get_disk_usage
+Key environment variables that need to be configured:
 
-   disk_bp = Blueprint('disk', __name__)
+- `MODE`: Application mode (development/production)
+- `FRONTEND_PORT`: Frontend application port for development
+- `BACKEND_PORT`: Backend API port
+- `TAK_SERVER_INSTALL_DIR`: TAK Server installation directory on host machine
+- `RESTART_POLICY`: Docker container restart policy
+- See `.env.example` for all available options
 
-   @disk_bp.route('/disk')
-   def disk_usage():
-       usage = get_disk_usage()
-       return jsonify({
-           'total': usage.total,
-           'used': usage.used,
-           'free': usage.free,
-           'percent': usage.percent
-       })
-   ```
-
-4. **Register the new route** in the main application file (`backend/__init__.py`) by importing and registering the blueprint.
-
-   In `backend/__init__.py`:
-   ```python
-   from backend.routes.disk_routes import disk_bp
-
-   def create_app():
-       app = Flask(__name__)
-
-       # Register existing blueprints
-       app.register_blueprint(monitor_bp)
-       app.register_blueprint(service_bp)
-
-       # Register the new disk blueprint
-       app.register_blueprint(disk_bp)
-
-       return app
-   ```
-
----
-
-## Configuring Routes and Blueprints
-
-### What Are Routes?
-
-Routes are the URLs that the frontend or API calls to interact with the backend. For example:
-- `/cpu` returns the CPU usage.
-- `/services` returns a list of running services.
-
-### What Are Blueprints?
-
-Blueprints allow you to organize related routes together in a modular way. Instead of defining all routes in one big file, you can split them into separate files for easier management. For example, you can have a `monitor_routes.py` file that handles all monitoring-related routes, and a `service_routes.py` file that handles routes related to managing services.
-
-Each blueprint is registered with the main Flask app to make its routes accessible.
-
----
-
-## Difference Between `services/` and `routes/`
-
-### `services/` Directory
-
-- **Purpose**: The `services/` directory is where the **business logic** of your application resides. This means any logic that performs actual system tasks, calculations, or data fetching should be placed here. For example:
-  - Fetching CPU or RAM usage.
-  - Starting or stopping services.
-  - Any processing logic that is unrelated to routing.
-
-- **Examples**:
-  - `backend/services/system.py`: Contains functions to start and stop system services.
-  - `backend/services/disk_usage.py`: Contains a function to get disk usage.
-
-- **Where Existing Python Scripts Go**: If you have an existing Python script that contains system-related logic (like fetching CPU stats or managing services), it should go in the `services/` directory. This script can then be imported into a route file to be called when needed.
-
-### `routes/` Directory
-
-- **Purpose**: The `routes/` directory contains the **routing logic**. Routes define the endpoints (URLs) that users or the frontend can interact with to trigger the logic in `services/`. Each route corresponds to an HTTP endpoint that responds to GET or POST requests.
-
-- **Examples**:
-  - `backend/routes/monitor_routes.py`: Defines routes like `/cpu` and `/ram` that respond to requests for CPU and RAM usage.
-  - `backend/routes/service_routes.py`: Defines routes like `/services` to return information about running services.
-
-- **Where to Add Routes**: If you need to expose an existing Python script through the web interface (e.g., `/cpu` for CPU stats), you would add a new route in `routes/`. The route will call the logic defined in `services/`.
-
----
-
-## Running the Application
-
-1. **Activate the virtual environment**:
-   ```bash
-   source .venv/bin/activate
-   ```
-
-2. **Run the application**:
-   ```bash
-   python app.py
-   ```
-
-3. Open your browser and go to `http://127.0.0.1:5000` to see the running app.
-
----
-
-## Troubleshooting
-
-- **404 Errors for Routes**:
-  - Ensure that your route is defined and that the blueprint is registered in `backend/__init__.py`.
-
-- **Static Files Not Loading**:
-  - Ensure that your CSS and JavaScript files are located in the `frontend/static/` directory and that they are referenced correctly in `index.html`.
-
-- **Missing Dependencies**:
-  - Make sure all dependencies are installed by running `pip install -r requirements.txt` in your virtual environment.
-
----
-
-### Author
+## Author
 
 Jacob Olsen
+
+## License
+
+ISC License 

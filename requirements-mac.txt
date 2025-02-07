@@ -1,2 +1,0 @@
-py2app==0.28.6
-create-dmg==1.2.0 
