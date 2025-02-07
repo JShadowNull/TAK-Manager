@@ -10,8 +10,7 @@ const versionFilePath = path.join(__dirname, 'version.txt');
 const paths = {
   root: path.join(rootDir, 'package.json'),
   client: path.join(rootDir, 'client/package.json'),
-  electron: path.join(rootDir, 'electron/package.json'),
-  dockerCompose: path.join(rootDir, 'docker-compose.prod.yml')
+  dockerCompose: path.join(rootDir, 'docker-compose.prod.yml'),
 };
 
 // Read version from version.txt
@@ -44,7 +43,7 @@ function gitCommitAndTag() {
     execSync('git rev-parse --is-inside-work-tree', { stdio: 'ignore' });
     
     // Stage the changed files
-    execSync('git add package.json client/package.json electron/package.json docker-compose.prod.yml');
+    execSync('git add package.json client/package.json docker-compose.prod.yml');
     
     // Create commit
     execSync(`git commit -m "chore: bump version to ${version}"`, { stdio: 'pipe' });
@@ -64,7 +63,6 @@ try {
   // Update all files and track if any changes were made
   changes = updatePackageJson(paths.root) || changes;
   changes = updatePackageJson(paths.client) || changes;
-  changes = updatePackageJson(paths.electron) || changes;
   changes = updateDockerCompose(paths.dockerCompose) || changes;
   
   if (changes) {

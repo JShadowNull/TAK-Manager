@@ -323,7 +323,7 @@ const AtakPreferencesSection: React.FC<AtakPreferencesSectionProps> = memo(({
   }, [newPreference, editingPreference, customPreferences, onPreferenceChange, onEnableChange, preferences]);
 
   return (
-    <div className="h-[calc(100vh-200px)] overflow-hidden">
+    <div className="h-[calc(100vh-200px)]">
       <div className="bg-background p-4 mb-2">
         <div className="flex items-center justify-between bg-card p-4 rounded-lg shadow-md border border-border">
           <Label className="text-lg font-medium">ATAK Settings</Label>
@@ -503,14 +503,16 @@ const AtakPreferencesSection: React.FC<AtakPreferencesSectionProps> = memo(({
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
                               <span className="font-medium">{item.name}</span>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEditPreference(item)}
-                                className="h-6 w-6 hover:bg-accent"
-                              >
-                                <Pencil className="h-3 w-3" />
-                              </Button>
+                              {item.category === 'CUSTOM' && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEditPreference(item)}
+                                  className="h-6 w-6 hover:bg-accent"
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                              )}
                             </div>
                             <Switch
                               checked={isPreferenceEnabled}
@@ -566,14 +568,16 @@ const AtakPreferencesSection: React.FC<AtakPreferencesSectionProps> = memo(({
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
                               <span className="font-medium">{item.name}</span>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEditPreference(item)}
-                                className="h-6 w-6 hover:bg-accent"
-                              >
-                                <Pencil className="h-3 w-3" />
-                              </Button>
+                              {item.category === 'CUSTOM' && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEditPreference(item)}
+                                  className="h-6 w-6 hover:bg-accent"
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                              )}
                             </div>
                             <Switch
                               checked={isPreferenceEnabled}
