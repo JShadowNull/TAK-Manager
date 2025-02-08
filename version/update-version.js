@@ -12,6 +12,7 @@ const paths = {
   client: path.join(rootDir, 'client/package.json'),
   wrapper: path.join(rootDir, 'tak-manager-wrapper/web/package.json'),
   dockerCompose: path.join(rootDir, 'docker-compose.prod.yml'),
+  innoSetup: path.join(rootDir, 'tak-manager-wrapper/inno-tak.iss'),
 };
 
 // Read version from version.txt
@@ -37,6 +38,16 @@ function updateDockerCompose(filePath) {
   return oldImage !== `tak-manager:${version}`; // return true if image changed
 }
 
+// Update inno-tak.iss version
+function updateInnoSetup(filePath) {
+  console.log(`Updating version in ${filePath}`);
+  let content = fs.readFileSync(filePath, 'utf8');
+  const oldContent = content;
+  content = content.replace(/#define MyAppVersion ".*"/, `#define MyAppVersion "v${version}"`);
+  fs.writeFileSync(filePath, content);
+  return oldContent !== content; // return true if content changed
+}
+
 // Git operations
 function gitCommitAndTag() {
   try {
@@ -44,7 +55,7 @@ function gitCommitAndTag() {
     execSync('git rev-parse --is-inside-work-tree', { stdio: 'ignore' });
     
     // Stage the changed files
-    execSync('git add package.json client/package.json tak-manager-wrapper/web/package.json docker-compose.prod.yml');
+    execSync('git add package.json client/package.json tak-manager-wrapper/web/package.json docker-compose.prod.yml tak-manager-wrapper/inno-tak.iss');
     
     // Create commit
     execSync(`git commit -m "chore: bump version to ${version}"`, { stdio: 'pipe' });
@@ -66,6 +77,7 @@ try {
   changes = updatePackageJson(paths.client) || changes;
   changes = updatePackageJson(paths.wrapper) || changes;
   changes = updateDockerCompose(paths.dockerCompose) || changes;
+  changes = updateInnoSetup(paths.innoSetup) || changes;
   
   if (changes) {
     console.log(`Successfully updated files to version ${version}`);
