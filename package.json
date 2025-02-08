@@ -11,14 +11,18 @@
     "build:client": "npm run build --workspace=client",
     "build:css": "npm run build:css --workspace=client",
     "docker:image-mac": "npm run docker:image-create-mac --workspace=client",
+    "docker:image-win": "npm run docker:image-create-win --workspace=client",
     "docker:dev": "npm run docker:dev --workspace=client",
     "update:version": "node version/update-version.js",
     "dev": "npm run docker:dev --workspace=client",
+
     "build:web": "npm run build --workspace=tak-manager-wrapper/web",
     "dev:web": "npm run dev --workspace=tak-manager-wrapper/web",
     "wrapper:dev": "npm run start:dev --workspace=tak-manager-wrapper/web",
     "wrapper:prod": "npm run start:prod --workspace=tak-manager-wrapper/web",
-    "package:mac": "npm run docker:image-create-mac --workspace=client && npm run package --workspace=tak-manager-wrapper/web && create-dmg 'tak-manager-wrapper/dist/TAK Manager.app' tak-manager-wrapper/dist/"
+    "package:mac": "npm run docker:image-create-mac --workspace=client && npm run package --workspace=tak-manager-wrapper/web && create-dmg 'tak-manager-wrapper/dist/TAK Manager.app' tak-manager-wrapper/dist/",
+    "package:win": "npm run docker:image-create-win --workspace=client && npm run package --workspace=tak-manager-wrapper/web"
+
   },
   "devDependencies": {
     "js-yaml": "^4.1.0"
