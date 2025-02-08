@@ -302,6 +302,21 @@ PLUGINS_DIR={host_plugins_dir}
             host_tak_dir = os.path.join(host_base_dir, 'tak-manager', 'data', 'takserver-docker', self.extracted_folder_name, "tak")
             host_plugins_dir = os.path.join(host_tak_dir, "webcontent")
             
+            # Convert paths to Docker format by detecting Windows-style paths
+            def convert_path_for_docker(path):
+                # Convert to forward slashes for consistency
+                path = path.replace('\\', '/')
+                
+                # Detect Windows path by checking for drive letter pattern (e.g., C:/)
+                if re.match(r'^[A-Za-z]:', path):
+                    # Convert Windows drive letter (e.g., C:) to Docker format (/c)
+                    drive, rest = path.split(':', 1)
+                    path = f'/{drive.lower()}{rest}'
+                return path
+            
+            host_tak_dir = convert_path_for_docker(host_tak_dir)
+            host_plugins_dir = convert_path_for_docker(host_plugins_dir)
+            
             docker_compose_content = f"""version: '3.8'
 
 services:
@@ -319,7 +334,9 @@ services:
     restart: unless-stopped
     tty: true
     volumes:
-      - {host_tak_dir}:/opt/tak
+      - type: bind
+        source: {host_tak_dir}
+        target: /opt/tak
       - db-data:/var/lib/postgresql/data
 
   takserver:
@@ -339,8 +356,12 @@ services:
     restart: unless-stopped
     tty: true
     volumes:
-      - {host_tak_dir}:/opt/tak
-      - {host_plugins_dir}:/opt/tak/webcontent
+      - type: bind
+        source: {host_tak_dir}
+        target: /opt/tak
+      - type: bind
+        source: {host_plugins_dir}
+        target: /opt/tak/webcontent
 
 networks:
   net:
