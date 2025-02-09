@@ -302,6 +302,7 @@ const CotStreamsSection: React.FC<CotStreamsSectionProps> = memo(({
                   handleInputChange('count', newValue);
                 }}
                 className="w-16 text-center bg-input text-foreground [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                hideArrows
               />
               <Button 
                 onClick={() => {
