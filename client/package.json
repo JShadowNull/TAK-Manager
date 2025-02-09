@@ -12,9 +12,9 @@
   "scripts": {
     "start": "vite",
     "build": "tsc && vite build",
-    "docker:image-create-mac": "docker build -t tak-manager:${npm_package_version} -f ../DockerfileProd .. && mkdir -p ../tak-manager-wrapper/docker && docker save tak-manager:${npm_package_version} | gzip > ../tak-manager-wrapper/docker/tak-manager-${npm_package_version}.tar.gz",
-    "docker:dev": "docker compose -f ../docker-compose.dev.yml --env-file ../.env.dev up",
-    "docker:image-create-win": "docker build -t tak-manager:%npm_package_version% -f ..\\DockerfileProd .. && if not exist ..\\tak-manager-wrapper\\docker mkdir ..\\tak-manager-wrapper\\docker && docker save tak-manager:%npm_package_version% -o ..\\tak-manager-wrapper\\docker\\tak-manager-%npm_package_version%.tar"
+    "image:mac": "docker build -t tak-manager:${npm_package_version} -f ../DockerfileProd .. && mkdir -p ../tak-manager-wrapper/docker && docker save tak-manager:${npm_package_version} | gzip > ../tak-manager-wrapper/docker/tak-manager-${npm_package_version}.tar.gz",
+    "image:win": "docker build -t tak-manager:%npm_package_version% -f ..\\DockerfileProd .. && if not exist ..\\tak-manager-wrapper\\docker mkdir ..\\tak-manager-wrapper\\docker && docker save tak-manager:%npm_package_version% -o ..\\tak-manager-wrapper\\docker\\tak-manager-%npm_package_version%.tar",
+    "docker:dev": "docker compose -f ../docker-compose.dev.yml --env-file ../.env.dev up"
   },
   "keywords": [],
   "author": "",
