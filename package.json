@@ -19,8 +19,8 @@
     "dev:web": "npm run dev --workspace=tak-manager-wrapper/web",
     "wrapper:dev": "npm run start:dev --workspace=tak-manager-wrapper/web",
     "wrapper:prod": "npm run start:prod --workspace=tak-manager-wrapper/web",
-    "package:mac": "npm run docker:image-create-mac --workspace=client && npm run package --workspace=tak-manager-wrapper/web && create-dmg 'tak-manager-wrapper/dist/TAK Manager.app' tak-manager-wrapper/dist/",
-    "package:win": "npm run docker:image-create-win --workspace=client && npm run package --workspace=tak-manager-wrapper/web && iscc tak-manager-wrapper/inno-tak.iss"
+    "package:mac": "VERSION=$npm_package_version npm run docker:image-create-mac --workspace=client && VERSION=$npm_package_version npm run package --workspace=tak-manager-wrapper/web && create-dmg --dmg-title=\"TAK Manager $npm_package_version\" 'tak-manager-wrapper/dist/TAK Manager.app' tak-manager-wrapper/dist/",
+    "package:win": "set VERSION=%npm_package_version% && npm run docker:image-create-win --workspace=client && npm run package --workspace=tak-manager-wrapper/web && iscc tak-manager-wrapper/inno-tak.iss"
   },
   "devDependencies": {
     "js-yaml": "^4.1.0"
