@@ -56,38 +56,37 @@ export function Combobox({ options = [], value: externalValue, onSelect, placeho
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-[200px] p-0">
+        <PopoverContent align="start" className="w-full p-0">
           <Command>
             <CommandInput placeholder="Search..." className="h-9" />
-            <CommandList>
-              <CommandEmpty>No option found.</CommandEmpty>
-              <CommandGroup>
-                {safeOptions.map((option) => (
-                  <CommandItem
-                    key={option.value}
-                    value={option.value}
-                    onSelect={(currentValue) => {
-                      const newValue = currentValue === value ? "" : currentValue
-                      setValue(newValue)
-                      setOpen(false)
-                      onSelect?.(newValue)
-                    }}
-                  >
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        value === option.value ? "opacity-100" : "opacity-0"
-                      )}
-                    />
-                    <div className="flex-1 break-words">{option.label}</div>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
+              <CommandList>
+                <CommandEmpty>No option found.</CommandEmpty>
+                <CommandGroup>
+                  {safeOptions.map((option) => (
+                    <CommandItem
+                      key={option.value}
+                      value={option.value}
+                      onSelect={(currentValue) => {
+                        const newValue = currentValue === value ? "" : currentValue
+                        setValue(newValue)
+                        setOpen(false)
+                        onSelect?.(newValue)
+                      }}
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4",
+                          value === option.value ? "opacity-100" : "opacity-0"
+                        )}
+                      />
+                      <div className="flex-1 break-words">{option.label}</div>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
           </Command>
         </PopoverContent>
       </Popover>
     </div>
   )
 }
-

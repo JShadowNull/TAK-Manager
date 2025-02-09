@@ -230,11 +230,15 @@
     --chart-4: 280 65% 60%;
     --chart-2: 160 60% 45%;
   }
-}
- 
+} 
 @layer base {
   * {
     @apply border-border;
+    scrollbar-width: none;  /* Firefox */
+    -ms-overflow-style: none;  /* IE and Edge */
+    &::-webkit-scrollbar {
+      display: none;  /* Chrome, Safari and Opera */
+    }
   }
   body {
     @apply bg-background text-foreground;
