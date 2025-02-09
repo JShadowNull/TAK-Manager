@@ -200,17 +200,19 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
                 Docker ZIP File <span className="text-red-500">*</span>
               </label>
               <p className="text-sm text-muted-foreground">Example: takserver-docker-5.2-RELEASE-43.zip</p>
-              <input
+              <Input
                 type="file"
                 id="docker_zip_file"
                 onChange={handleInputChange}
-                className="w-full text-sm p-2 rounded-lg bg-sidebar border border-inputBorder focus:border-accentBorder cursor-pointer focus:outline-hidden"
+                onClearFile={() => {
+                  setFormData(prev => ({ ...prev, docker_zip_file: null }));
+                  setErrors({});
+                }}
+                error={errors.docker_zip_file}
+                placeholder="Click to select or drag and drop your ZIP file"
                 accept=".zip"
                 required
               />
-              {errors.docker_zip_file && (
-                <p className="text-sm text-red-500">{errors.docker_zip_file}</p>
-              )}
             </div>
 
             {/* Form Fields */}

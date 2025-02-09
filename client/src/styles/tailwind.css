@@ -251,6 +251,18 @@
     }
   }
 
+  /* Remove default file input styling */
+  input[type="file"] {
+    &::-webkit-file-upload-button {
+      visibility: hidden;
+      display: none;
+    }
+    &::file-selector-button {
+      visibility: hidden;
+      display: none;
+    }
+  }
+
   body {
     @apply bg-background text-foreground;
   }
