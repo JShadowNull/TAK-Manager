@@ -240,6 +240,17 @@
       display: none;  /* Chrome, Safari and Opera */
     }
   }
+
+  /* Remove default number input arrows */
+  input[type="number"] {
+    -moz-appearance: textfield;  /* Firefox */
+    &::-webkit-outer-spin-button,
+    &::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+  }
+
   body {
     @apply bg-background text-foreground;
   }
