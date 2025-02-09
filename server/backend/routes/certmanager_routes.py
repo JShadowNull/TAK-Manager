@@ -2,6 +2,7 @@
 # Imports
 # ============================================================================
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, AsyncGenerator
@@ -9,6 +10,7 @@ from backend.services.scripts.cert_manager.certmanager import CertManager
 import json
 import asyncio
 from backend.config.logging_config import configure_logging
+import os
 
 # Configure logger
 logger = configure_logging(__name__)
@@ -26,7 +28,6 @@ async def emit_event(data: Dict[str, Any]):
     global _latest_cert_status
     if _latest_cert_status != data:  # Only emit if data has changed
         _latest_cert_status = data
-        logger.debug(f"Emitting certificate status event: {data}")
 
 cert_manager = CertManager(emit_event=emit_event)
 
@@ -47,6 +48,9 @@ class BatchCreateRequest(BaseModel):
     certificates: Optional[List[Certificate]] = None
 
 class DeleteRequest(BaseModel):
+    usernames: List[str]
+
+class DownloadRequest(BaseModel):
     usernames: List[str]
 
 # ============================================================================
@@ -141,3 +145,42 @@ async def delete_certificates(data: DeleteRequest):
         error_message = str(e)
         logger.error(f"Error deleting certificates: {error_message}")
         raise HTTPException(status_code=500, detail=error_message)
+
+@certmanager.post('/certificates/download')
+async def download_certificates(data: DownloadRequest):
+    """Download certificates - supports both single and batch downloads"""
+    try:
+        if not data.usernames:
+            raise HTTPException(status_code=400, detail="Usernames list is empty")
+
+        # Execute the download operation
+        if len(data.usernames) == 1:
+            result = await cert_manager.get_certificate_files(data.usernames[0])
+            if result['success']:
+                return FileResponse(
+                    result['files']['p12'],
+                    filename=f"{data.usernames[0]}.p12",
+                    media_type='application/x-pkcs12'
+                )
+            raise HTTPException(status_code=404, detail=result['message'])
+        else:
+            # For batch downloads, we'll still process one at a time but emit events
+            result = await cert_manager.download_batch(data.usernames)
+            if not result['success']:
+                raise HTTPException(status_code=404, detail=result['message'])
+            
+            # Return the first successful download
+            for cert_result in result['results']:
+                if cert_result['status'] == 'completed' and cert_result.get('file_path'):
+                    return FileResponse(
+                        cert_result['file_path'],
+                        filename=f"{cert_result['username']}.p12",
+                        media_type='application/x-pkcs12'
+                    )
+            raise HTTPException(status_code=404, detail="No certificates were successfully downloaded")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error downloading certificates: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
