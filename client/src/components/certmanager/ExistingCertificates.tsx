@@ -337,7 +337,7 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <div className="flex items-center gap-1 cursor-pointer">
+                                <div className="flex items-center gap-1 cursor-text">
                                   {cert.passwordHashed ? (
                                     <>
                                       <LockIcon sx={{ fontSize: 16, color: 'hsl(var(--muted-foreground))' }} />

@@ -87,7 +87,7 @@ const UpdatePluginsForm: React.FC<UpdatePluginsFormProps> = ({ onClose, onUpdate
   };
 
   return (
-    <div className="w-full border border-border bg-card p-6 rounded-lg">
+    <div className="w-full border border-border bg-card p-6 rounded-lg break-normal">
       <h3 className="text-base font-bold mb-4">Update TAK Server Plugins</h3>
       
       <div className="flex flex-col gap-4">
@@ -130,7 +130,7 @@ const UpdatePluginsForm: React.FC<UpdatePluginsFormProps> = ({ onClose, onUpdate
               name="plugin_zip_file"
               accept=".zip"
               onChange={handleInputChange}
-              className="w-full text-sm p-2 rounded-lg bg-sidebar border border-inputBorder focus:border-accentBorder focus:outline-hidden"
+              className="w-full text-sm p-2 rounded-lg bg-sidebar border border-inputBorder focus:border-accentBorder cursor-pointer focus:outline-hidden"
               required
             />
             {errors.ota_zip_file && (

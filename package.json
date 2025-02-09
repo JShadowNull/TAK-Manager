@@ -1,28 +1,21 @@
 {
   "name": "tak-manager-root",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "workspaces": [
     "client",
     "tak-manager-wrapper/web"
   ],
   "scripts": {
-    "start:client": "npm run start --workspace=client",
-    "build:client": "npm run build --workspace=client",
-    "build:css": "npm run build:css --workspace=client",
-    "docker:image-mac": "npm run docker:image-create-mac --workspace=client",
-    "docker:image-win": "npm run docker:image-create-win --workspace=client",
-    "docker:dev": "npm run docker:dev --workspace=client",
+    "docker:image-mac": "npm run image:mac --workspace=client",
+    "docker:image-win": "npm run image:win --workspace=client",
     "update:version": "node version/update-version.js",
     "dev": "npm run docker:dev --workspace=client",
-
-    "build:web": "npm run build --workspace=tak-manager-wrapper/web",
-    "dev:web": "npm run dev --workspace=tak-manager-wrapper/web",
     "wrapper:dev": "npm run start:dev --workspace=tak-manager-wrapper/web",
-    "wrapper:prod": "npm run start:prod --workspace=tak-manager-wrapper/web",
-    "package:mac": "npm run docker:image-create-mac --workspace=client && npm run package --workspace=tak-manager-wrapper/web && create-dmg 'tak-manager-wrapper/dist/TAK Manager.app' tak-manager-wrapper/dist/",
-    "package:win": "npm run docker:image-create-win --workspace=client && npm run package --workspace=tak-manager-wrapper/web"
-
+    "package:mac": "VERSION=$npm_package_version npm run image:mac --workspace=client && VERSION=$npm_package_version npm run package --workspace=tak-manager-wrapper/web && create-dmg --dmg-title=\"TAK Manager $npm_package_version\" 'tak-manager-wrapper/dist/TAK Manager.app' tak-manager-wrapper/dist/",
+    "package:win": "set VERSION=%npm_package_version% && npm run image:win --workspace=client && npm run package --workspace=tak-manager-wrapper/web && iscc tak-manager-wrapper/inno-tak.iss",
+    "setup:mac": "npm install && cd tak-manager-wrapper && python -m venv venv && source venv/bin/activate && pip install -r requirements-mac.txt",
+    "setup:win": "npm install && cd tak-manager-wrapper && python -m venv venv && venv\\Scripts\\activate && pip install -r requirements-win.txt"
   },
   "devDependencies": {
     "js-yaml": "^4.1.0"

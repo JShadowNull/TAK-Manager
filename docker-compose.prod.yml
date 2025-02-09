@@ -1,6 +1,6 @@
 services:
   app:
-    image: tak-manager:1.0.0
+    image: tak-manager:1.0.1
     container_name: tak-manager-production
     restart: unless-stopped
     environment:

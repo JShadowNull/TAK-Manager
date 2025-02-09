@@ -87,7 +87,7 @@ const OtaConfigurationForm: React.FC<OtaConfigurationFormProps> = ({ onClose, on
   };
 
   return (
-    <div className="w-full border border-border bg-card p-6 rounded-lg">
+    <div className="w-full border border-border bg-card p-6 rounded-lg break-normal">
       <h3 className="text-base font-bold mb-4">OTA Updates Configuration</h3>
       
       <div className="flex flex-col gap-4">
@@ -131,7 +131,7 @@ const OtaConfigurationForm: React.FC<OtaConfigurationFormProps> = ({ onClose, on
               name="ota_zip_file"
               accept=".zip"
               onChange={handleInputChange}
-              className="w-full text-sm p-2 rounded-lg bg-sidebar border border-inputBorder focus:border-accentBorder focus:outline-hidden"
+              className="w-full text-sm p-2 rounded-lg bg-sidebar border border-inputBorder focus:border-accentBorder cursor-pointer focus:outline-hidden"
               required
             />
             {errors.ota_zip_file && (

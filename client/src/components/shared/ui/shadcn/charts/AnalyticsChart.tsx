@@ -151,6 +151,7 @@ export function AnalyticsChart({
               strokeWidth={2}
               dot={false}
               isAnimationActive={false}
+              className="cursor-pointer"
             />
           </AreaChart>
         </ResponsiveContainer>
