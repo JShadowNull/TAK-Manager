@@ -118,7 +118,10 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
                   Restart
                 </Button>
                 <Button
-                  onClick={() => window.open('https://127.0.0.1:8443', '_blank')}
+                  variant="primary"
+                  href="https://127.0.0.1:8443"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   disabled={isOperationInProgress}
                 >
                   Launch TAK Web UI

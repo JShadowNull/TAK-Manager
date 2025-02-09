@@ -162,7 +162,7 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
 
   return (
     <>
-      <div className="w-full border border-border bg-card p-6 rounded-lg">
+      <div className="w-full border border-border bg-card p-6 rounded-lg break-normal">
         <h3 className="text-base font-bold mb-4">Installation Configuration</h3>
         
         <div className="flex flex-col gap-4">
@@ -204,7 +204,7 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
                 type="file"
                 id="docker_zip_file"
                 onChange={handleInputChange}
-                className="w-full text-sm p-2 rounded-lg bg-sidebar border border-inputBorder focus:border-accentBorder focus:outline-hidden"
+                className="w-full text-sm p-2 rounded-lg bg-sidebar border border-inputBorder focus:border-accentBorder cursor-pointer focus:outline-hidden"
                 accept=".zip"
                 required
               />
