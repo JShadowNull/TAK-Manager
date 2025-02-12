@@ -20,8 +20,13 @@ body = """
 {% endif -%}
 {% for group, commits in commits | group_by(attribute="group") %}
     ### {{ group | upper_first }}
+    {% set seen = [] %}
     {% for commit in commits %}
-        - {{ commit.message | split(pat="\n") | first | upper_first | trim }}\
+        {% set message = commit.message | split(pat="\n") | first | upper_first | trim %}
+        {% if message not in seen %}
+            - {{ message }}
+            {% set seen = seen | concat(with=[message]) %}
+        {% endif %}
     {% endfor %}
 {% endfor %}\n
 """
@@ -45,10 +50,6 @@ footer = """
 trim = true
 
 [git]
-# Include submodule changes
-include_submodules = true
-# Treat submodule commits as part of the main repository
-submodule_commits = true
 # parse the commits based on https://www.conventionalcommits.org
 conventional_commits = true
 # filter out the commits that are not conventional
