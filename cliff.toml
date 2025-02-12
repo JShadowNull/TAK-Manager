@@ -20,13 +20,8 @@ body = """
 {% endif -%}
 {% for group, commits in commits | group_by(attribute="group") %}
     ### {{ group | upper_first }}
-    {% set seen = [] %}
     {% for commit in commits %}
-        {% set message = commit.message | split(pat="\n") | first | upper_first | trim %}
-        {% if message not in seen %}
-            - {{ message }}
-            {% set seen = seen | concat(with=[message]) %}
-        {% endif %}
+        - {{ commit.message | split(pat="\n") | first | upper_first | trim }}\
     {% endfor %}
 {% endfor %}\n
 """
