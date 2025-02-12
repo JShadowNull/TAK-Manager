@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional, Callable
 import time
 import asyncio
 from backend.config.logging_config import configure_logging
+import tempfile
 
 # Configure logging using centralized config
 logger = configure_logging(__name__)
@@ -17,7 +18,6 @@ class CertManager:
         self._last_status = None
         self._last_certificates = None
         self._monitor_task = None
-        logger.debug("CertManager initialized with working directory: %s", self.working_dir)
 
     async def start_monitoring(self):
         """Start monitoring certificates for changes."""
@@ -176,7 +176,6 @@ class CertManager:
     async def get_registered_certificates(self) -> list:
         """Parse UserAuthenticationFile.xml and return registered certificate information."""
         try:
-            logger.debug("Starting to fetch registered certificates")
             await self.update_status(
                 "fetch",
                 "in_progress",
@@ -184,7 +183,6 @@ class CertManager:
             )
 
             auth_file = await self.get_auth_file_path()
-            logger.debug(f"Parsing authentication file from: {auth_file}")
             tree = ET.parse(auth_file)
             root = tree.getroot()
             
@@ -199,19 +197,14 @@ class CertManager:
                     'groups': []
                 }
                 
-                logger.debug(f"Processing certificate for user: {cert_info['identifier']}")
-                
                 for group in user.findall('.//ns:groupList', ns):
                     if group.text:
                         cert_info['groups'].append(group.text.strip())
                 
                 if not cert_info['groups']:
-                    logger.debug(f"No groups found for user {cert_info['identifier']}, assigning default '__ANON__'")
                     cert_info['groups'].append('__ANON__')
                 
                 certificates.append(cert_info)
-            
-            logger.debug(f"Found {len(certificates)} registered certificates")
             
             await self.emit_certificates_update(certificates)
             await self.update_status(
@@ -786,6 +779,225 @@ class CertManager:
             error_message = f"Error during batch deletion: {str(e)}"
             await self.update_status(
                 "delete_certs_batch",
+                "error",
+                error_message,
+                {
+                    "error": error_message,
+                    "results": results if 'results' in locals() else []
+                }
+            )
+            return {
+                'success': False,
+                'message': error_message,
+                'results': results if 'results' in locals() else []
+            }
+
+    async def get_certificate_files(self, username: str) -> Dict[str, Any]:
+        """Get certificate files for a user"""
+        try:
+            container_name = self.get_container_name()
+            
+            # Start the download operation
+            await self.update_status(
+                "download",
+                "in_progress",
+                f"Starting download for user {username}",
+                {"username": username}
+            )
+
+            # First verify the user exists
+            certificates = await self.get_registered_certificates()
+            if not any(cert['identifier'] == username for cert in certificates):
+                error_message = f'User {username} not found'
+                await self.update_status(
+                    "download",
+                    "error",
+                    error_message,
+                    {"username": username}
+                )
+                return {
+                    'success': False,
+                    'message': error_message
+                }
+
+            # Check if certificate exists in container
+            verify_command = ["docker", "exec", container_name, "bash", "-c", f"find /opt/tak/certs/files/ -name '{username}.p12' -type f"]
+            result = await self.run_command.run_command_async(
+                command=verify_command,
+                event_type="download",
+                emit_event=self.emit_event,
+                ignore_errors=True
+            )
+
+            if not result.stdout:
+                await self.update_status(
+                    "download",
+                    "error",
+                    f"Certificate not found for {username}",
+                    {"username": username}
+                )
+                return {'success': False, 'message': f'Certificate not found for {username}'}
+
+            # Copy file from container to temp location
+            temp_dir = tempfile.mkdtemp()
+            p12_path = os.path.join(temp_dir, f"{username}.p12")
+            
+            copy_command = ["docker", "cp", f"{container_name}:/opt/tak/certs/files/{username}.p12", p12_path]
+            result = await self.run_command.run_command_async(
+                command=copy_command,
+                event_type="download",
+                emit_event=self.emit_event,
+                ignore_errors=True
+            )
+
+            if not result.success or not os.path.exists(p12_path):
+                await self.update_status(
+                    "download",
+                    "error",
+                    f"Failed to copy certificate for {username}",
+                    {"username": username, "error": result.stderr}
+                )
+                return {'success': False, 'message': f'Failed to copy certificate for {username}'}
+
+            # Send completion status
+            await self.update_status(
+                "download",
+                "complete",
+                f"Successfully prepared download for {username}",
+                {"username": username}
+            )
+            
+            return {
+                'success': True,
+                'files': {
+                    'p12': p12_path
+                }
+            }
+
+        except Exception as e:
+            error_message = f"Error getting certificate files for {username}: {str(e)}"
+            await self.update_status(
+                "download",
+                "error",
+                error_message,
+                {
+                    "username": username,
+                    "error": str(e)
+                }
+            )
+            return {'success': False, 'message': error_message}
+
+    async def download_batch(self, usernames: list) -> Dict[str, Any]:
+        """Download multiple certificates in a batch."""
+        try:
+            total_certs = len(usernames)
+            completed_certs = 0
+            results = []
+
+            # Start batch download operation
+            await self.update_status(
+                "download_batch",
+                "in_progress",
+                f"Starting batch download of {total_certs} certificates",
+                {"total": total_certs}
+            )
+
+            # Get initial certificates list
+            certificates = await self.get_registered_certificates()
+            
+            for username in usernames:
+                try:
+                    # Verify user exists
+                    if not any(cert['identifier'] == username for cert in certificates):
+                        results.append({
+                            'username': username,
+                            'message': f'User {username} not found',
+                            'status': 'failed'
+                        })
+                        continue
+
+                    # Update progress
+                    await self.update_status(
+                        "download",
+                        "in_progress",
+                        f"Downloading certificate for {username}",
+                        {
+                            "username": username,
+                            "completed": completed_certs,
+                            "total": total_certs
+                        }
+                    )
+
+                    # Download certificate
+                    result = await self.get_certificate_files(username)
+                    
+                    if result['success']:
+                        completed_certs += 1
+                        results.append({
+                            'username': username,
+                            'message': f'Successfully downloaded certificate for {username}',
+                            'status': 'completed',
+                            'file_path': result['files']['p12']
+                        })
+                        
+                        # Send individual download complete event
+                        await self.update_status(
+                            "download",
+                            "complete",
+                            f"Successfully downloaded certificate for {username}",
+                            {
+                                "username": username,
+                                "file_path": result['files']['p12']
+                            }
+                        )
+                    else:
+                        results.append({
+                            'username': username,
+                            'message': result['message'],
+                            'status': 'failed'
+                        })
+
+                except Exception as e:
+                    results.append({
+                        'username': username,
+                        'message': str(e),
+                        'status': 'failed'
+                    })
+
+            # Send final status
+            if completed_certs == total_certs:
+                await self.update_status(
+                    "download_batch",
+                    "complete",
+                    f"Successfully downloaded {completed_certs} certificates",
+                    {
+                        "total": total_certs,
+                        "completed": completed_certs,
+                        "results": results
+                    }
+                )
+            else:
+                await self.update_status(
+                    "download_batch",
+                    "error",
+                    f"Downloaded {completed_certs} of {total_certs} certificates",
+                    {
+                        "total": total_certs,
+                        "completed": completed_certs,
+                        "results": results
+                    }
+                )
+
+            return {
+                'success': completed_certs == total_certs,
+                'message': f'Downloaded {completed_certs} of {total_certs} certificates',
+                'results': results
+            }
+
+        except Exception as e:
+            error_message = f"Error during batch download: {str(e)}"
+            await self.update_status(
+                "download_batch",
                 "error",
                 error_message,
                 {

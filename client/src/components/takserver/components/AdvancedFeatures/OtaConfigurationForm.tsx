@@ -1,5 +1,6 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { Button } from '../../../shared/ui/shadcn/button';
+import { Input } from '../../../shared/ui/shadcn/input';
 import { HelpIconTooltip } from '../../../shared/ui/shadcn/tooltip/HelpIconTooltip';
 import { z } from 'zod';
 
@@ -23,7 +24,6 @@ interface OtaFormData {
 }
 
 const OtaConfigurationForm: React.FC<OtaConfigurationFormProps> = ({ onClose, onConfigureStart }) => {
-  const otaFileRef = useRef<HTMLInputElement>(null);
   const [otaFormData, setOtaFormData] = useState<OtaFormData>({
     ota_zip_file: null,
   });
@@ -86,6 +86,11 @@ const OtaConfigurationForm: React.FC<OtaConfigurationFormProps> = ({ onClose, on
     }
   };
 
+  const handleClearFile = () => {
+    setOtaFormData(prev => ({ ...prev, ota_zip_file: null }));
+    setErrors({});
+  };
+
   return (
     <div className="w-full border border-border bg-card p-6 rounded-lg break-normal">
       <h3 className="text-base font-bold mb-4">OTA Updates Configuration</h3>
@@ -124,19 +129,18 @@ const OtaConfigurationForm: React.FC<OtaConfigurationFormProps> = ({ onClose, on
               <span className="text-red-500">*</span>
             </label>
             <p className="text-sm text-muted-foreground">Example: ATAK-MIL_5.2.0_loadout.zip</p>
-            <input
-              ref={otaFileRef}
+            
+            <Input
               type="file"
               id="ota_zip_file"
               name="ota_zip_file"
               accept=".zip"
               onChange={handleInputChange}
-              className="w-full text-sm p-2 rounded-lg bg-sidebar border border-inputBorder focus:border-accentBorder cursor-pointer focus:outline-hidden"
+              onClearFile={handleClearFile}
+              error={errors.ota_zip_file}
+              placeholder="Click to select or drag and drop your ZIP file"
               required
             />
-            {errors.ota_zip_file && (
-              <p className="text-sm text-red-500">{errors.ota_zip_file}</p>
-            )}
           </div>
 
           <div className="flex justify-end gap-4 mt-4">

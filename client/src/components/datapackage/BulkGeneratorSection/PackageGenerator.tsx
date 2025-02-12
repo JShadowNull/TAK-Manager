@@ -247,7 +247,7 @@ const BulkGeneratorSection: React.FC<BulkGeneratorSectionProps> = ({
           <div className="space-y-4">
             <Label className="text-lg font-medium">Select Client Certificates</Label>
             <p className="text-sm text-muted-foreground">Select one or more client certificates to generate data packages for.</p>
-            <ScrollArea className="h-72 w-1/3 min-w-fit rounded-md border">
+            <ScrollArea className="w-1/3 min-w-fit rounded-md border">
               <Command>
                 <CommandInput 
                   placeholder="Search client certificates..." 

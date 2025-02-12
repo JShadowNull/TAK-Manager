@@ -230,12 +230,39 @@
     --chart-4: 280 65% 60%;
     --chart-2: 160 60% 45%;
   }
-}
- 
+} 
 @layer base {
   * {
     @apply border-border;
+    scrollbar-width: none;  /* Firefox */
+    -ms-overflow-style: none;  /* IE and Edge */
+    &::-webkit-scrollbar {
+      display: none;  /* Chrome, Safari and Opera */
+    }
   }
+
+  /* Remove default number input arrows */
+  input[type="number"] {
+    -moz-appearance: textfield;  /* Firefox */
+    &::-webkit-outer-spin-button,
+    &::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+  }
+
+  /* Remove default file input styling */
+  input[type="file"] {
+    &::-webkit-file-upload-button {
+      visibility: hidden;
+      display: none;
+    }
+    &::file-selector-button {
+      visibility: hidden;
+      display: none;
+    }
+  }
+
   body {
     @apply bg-background text-foreground;
   }
