@@ -6,7 +6,6 @@ const { execSync } = require('child_process');
 
 // Define paths
 const rootDir = path.join(__dirname, '..');
-const versionFilePath = path.join(__dirname, 'version.txt');
 const paths = {
   root: path.join(rootDir, 'package.json'),
   client: path.join(rootDir, 'client/package.json'),
@@ -15,8 +14,9 @@ const paths = {
   innoSetup: path.join(rootDir, 'tak-manager-wrapper/inno-tak.iss'),
 };
 
-// Read version from version.txt
-const version = fs.readFileSync(versionFilePath, 'utf8').trim();
+// Read version from root package.json
+const rootPackage = JSON.parse(fs.readFileSync(paths.root, 'utf8'));
+const version = rootPackage.version;
 
 // Update package.json files
 function updatePackageJson(filePath) {
