@@ -19,7 +19,8 @@
     "setup:win": "npm install && cd tak-manager-wrapper && python -m venv venv && venv\\Scripts\\activate && pip install -r requirements-win.txt"
   },
   "devDependencies": {
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.1.0",
+    "standard-version": "^9.5.0"
   },
   "author": "Jacob Olsen",
   "description": "TAK Manager - A comprehensive TAK Server management solution",
