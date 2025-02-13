@@ -130,15 +130,28 @@ async function release() {
         const changelogCmd = `git cliff --config cliff.toml --tag "v${newVersion}" --unreleased --strip all`;
         const releaseNotes = execSync(changelogCmd).toString().trim();
         
-        // Create the formatted entry with version header
+        // Create the formatted entry with version header (only once)
         const formattedEntry = `## [${newVersion}] - ${currentDate}\n\n${releaseNotes}`;
         
         // Update CHANGELOG.md
         const changelogPath = path.join(process.cwd(), 'CHANGELOG.md');
         let changelog = fs.readFileSync(changelogPath, 'utf8');
+        
+        // Find the first version header
         const versionHeader = '## [';
         const insertIndex = changelog.indexOf(versionHeader);
-        changelog = changelog.slice(0, insertIndex) + formattedEntry + '\n\n' + changelog.slice(insertIndex);
+        
+        // Remove any duplicate version headers from the release notes
+        const uniqueEntry = formattedEntry.split('\n').reduce((acc, line) => {
+            // Skip lines that contain duplicate version headers
+            if (line.startsWith(`## [${newVersion}]`)) {
+                return acc.length === 0 ? line : acc;
+            }
+            return acc + (acc.length === 0 ? '' : '\n') + line;
+        }, '');
+        
+        // Update the changelog with the unique entry
+        changelog = changelog.slice(0, insertIndex) + uniqueEntry + '\n\n' + changelog.slice(insertIndex);
         fs.writeFileSync(changelogPath, changelog);
         
         // Stage and commit changelog
@@ -153,8 +166,8 @@ async function release() {
             // Tag doesn't exist, that's fine
         }
         
-        // Create new tag with formatted release notes
-        exec(`git tag -a v${newVersion} -m "TAK Manager v${newVersion}" -m "${formattedEntry}"`);
+        // Create new tag with the unique formatted release notes
+        exec(`git tag -a v${newVersion} -m "TAK Manager v${newVersion}" -m "${uniqueEntry}"`);
         
         // Push changes and tags to main
         exec('git push origin main');
@@ -163,45 +176,30 @@ async function release() {
         // Create release in Gitea if token exists
         const giteaToken = process.env.GITEA_TOKEN;
         if (giteaToken) {
-            // Wait a moment for the tag to be processed by Gitea
+            // Wait a moment for the tag to be processed
             console.log('Waiting for tag to be processed...');
             execSync('sleep 2');
-            
-            // Generate release notes in a simpler format
-            const sections = releaseNotes.split('###').filter(Boolean);
-            const formattedNotes = sections.map(section => {
-                const [title, ...items] = section.trim().split('\n').filter(Boolean);
-                return `### ${title}\n\n${items.join('\n')}`;
-            }).join('\n\n');
-            
-            const releaseData = {
+
+            // Use the unique entry for the release body
+            const releaseBody = uniqueEntry
+                .split('\n')
+                .map(line => line.trim())
+                .filter(Boolean)
+                .join('\n');
+
+            // Create the release data with proper escaping
+            const releaseData = JSON.stringify({
                 tag_name: `v${newVersion}`,
                 name: `TAK Manager v${newVersion}`,
-                body: formattedNotes,
-                draft: false,
-                prerelease: false
-            };
-            
-            // Write release data to a temporary file
-            const tempFile = path.join(process.cwd(), 'release-data.json');
-            fs.writeFileSync(tempFile, JSON.stringify(releaseData, null, 2));
-            
-            try {
-                // Create the release using the file to avoid escaping issues
-                console.log('Creating Gitea release...');
-                exec(`curl -X POST "https://gitea.local.ubuntuserver.buzz/api/v1/repos/Jake/Tak-Manager/releases" \
-                    -H "accept: application/json" \
-                    -H "Authorization: token ${giteaToken}" \
-                    -H "Content-Type: application/json" \
-                    --data-binary @${tempFile}`);
-            } catch (error) {
-                console.error('Failed to create Gitea release:', error);
-            } finally {
-                // Clean up
-                if (fs.existsSync(tempFile)) {
-                    fs.unlinkSync(tempFile);
-                }
-            }
+                body: releaseBody
+            });
+
+            // Use a simpler curl command with the properly escaped JSON
+            exec(`curl -X POST \
+                "https://gitea.local.ubuntuserver.buzz/api/v1/repos/Jake/Tak-Manager/releases" \
+                -H "Authorization: token ${giteaToken}" \
+                -H "Content-Type: application/json" \
+                -d '${releaseData.replace(/'/g, "'\\''")}'`);
         } else {
             console.warn('GITEA_TOKEN not set, skipping release creation');
         }
