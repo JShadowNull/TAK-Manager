@@ -102,8 +102,9 @@ async function release() {
         console.log('Generating changelog...');
         const lastTag = execSync('git describe --tags --abbrev=0').toString().trim();
         
-        // Generate the changelog entry using git-cliff
+        // Generate the changelog entry using git-cliff with proper formatting
         const currentDate = new Date().toISOString().split('T')[0];
+        // First get the raw changelog content with proper formatting
         const changelogCmd = `git cliff --config cliff.toml --tag "v${newVersion}" --unreleased --strip all`;
         const releaseNotes = execSync(changelogCmd).toString().trim();
         
@@ -130,8 +131,8 @@ async function release() {
             // Tag doesn't exist, that's fine
         }
         
-        // Create new tag with formatted release notes - use the exact same format as changelog
-        exec(`git tag -a v${newVersion} -m "${formattedEntry}"`);
+        // Create new tag with formatted release notes
+        exec(`git tag -a v${newVersion} -m "TAK Manager v${newVersion}" -m "${formattedEntry}"`);
         
         // Push changes and tags to main
         exec('git push origin main');
@@ -140,16 +141,20 @@ async function release() {
         // Create release in Gitea if token exists
         const giteaToken = process.env.GITEA_TOKEN;
         if (giteaToken) {
+            const releaseTitle = `TAK Manager v${newVersion}`;
             const releaseData = {
                 tag_name: `v${newVersion}`,
-                name: `TAK Manager v${newVersion}`,
-                body: formattedEntry,  // Use the exact same formatted entry
+                name: releaseTitle,
+                body: formattedEntry,  // Use the exact same formatted entry as changelog
                 draft: false,
                 prerelease: false
             };
             
-            // Properly escape the JSON for curl
-            const escapedData = JSON.stringify(releaseData).replace(/"/g, '\\"');
+            // Properly escape the JSON for curl, preserving newlines and formatting
+            const escapedData = JSON.stringify(releaseData)
+                .replace(/\\n/g, '\\n')  // Preserve newlines
+                .replace(/"/g, '\\"')    // Escape quotes
+                .replace(/\\"/g, '\\"'); // Ensure proper escaping of nested quotes
             
             exec(`curl -X POST "https://gitea.local.ubuntuserver.buzz/api/v1/repos/Jake/Tak-Manager/releases" \
                 -H "Authorization: token ${giteaToken}" \
