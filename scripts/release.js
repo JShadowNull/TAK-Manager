@@ -26,21 +26,14 @@ function bumpVersion(version, type) {
     }
 }
 
-function determineVersionBump() {
-    try {
-        // Get all commit messages from dev branch that aren't in main
-        const commitMessages = execSync('git log main..dev --pretty=format:"%B"').toString();
-        console.log('Analyzing commits from dev:', commitMessages);
-        
-        if (commitMessages.includes('BREAKING CHANGE')) return 'major';
-        if (commitMessages.includes('feat:')) return 'minor';
-        if (commitMessages.includes('fix:')) return 'patch';
-        if (commitMessages.includes('beta')) return 'prerelease';
-        return 'patch'; // Default to patch if no conventional commits found
-    } catch (error) {
-        console.log('Error analyzing commits, defaulting to patch');
-        return 'patch';
-    }
+function determineVersionBumpFromMessages(commitMessages) {
+    console.log('Analyzing commits:', commitMessages);
+    
+    if (commitMessages.includes('BREAKING CHANGE')) return 'major';
+    if (commitMessages.includes('feat:')) return 'minor';
+    if (commitMessages.includes('fix:')) return 'patch';
+    if (commitMessages.includes('beta')) return 'prerelease';
+    return 'patch'; // Default to patch if no conventional commits found
 }
 
 function runWithRetries(command, maxAttempts = 3) {
@@ -69,13 +62,18 @@ async function release() {
         const currentVersion = packageJson.version;
         console.log(`Current version: ${currentVersion}`);
         
+        // Capture commits from dev before merge
+        console.log('Analyzing commits from dev branch...');
+        const commitMessages = execSync('git log main..dev --pretty=format:"%B"').toString();
+        console.log('Commits to be included:', commitMessages);
+        
+        // Determine version bump based on captured commits
+        const versionBump = determineVersionBumpFromMessages(commitMessages);
+        console.log(`Version bump type: ${versionBump}`);
+        
         // Merge dev into main
         console.log('Merging dev into main...');
         exec('git merge dev --no-ff -m "chore: merge dev into main for release"');
-        
-        // Determine version bump based on dev branch commits
-        const versionBump = determineVersionBump();
-        console.log(`Version bump type: ${versionBump}`);
         
         // Calculate new version
         const newVersion = bumpVersion(currentVersion, versionBump);
