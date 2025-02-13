@@ -1,9 +1,29 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [1.1.0](https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/compare/v1.0.2...v1.1.0) (2025-02-13)
+
+
+### Features
+
+* add ability to download certificates ([2afcb66](https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/commit/2afcb665841c83d81e293e3459b5c997c25e009b))
+* add changelog tracking ([229f29c](https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/commit/229f29c2bca9a697dbb2be13b5a189eb4bd5e0a2))
+* add changelog tracking ([3fd82d6](https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/commit/3fd82d6718e148faea21acdfedd3d2a2c9387c4e))
+* add number input with custom controls and styling ([588929c](https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/commit/588929cae237c8c20710d05045c3dfaaeb79a34d))
+* add option to hide input number arrows ([d343460](https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/commit/d34346024d06053695a9c1c157fad196fe9ad4ed))
+* add Windows packaging and Docker image creation support ([890bcdf](https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/commit/890bcdfbdd3c0c9d3d35a0cc5d888688ea57cc7b))
+* enhance ATAK preferences management with custom settings support ([181a58c](https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/commit/181a58cc8be2f32fd5a2734079e3b213a9b495ec))
+* enhance file input with drag-and-drop and custom styling ([26d38b4](https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/commit/26d38b421579981558112e13a8bfc818ce8a95ed))
+* improve UI cursor interactions and responsiveness ([f8b363a](https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/commit/f8b363a377c7414179e5f807925134d2e86cf69b))
+* test commit to trigger version bump ([ddb5041](https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/commit/ddb5041a12416d80897d8b90c2bc3d7c1c6f3874))
+
+
+### Bug Fixes
+
+* changelog ([ce075d2](https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/commit/ce075d2033e738238452052205d6f8c9db32838b))
+* improve Windows path handling in TAK server Docker installation ([1f0b409](https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/commit/1f0b409fa6c93fe841ee50980caaab06523e69d7))
+* update changelog ([728d920](https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/commit/728d920625c657761810f6f159ab0691d4b81339))
 
 ## [1.0.3] - 2025-02-13
 
