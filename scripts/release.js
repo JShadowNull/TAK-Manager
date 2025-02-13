@@ -163,31 +163,45 @@ async function release() {
         // Create release in Gitea if token exists
         const giteaToken = process.env.GITEA_TOKEN;
         if (giteaToken) {
-            // Generate a clean version of the release notes for Gitea
-            const giteaReleaseNotes = releaseNotes
-                .split('\n')
-                .map(line => line.trim())
-                .filter(line => line.length > 0)
-                .join('\n');
-
+            // Wait a moment for the tag to be processed by Gitea
+            console.log('Waiting for tag to be processed...');
+            execSync('sleep 2');
+            
+            // Generate release notes in a simpler format
+            const sections = releaseNotes.split('###').filter(Boolean);
+            const formattedNotes = sections.map(section => {
+                const [title, ...items] = section.trim().split('\n').filter(Boolean);
+                return `### ${title}\n\n${items.join('\n')}`;
+            }).join('\n\n');
+            
             const releaseData = {
                 tag_name: `v${newVersion}`,
                 name: `TAK Manager v${newVersion}`,
-                body: giteaReleaseNotes,
+                body: formattedNotes,
                 draft: false,
                 prerelease: false
             };
             
-            // Properly escape the JSON data
-            const jsonData = JSON.stringify(releaseData)
-                .replace(/\\/g, '\\\\')
-                .replace(/"/g, '\\"');
+            // Write release data to a temporary file
+            const tempFile = path.join(process.cwd(), 'release-data.json');
+            fs.writeFileSync(tempFile, JSON.stringify(releaseData, null, 2));
             
-            // Use curl with properly escaped data
-            exec(`curl -X POST "https://gitea.local.ubuntuserver.buzz/api/v1/repos/Jake/Tak-Manager/releases" \
-                -H "Authorization: token ${giteaToken}" \
-                -H "Content-Type: application/json" \
-                -d "${jsonData}"`);
+            try {
+                // Create the release using the file to avoid escaping issues
+                console.log('Creating Gitea release...');
+                exec(`curl -X POST "https://gitea.local.ubuntuserver.buzz/api/v1/repos/Jake/Tak-Manager/releases" \
+                    -H "accept: application/json" \
+                    -H "Authorization: token ${giteaToken}" \
+                    -H "Content-Type: application/json" \
+                    --data-binary @${tempFile}`);
+            } catch (error) {
+                console.error('Failed to create Gitea release:', error);
+            } finally {
+                // Clean up
+                if (fs.existsSync(tempFile)) {
+                    fs.unlinkSync(tempFile);
+                }
+            }
         } else {
             console.warn('GITEA_TOKEN not set, skipping release creation');
         }
