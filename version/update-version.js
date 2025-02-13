@@ -2,7 +2,6 @@
 const fs = require('fs');
 const path = require('path');
 const yaml = require('js-yaml');
-const { execSync } = require('child_process');
 
 // Define paths
 const rootDir = path.join(__dirname, '..');
@@ -48,27 +47,6 @@ function updateInnoSetup(filePath) {
   return oldContent !== content; // return true if content changed
 }
 
-// Git operations
-function gitCommitAndTag() {
-  try {
-    // Check if we're in a git repository
-    execSync('git rev-parse --is-inside-work-tree', { stdio: 'ignore' });
-    
-    // Stage the changed files
-    execSync('git add package.json client/package.json tak-manager-wrapper/web/package.json docker-compose.prod.yml tak-manager-wrapper/inno-tak.iss');
-    
-    // Create commit
-    execSync(`git commit -m "chore: bump version to ${version}"`, { stdio: 'pipe' });
-    
-    // Create tag
-    execSync(`git tag -a v${version} -m "Version ${version}"`, { stdio: 'pipe' });
-    
-    console.log(`Created git commit and tag for version ${version}`);
-  } catch (error) {
-    console.warn('Git operations failed:', error.message);
-  }
-}
-
 try {
   let changes = false;
   
@@ -81,7 +59,6 @@ try {
   
   if (changes) {
     console.log(`Successfully updated files to version ${version}`);
-    gitCommitAndTag();
   } else {
     console.log('No version changes needed - files already at correct version');
   }
