@@ -9,37 +9,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Feat: add changelog tracking
-- Feat: enhance file input with drag-and-drop and custom styling
-- Feat: add option to hide input number arrows
-- Feat: add number input with custom controls and styling
-- Feat: add ability to download certificates
-- Feat: improve UI cursor interactions and responsiveness
-- Chore: add FETCH_HEAD file for Git repository management
-- Feat: add Windows packaging and Docker image creation support
-- Chore: add tak-manager-wrapper submodule
-- Feat: enhance ATAK preferences management with custom settings support
+- Add changelog tracking
+- Enhance file input with drag-and-drop and custom styling
+- Add option to hide input number arrows
+- Add number input with custom controls and styling
+- Add ability to download certificates
+- Improve UI cursor interactions and responsiveness
+- Add FETCH_HEAD file for Git repository management
+- Add Windows packaging and Docker image creation support
+- Add tak-manager-wrapper submodule
+- Enhance ATAK preferences management with custom settings support
 
 ### Changed
 
-- 
+- Bump version to 1.0.3 and update project configuration
+- Bump version to 1.0.2 and update changelog
 - Delete FETCH_HEAD
-- Docs: update README with refined project structure and environment configuration
-- Docs: simplify README installation instructions
-- Docs: update README with detailed production deployment instructions
+- Update README with refined project structure and environment configuration
+- Simplify README installation instructions
+- Update README with detailed production deployment instructions
+- Bump version to 1.0.0
 
 ### Fixed
 
-- Fix: update changelog
-- Fix: changelog
-- Fix: improve Windows path handling in TAK server Docker installation
+- Update changelog
+- Changelog
+- Improve Windows path handling in TAK server Docker installation
 
 ### Removed
 
-- Chore: remove default browser scroll
-- Chore: remove .env.prod.example file
-- Chore: remove Tauri-related workspace and scripts
-- Chore: remove Electron-related files and configurations
+- Remove default browser scroll
+- Remove .env.prod.example file
+- Remove Tauri-related workspace and scripts
+- Remove Electron-related files and configurations
 
 ## [1.0.2] - 2025-01-25
 
@@ -56,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Bump version to 1.0.2
 - Refactor project configuration and deployment settings for production environment
 - Refactor and enhance certificate management components for improved functionality and user experience
 - Enhance application structure and functionality with PWA support and improved error handling
