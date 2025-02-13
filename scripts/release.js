@@ -1,5 +1,6 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
+const path = require('path');
 
 function exec(command) {
     try {
@@ -71,13 +72,16 @@ async function release() {
         const versionBump = determineVersionBumpFromMessages(commitMessages);
         console.log(`Version bump type: ${versionBump}`);
         
+        // Calculate new version before merge
+        const newVersion = bumpVersion(currentVersion, versionBump);
+        console.log(`New version will be: ${newVersion}`);
+        
+        // Store the current dev commit hash for changelog generation
+        const devCommit = execSync('git rev-parse dev').toString().trim();
+        
         // Merge dev into main
         console.log('Merging dev into main...');
         exec('git merge dev --no-ff -m "chore: merge dev into main for release"');
-        
-        // Calculate new version
-        const newVersion = bumpVersion(currentVersion, versionBump);
-        console.log(`New version will be: ${newVersion}`);
         
         // Update version in package.json
         packageJson.version = newVersion;
@@ -88,19 +92,32 @@ async function release() {
         process.env.NEW_VERSION = newVersion;
         runWithRetries('npm run update:version');
         
-        // Generate changelog
-        console.log('Generating changelog...');
-        runWithRetries('npm run update:changelog');
-        
-        // Get the generated changelog for the new version
-        const releaseNotes = execSync('git cliff --latest').toString();
-        console.log('Release notes generated:', releaseNotes);
-        
-        // Stage and commit changes
-        exec('git add package.json package-lock.json CHANGELOG.md');
+        // Stage version changes
+        exec('git add package.json package-lock.json');
         exec('git add client/package.json || true');
         exec('git add docker-compose.prod.yml || true');
         exec(`git commit -m "chore: release tak-manager@${newVersion} [skip ci]"`);
+        
+        // Generate changelog using the stored dev commit
+        console.log('Generating changelog...');
+        const changelogCmd = `git cliff --tag v${newVersion} --strip header`;
+        const releaseNotes = execSync(changelogCmd).toString();
+        console.log('Release notes generated:', releaseNotes);
+        
+        // Update CHANGELOG.md
+        const changelogPath = path.join(process.cwd(), 'CHANGELOG.md');
+        const currentDate = new Date().toISOString().split('T')[0];
+        const newEntry = `## [${newVersion}] - ${currentDate}\n\n${releaseNotes}\n`;
+        
+        let changelog = fs.readFileSync(changelogPath, 'utf8');
+        const versionHeader = '## [';
+        const insertIndex = changelog.indexOf(versionHeader);
+        changelog = changelog.slice(0, insertIndex) + newEntry + changelog.slice(insertIndex);
+        fs.writeFileSync(changelogPath, changelog);
+        
+        // Stage and commit changelog
+        exec('git add CHANGELOG.md');
+        exec(`git commit --amend --no-edit`);
         
         // Delete existing tag if it exists
         try {
