@@ -5,61 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.3] - 2025-02-13
 
 ### Added
 
-- Add changelog tracking
-- Add option to hide input number arrows
-- Add number input with custom controls and styling
-- Add ability to download certificates
-- Add FETCH_HEAD file for Git repository management
-- Add Windows packaging and Docker image creation support
-- Add tak-manager-wrapper submodule
+- Feat: add changelog tracking
+- Feat: enhance file input with drag-and-drop and custom styling
+- Feat: add option to hide input number arrows
+- Feat: add number input with custom controls and styling
+- Feat: add ability to download certificates
+- Feat: improve UI cursor interactions and responsiveness
+- Chore: add FETCH_HEAD file for Git repository management
+- Feat: add Windows packaging and Docker image creation support
+- Chore: add tak-manager-wrapper submodule
+- Feat: enhance ATAK preferences management with custom settings support
 
 ### Changed
 
-- Enhance changelog generation and configuration
-- Update changelog and add new npm script for changelog generation
-- Update tak-manager-wrapper submodule to latest commit
-- Update tak-manager-wrapper submodule
-- Bump version to 1.0.2 and update changelog
-- Enhance file input with drag-and-drop and custom styling
-- Update setup scripts and package version
-- Improve UI cursor interactions and responsiveness
-- Streamline npm scripts and add setup scripts for Mac and Windows
-- Update packaging scripts with version environment variable support
-- Enhance version update script and Windows packaging support
+- 
 - Delete FETCH_HEAD
-- Mark tak-manager-wrapper submodule as dirty
-- Update version scripts and Mac-specific packaging
-- Update .env.example for production deployment
-- Update project configuration and Docker image build path
-- Mark tak-manager-wrapper submodule as dirty
-- Update workspace configuration and dependencies
-- Update README with refined project structure and environment configuration
-- Simplify README installation instructions
-- Update README with detailed production deployment instructions
-- Update .env.example with improved configuration and comments
-- Enhance ATAK preferences management with custom settings support
+- Docs: update README with refined project structure and environment configuration
+- Docs: simplify README installation instructions
+- Docs: update README with detailed production deployment instructions
 
 ### Fixed
 
-- Improve Windows path handling in TAK server Docker installation
+- Fix: update changelog
+- Fix: changelog
+- Fix: improve Windows path handling in TAK server Docker installation
 
 ### Removed
 
-- Remove default browser scroll
-- Remove .env.prod.example file
-- Remove Tauri-related workspace and scripts
-- Remove Electron-related files and configurations
-
-## [1.0.0] - 2025-01-25
-
-### Changed
-
-- Update project configuration and version management scripts
-- Bump version to 1.0.0
+- Chore: remove default browser scroll
+- Chore: remove .env.prod.example file
+- Chore: remove Tauri-related workspace and scripts
+- Chore: remove Electron-related files and configurations
 
 ## [1.0.2] - 2025-01-25
 
@@ -76,7 +56,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Bump version to 1.0.2
 - Refactor project configuration and deployment settings for production environment
 - Refactor and enhance certificate management components for improved functionality and user experience
 - Enhance application structure and functionality with PWA support and improved error handling
@@ -194,14 +173,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactor Popup component to integrate terminal functionality; remove TerminalPopup component. Enhance UI with terminal-specific props, scrolling behavior, and dynamic button rendering based on operation status. Update TakServerStatus to utilize the new Popup structure for installation progress and Docker status notifications.
 - Enhance Popup components and add uninstall confirmation in TAKServer management; implement blur effect for sidebars and improve UI responsiveness
 - Update TAKServer management with new status monitoring and installation enhancements; bump MUI dependencies to version 6.1.10
+- Fixed scrollbar and updated takserver management page
 - Updated frontend to use react
 - Update directory
 - Update to requirements
 - V1.0.0
-
-### Fixed
-
-- Fixed scrollbar and updated takserver management page
 
 ### Removed
 
@@ -216,7 +192,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Remove unused components and refactor InputField and PreferenceItem for improved structure
 - Remove Installers page and related references from the application; update routing and sidebar components accordingly.
 
-[unreleased]: https://gitea.ubuntuserver.buzz/Jake/Tak-Manager.git/compare/1.0.0..HEAD
-[1.0.0]: https://gitea.ubuntuserver.buzz/Jake/Tak-Manager.git/compare/v1.0.2..1.0.0
+[1.0.2]: https://gitea.ubuntuserver.buzz/Jake/Tak-Manager.git/compare/v1.0.1..v1.0.2
+[1.0.3]: https://gitea.ubuntuserver.buzz/Jake/Tak-Manager.git/compare/v1.0.2..v1.0.3
 
 <!-- generated by git-cliff -->
