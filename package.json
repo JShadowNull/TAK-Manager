@@ -1,6 +1,6 @@
 {
   "name": "tak-manager-root",
-  "version": "1.0.14",
+  "version": "1.0.3",
   "private": true,
   "workspaces": [
     "client",

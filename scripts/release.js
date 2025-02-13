@@ -100,7 +100,8 @@ async function release() {
         
         // Generate changelog using the stored dev commit
         console.log('Generating changelog...');
-        const changelogCmd = `git cliff --tag v${newVersion} --strip header`;
+        const lastTag = execSync('git describe --tags --abbrev=0').toString().trim();
+        const changelogCmd = `git cliff --tag "v${newVersion}" --strip all --unreleased`;
         const releaseNotes = execSync(changelogCmd).toString();
         console.log('Release notes generated:', releaseNotes);
         
