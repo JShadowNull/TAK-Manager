@@ -102,16 +102,10 @@ async function release() {
         console.log('Generating changelog...');
         const lastTag = execSync('git describe --tags --abbrev=0').toString().trim();
         
-        // Generate the formatted changelog entry directly to a file to preserve formatting
+        // Generate the formatted changelog entry
         const currentDate = new Date().toISOString().split('T')[0];
-        const tempNotesFile = path.join(process.cwd(), 'temp-release-notes.md');
-        
-        // Generate formatted release notes to temp file
-        const changelogCmd = `git cliff --config cliff.toml --tag "v${newVersion}" --unreleased --strip all --output ${tempNotesFile}`;
-        execSync(changelogCmd);
-        
-        // Read the formatted content
-        const releaseNotes = fs.readFileSync(tempNotesFile, 'utf8').trim();
+        const changelogCmd = `git cliff --config cliff.toml --tag "v${newVersion}" --unreleased --strip all`;
+        const releaseNotes = execSync(changelogCmd).toString().trim();
         
         // Create the formatted entry with version header
         const formattedEntry = `## [${newVersion}] - ${currentDate}\n\n${releaseNotes}`;
@@ -146,30 +140,26 @@ async function release() {
         // Create release in Gitea if token exists
         const giteaToken = process.env.GITEA_TOKEN;
         if (giteaToken) {
-            const releaseTitle = `TAK Manager v${newVersion}`;
+            // Extract the current version's entry from CHANGELOG.md
+            const changelogContent = fs.readFileSync(changelogPath, 'utf8');
+            const versionStart = changelogContent.indexOf(`## [${newVersion}]`);
+            const nextVersionStart = changelogContent.indexOf('## [', versionStart + 1);
+            const releaseContent = nextVersionStart === -1 
+                ? changelogContent.slice(versionStart).trim()
+                : changelogContent.slice(versionStart, nextVersionStart).trim();
             
-            // Read the formatted release notes directly from the file
             const releaseData = {
                 tag_name: `v${newVersion}`,
-                name: releaseTitle,
-                body: formattedEntry,
+                name: `TAK Manager v${newVersion}`,
+                body: releaseContent,
                 draft: false,
                 prerelease: false
             };
             
-            // Write the release data to a temporary JSON file to preserve formatting
-            const tempReleaseFile = path.join(process.cwd(), 'temp-release.json');
-            fs.writeFileSync(tempReleaseFile, JSON.stringify(releaseData));
-            
-            // Use the file directly with curl to preserve all formatting
             exec(`curl -X POST "https://gitea.local.ubuntuserver.buzz/api/v1/repos/Jake/Tak-Manager/releases" \
                 -H "Authorization: token ${giteaToken}" \
                 -H "Content-Type: application/json" \
-                -d @${tempReleaseFile}`);
-                
-            // Clean up temporary files
-            fs.unlinkSync(tempNotesFile);
-            fs.unlinkSync(tempReleaseFile);
+                -d '${JSON.stringify(releaseData)}'`);
         } else {
             console.warn('GITEA_TOKEN not set, skipping release creation');
         }
