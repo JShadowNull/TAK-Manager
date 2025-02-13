@@ -10,32 +10,27 @@ function exec(command) {
     }
 }
 
-function getLatestTag() {
-    try {
-        exec('git fetch --tags');
-        const tags = execSync('git tag -l "v*"').toString().split('\n').filter(Boolean);
-        if (tags.length === 0) return '0.0.0';
-        return tags.sort((a, b) => {
-            const verA = a.replace('v', '').split('.').map(Number);
-            const verB = b.replace('v', '').split('.').map(Number);
-            for (let i = 0; i < 3; i++) {
-                if (verA[i] !== verB[i]) return verB[i] - verA[i];
-            }
-            return 0;
-        })[0].replace('v', '');
-    } catch (error) {
-        console.log('No tags found, starting from 0.0.0');
-        return '0.0.0';
+function bumpVersion(version, type) {
+    const [major, minor, patch] = version.split('.').map(Number);
+    switch (type) {
+        case 'major':
+            return `${major + 1}.0.0`;
+        case 'minor':
+            return `${major}.${minor + 1}.0`;
+        case 'patch':
+            return `${major}.${minor}.${patch + 1}`;
+        case 'prerelease':
+            return `${major}.${minor}.${patch}-beta.1`;
+        default:
+            return version;
     }
 }
 
 function determineVersionBump() {
-    const latestTag = getLatestTag();
-    console.log(`Latest tag: v${latestTag}`);
-    
     try {
-        const commitMessages = execSync(`git log v${latestTag}..HEAD --pretty=format:"%B"`).toString();
-        console.log('Analyzing commits:', commitMessages);
+        // Get all commit messages from dev branch that aren't in main
+        const commitMessages = execSync('git log main..dev --pretty=format:"%B"').toString();
+        console.log('Analyzing commits from dev:', commitMessages);
         
         if (commitMessages.includes('BREAKING CHANGE')) return 'major';
         if (commitMessages.includes('feat:')) return 'minor';
@@ -69,23 +64,35 @@ async function release() {
         exec('git checkout main');
         exec('git pull origin main');
         
+        // Get current version from package.json
+        const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+        const currentVersion = packageJson.version;
+        console.log(`Current version: ${currentVersion}`);
+        
         // Merge dev into main
         console.log('Merging dev into main...');
         exec('git merge dev --no-ff -m "chore: merge dev into main for release"');
         
-        // Determine version bump
+        // Determine version bump based on dev branch commits
         const versionBump = determineVersionBump();
         console.log(`Version bump type: ${versionBump}`);
         
-        // Update version and generate changelog
-        process.env.VERSION_BUMP = versionBump;
-        runWithRetries('npm run update:version');
-        runWithRetries('npm run update:changelog');
+        // Calculate new version
+        const newVersion = bumpVersion(currentVersion, versionBump);
+        console.log(`New version will be: ${newVersion}`);
         
-        // Get new version
-        const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-        const newVersion = packageJson.version;
-        console.log(`New version: ${newVersion}`);
+        // Update version in package.json
+        packageJson.version = newVersion;
+        fs.writeFileSync('package.json', JSON.stringify(packageJson, null, 2) + '\n');
+        
+        // Update version in all files
+        process.env.VERSION_BUMP = versionBump;
+        process.env.NEW_VERSION = newVersion;
+        runWithRetries('npm run update:version');
+        
+        // Generate changelog
+        console.log('Generating changelog...');
+        runWithRetries('npm run update:changelog');
         
         // Stage and commit changes
         exec('git add package.json package-lock.json CHANGELOG.md');
@@ -134,6 +141,7 @@ async function release() {
         exec('git checkout dev');
         
         console.log('Release completed successfully!');
+        console.log(`Version bumped from ${currentVersion} to ${newVersion}`);
         
     } catch (error) {
         console.error('Release failed:', error);
