@@ -17,7 +17,7 @@
     "package:win": "set VERSION=%npm_package_version% && npm run image:win --workspace=client && npm run package --workspace=tak-manager-wrapper/web && iscc tak-manager-wrapper/inno-tak.iss",
     "setup:mac": "npm install && cd tak-manager-wrapper && python -m venv venv && source venv/bin/activate && pip install -r requirements-mac.txt",
     "setup:win": "npm install && cd tak-manager-wrapper && python -m venv venv && venv\\Scripts\\activate && pip install -r requirements-win.txt",
-    "release": "git checkout main && git pull origin main && git merge dev --no-ff -m \"chore: merge dev into main for release\" && git push origin main && git checkout dev"
+    "release": "node scripts/release.js"
   },
   "devDependencies": {
     "js-yaml": "^4.1.0",
