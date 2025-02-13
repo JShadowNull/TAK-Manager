@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.13] - 2025-02-13
+
+## [1.0.13] - 2025-02-13
+
+### ⚙️ Miscellaneous Tasks
+
+- Release tak-manager@1.0.12 [skip ci]
+- Release tak-manager@1.0.13 [skip ci]
+
+
 ## [1.0.11] - 2025-02-13
 
 ## [1.0.7] - 2025-02-13
