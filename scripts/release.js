@@ -94,14 +94,15 @@ async function release() {
         console.log('Generating changelog...');
         runWithRetries('npm run update:changelog');
         
+        // Get the generated changelog for the new version
+        const releaseNotes = execSync('git cliff --latest').toString();
+        console.log('Release notes generated:', releaseNotes);
+        
         // Stage and commit changes
         exec('git add package.json package-lock.json CHANGELOG.md');
         exec('git add client/package.json || true');
         exec('git add docker-compose.prod.yml || true');
         exec(`git commit -m "chore: release tak-manager@${newVersion} [skip ci]"`);
-        
-        // Create and push tag
-        const releaseNotes = execSync('git cliff --latest').toString();
         
         // Delete existing tag if it exists
         try {
@@ -111,14 +112,14 @@ async function release() {
             // Tag doesn't exist, that's fine
         }
         
-        // Create new tag
+        // Create new tag with release notes
         exec(`git tag -a v${newVersion} -m "TAK Manager v${newVersion}" -m "${releaseNotes}"`);
         
-        // Push changes and tags
+        // Push changes and tags to main
         exec('git push origin main');
         exec(`git push origin v${newVersion}`);
         
-        // Create release in Gitea
+        // Create release in Gitea if token exists
         const giteaToken = process.env.GITEA_TOKEN;
         if (giteaToken) {
             const releaseData = {
@@ -137,8 +138,11 @@ async function release() {
             console.warn('GITEA_TOKEN not set, skipping release creation');
         }
         
-        // Switch back to dev
+        // Sync changes back to dev branch
+        console.log('Syncing changes back to dev branch...');
         exec('git checkout dev');
+        exec('git merge main');
+        exec('git push origin dev');
         
         console.log('Release completed successfully!');
         console.log(`Version bumped from ${currentVersion} to ${newVersion}`);
