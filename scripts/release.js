@@ -98,23 +98,24 @@ async function release() {
         exec('git add docker-compose.prod.yml || true');
         exec(`git commit -m "chore: release tak-manager@${newVersion} [skip ci]"`);
         
-        // Generate changelog using the stored dev commit
+        // Generate changelog and release notes
         console.log('Generating changelog...');
         const lastTag = execSync('git describe --tags --abbrev=0').toString().trim();
-        // Use our custom config for better formatting
-        const changelogCmd = `git cliff --config cliff.toml --output CHANGELOG.md --tag "v${newVersion}" --unreleased --strip all`;
-        const releaseNotes = execSync(changelogCmd).toString();
-        console.log('Release notes generated:', releaseNotes);
         
-        // Update CHANGELOG.md with properly formatted entry
-        const changelogPath = path.join(process.cwd(), 'CHANGELOG.md');
+        // Generate the changelog entry using git-cliff
         const currentDate = new Date().toISOString().split('T')[0];
-        const newEntry = `## [${newVersion}] - ${currentDate}\n\n${releaseNotes}\n`;
+        const changelogCmd = `git cliff --config cliff.toml --tag "v${newVersion}" --unreleased --strip all`;
+        const releaseNotes = execSync(changelogCmd).toString().trim();
         
+        // Create the formatted entry with version header
+        const formattedEntry = `## [${newVersion}] - ${currentDate}\n\n${releaseNotes}`;
+        
+        // Update CHANGELOG.md
+        const changelogPath = path.join(process.cwd(), 'CHANGELOG.md');
         let changelog = fs.readFileSync(changelogPath, 'utf8');
         const versionHeader = '## [';
         const insertIndex = changelog.indexOf(versionHeader);
-        changelog = changelog.slice(0, insertIndex) + newEntry + changelog.slice(insertIndex);
+        changelog = changelog.slice(0, insertIndex) + formattedEntry + '\n\n' + changelog.slice(insertIndex);
         fs.writeFileSync(changelogPath, changelog);
         
         // Stage and commit changelog
@@ -129,8 +130,8 @@ async function release() {
             // Tag doesn't exist, that's fine
         }
         
-        // Create new tag with release notes
-        exec(`git tag -a v${newVersion} -m "TAK Manager v${newVersion}" -m "${releaseNotes}"`);
+        // Create new tag with formatted release notes - use the exact same format as changelog
+        exec(`git tag -a v${newVersion} -m "${formattedEntry}"`);
         
         // Push changes and tags to main
         exec('git push origin main');
@@ -142,15 +143,18 @@ async function release() {
             const releaseData = {
                 tag_name: `v${newVersion}`,
                 name: `TAK Manager v${newVersion}`,
-                body: releaseNotes,
+                body: formattedEntry,  // Use the exact same formatted entry
                 draft: false,
                 prerelease: false
             };
             
+            // Properly escape the JSON for curl
+            const escapedData = JSON.stringify(releaseData).replace(/"/g, '\\"');
+            
             exec(`curl -X POST "https://gitea.local.ubuntuserver.buzz/api/v1/repos/Jake/Tak-Manager/releases" \
                 -H "Authorization: token ${giteaToken}" \
                 -H "Content-Type: application/json" \
-                -d '${JSON.stringify(releaseData)}'`);
+                -d "${escapedData}"`);
         } else {
             console.warn('GITEA_TOKEN not set, skipping release creation');
         }
