@@ -2,6 +2,26 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
+// Load environment variables from .env file
+function loadEnv() {
+    const envPath = path.join(process.cwd(), '.env');
+    if (fs.existsSync(envPath)) {
+        const envConfig = require('dotenv').config();
+        if (envConfig.error) {
+            console.warn('Error loading .env file:', envConfig.error);
+        }
+    } else {
+        console.warn('.env file not found. Make sure to create one from .env.example');
+    }
+    
+    // Verify Gitea token is set
+    if (!process.env.GITEA_TOKEN) {
+        console.warn('GITEA_TOKEN not found in environment variables.');
+        console.warn('Please set it in your .env file or as an environment variable.');
+        console.warn('You can create a token in Gitea: Settings > Applications > Generate New Token');
+    }
+}
+
 function exec(command) {
     try {
         return execSync(command, { stdio: 'inherit' });
@@ -53,6 +73,9 @@ function runWithRetries(command, maxAttempts = 3) {
 
 async function release() {
     try {
+        // Load environment variables first
+        loadEnv();
+        
         // Switch to main and update
         console.log('Switching to main branch...');
         exec('git checkout main');
