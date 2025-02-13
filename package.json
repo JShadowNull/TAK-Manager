@@ -1,6 +1,6 @@
 {
   "name": "tak-manager-root",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "private": true,
   "workspaces": [
     "client",
@@ -21,6 +21,7 @@
     "merge": "git checkout main && git pull origin main && git merge dev && git push origin main && git checkout dev"
   },
   "devDependencies": {
+    "dotenv": "^16.4.5",
     "js-yaml": "^4.1.0",
     "standard-version": "^9.5.0"
   },
