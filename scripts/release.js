@@ -101,11 +101,12 @@ async function release() {
         // Generate changelog using the stored dev commit
         console.log('Generating changelog...');
         const lastTag = execSync('git describe --tags --abbrev=0').toString().trim();
-        const changelogCmd = `git cliff --tag "v${newVersion}" --strip all --unreleased`;
+        // Use our custom config for better formatting
+        const changelogCmd = `git cliff --config cliff.toml --output CHANGELOG.md --tag "v${newVersion}" --unreleased --strip all`;
         const releaseNotes = execSync(changelogCmd).toString();
         console.log('Release notes generated:', releaseNotes);
         
-        // Update CHANGELOG.md
+        // Update CHANGELOG.md with properly formatted entry
         const changelogPath = path.join(process.cwd(), 'CHANGELOG.md');
         const currentDate = new Date().toISOString().split('T')[0];
         const newEntry = `## [${newVersion}] - ${currentDate}\n\n${releaseNotes}\n`;
