@@ -130,28 +130,15 @@ async function release() {
         const changelogCmd = `git cliff --config cliff.toml --tag "v${newVersion}" --unreleased --strip all`;
         const releaseNotes = execSync(changelogCmd).toString().trim();
         
-        // Create the formatted entry with version header (only once)
+        // Create the formatted entry with version header
         const formattedEntry = `## [${newVersion}] - ${currentDate}\n\n${releaseNotes}`;
         
         // Update CHANGELOG.md
         const changelogPath = path.join(process.cwd(), 'CHANGELOG.md');
         let changelog = fs.readFileSync(changelogPath, 'utf8');
-        
-        // Find the first version header
         const versionHeader = '## [';
         const insertIndex = changelog.indexOf(versionHeader);
-        
-        // Remove any duplicate version headers from the release notes
-        const uniqueEntry = formattedEntry.split('\n').reduce((acc, line) => {
-            // Skip lines that contain duplicate version headers
-            if (line.startsWith(`## [${newVersion}]`)) {
-                return acc.length === 0 ? line : acc;
-            }
-            return acc + (acc.length === 0 ? '' : '\n') + line;
-        }, '');
-        
-        // Update the changelog with the unique entry
-        changelog = changelog.slice(0, insertIndex) + uniqueEntry + '\n\n' + changelog.slice(insertIndex);
+        changelog = changelog.slice(0, insertIndex) + formattedEntry + '\n\n' + changelog.slice(insertIndex);
         fs.writeFileSync(changelogPath, changelog);
         
         // Stage and commit changelog
@@ -166,8 +153,8 @@ async function release() {
             // Tag doesn't exist, that's fine
         }
         
-        // Create new tag with the unique formatted release notes
-        exec(`git tag -a v${newVersion} -m "TAK Manager v${newVersion}" -m "${uniqueEntry}"`);
+        // Create new tag with formatted release notes
+        exec(`git tag -a v${newVersion} -m "TAK Manager v${newVersion}" -m "${formattedEntry}"`);
         
         // Push changes and tags to main
         exec('git push origin main');
@@ -180,8 +167,8 @@ async function release() {
             console.log('Waiting for tag to be processed...');
             execSync('sleep 2');
 
-            // Use the unique entry for the release body
-            const releaseBody = uniqueEntry
+            // Use just the release notes without the version header
+            const releaseBody = releaseNotes
                 .split('\n')
                 .map(line => line.trim())
                 .filter(Boolean)
