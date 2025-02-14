@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.1.0] - 2025-02-14
+
+## [1.1.0] - 2025-02-14
+
+
+### Added 🚀
+
+
+- Improve loading states and update checking logic in app component
+
+
+### Other 📦
+
+
+- Update tak-manager-wrapper submodule
+- Update docker image build scripts and package version
+- Merge dev into main for release
+- Release tak-manager@1.1.0 [skip ci]
+
 ## [1.0.5] - 2025-02-14
 
 
