@@ -3,6 +3,7 @@ import { Input } from "@/components/shared/ui/shadcn/input";
 import { Label } from "@/components/shared/ui/shadcn/label";
 import { Switch } from "@/components/shared/ui/shadcn/switch";
 import { cn } from "@/lib/utils";
+import { HelpIconTooltip } from '@/components/shared/ui/shadcn/tooltip/HelpIconTooltip';
 
 export interface PreferenceOption {
   value: string;
@@ -28,6 +29,7 @@ export interface PreferenceItemProps {
   showLabel?: boolean;
   showEnableToggle?: boolean;
   error?: string;
+  tooltip?: string;
 }
 
 const PreferenceItem: React.FC<PreferenceItemProps> = ({
@@ -48,7 +50,8 @@ const PreferenceItem: React.FC<PreferenceItemProps> = ({
   max,
   showLabel = true,
   showEnableToggle = true,
-  error
+  error,
+  tooltip
 }) => {
   // Use defaultValue if value is empty and defaultValue exists
   const effectiveValue = (!value && defaultValue) ? defaultValue : value;
@@ -57,9 +60,18 @@ const PreferenceItem: React.FC<PreferenceItemProps> = ({
     <div className="flex flex-col space-y-2">
       <div className="flex items-center justify-between">
         {showLabel && (
-          <Label htmlFor={label} className="text-sm font-medium">
-            {name}
-          </Label>
+          <div className="flex items-center gap-2 break-normal">
+            <Label htmlFor={label} className="text-sm font-medium">
+              {name}
+            </Label>
+            {tooltip && (
+              <HelpIconTooltip
+                tooltip={tooltip}
+                triggerMode="hover"
+                iconSize={14}
+              />
+            )}
+          </div>
         )}
         {showEnableToggle && (
           <Switch

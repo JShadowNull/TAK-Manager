@@ -227,6 +227,15 @@ const CotStreamsSection: React.FC<CotStreamsSectionProps> = memo(({
       item.label.endsWith(streamIndex.toString())
     );
 
+    const tooltips = {
+      description: "A unique, descriptive name for this TAK Server connection",
+      ipAddress: "The IP address of your host machine or vpn connection. This is what clients will connect to.",
+      port: "The port number for the TAK Server connection. If you installed the TAK Server using this application, you should be use 8089.",
+      protocol: "The connection protocol - SSL for secure connections, TCP for unencrypted. If you installed the TAK Server using this application, you should use SSL.",
+      caLocation: "The CA certificate file used for secure SSL connections. If you installed the TAK Server using this application, you should use truststore-intermediate.p12.",
+      certPassword: "The certificate password you configured when installing the TAK Server."
+    };
+
     return (
       <div key={streamIndex} className="mb-4 p-4 bg-card rounded-lg shadow-lg border border-border">
         <div className="mb-4">
@@ -236,6 +245,7 @@ const CotStreamsSection: React.FC<CotStreamsSectionProps> = memo(({
           {streamItems.map((item) => {
             const pref = preferences[item.label] || {};
             const fieldValue = pref.value !== undefined ? pref.value : '';
+            const baseFieldName = item.label.replace(/\d+$/, '');
 
             if (item.label === 'count') return null;
 
@@ -263,6 +273,7 @@ const CotStreamsSection: React.FC<CotStreamsSectionProps> = memo(({
                   showLabel={true}
                   showEnableToggle={false}
                   error={touchedFields[item.label] ? displayErrors[item.label] : undefined}
+                  tooltip={tooltips[baseFieldName as keyof typeof tooltips]}
                 />
               </div>
             );
