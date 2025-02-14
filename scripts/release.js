@@ -81,19 +81,50 @@ async function release() {
         exec('git checkout main');
         exec('git pull origin main');
         
+        // Update and get submodule commits first
+        console.log('Checking submodule changes...');
+        exec('git submodule update --init --recursive');
+        exec('cd tak-manager-wrapper && git checkout main || git checkout master');
+        exec('cd tak-manager-wrapper && git pull origin main || git pull origin master');
+        
         // Get current version from package.json
         const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
         const currentVersion = packageJson.version;
         console.log(`Current version: ${currentVersion}`);
         
-        // Capture commits from dev before merge
-        console.log('Analyzing commits from dev branch...');
-        const commitMessages = execSync('git log main..dev --pretty=format:"%B"').toString();
-        console.log('Commits to be included:', commitMessages);
+        // Capture commits from both repositories
+        console.log('Analyzing commits from both repositories...');
+        const mainCommitMessages = execSync('git log main..dev --pretty=format:"%B"').toString();
+        let wrapperCommitMessages = '';
+        try {
+            // Get the last tag in wrapper repository
+            const lastWrapperTag = execSync('cd tak-manager-wrapper && git describe --tags --abbrev=0 || echo "none"').toString().trim();
+            if (lastWrapperTag !== 'none') {
+                wrapperCommitMessages = execSync(`cd tak-manager-wrapper && git log ${lastWrapperTag}..HEAD --pretty=format:"%B"`).toString();
+            } else {
+                wrapperCommitMessages = execSync('cd tak-manager-wrapper && git log --pretty=format:"%B"').toString();
+            }
+        } catch (error) {
+            console.log('No previous tags in wrapper repository');
+            wrapperCommitMessages = execSync('cd tak-manager-wrapper && git log --pretty=format:"%B"').toString();
+        }
         
-        // Determine version bump based on captured commits
-        const versionBump = determineVersionBumpFromMessages(commitMessages);
-        console.log(`Version bump type: ${versionBump}`);
+        console.log('Main commits to be included:', mainCommitMessages);
+        console.log('Wrapper commits to be included:', wrapperCommitMessages);
+        
+        // Determine version bump based on captured commits from both repositories
+        const mainVersionBump = determineVersionBumpFromMessages(mainCommitMessages);
+        const wrapperVersionBump = determineVersionBumpFromMessages(wrapperCommitMessages);
+        
+        // Use the more significant version bump
+        const versionBumpPriority = { major: 3, minor: 2, patch: 1, prerelease: 0 };
+        const versionBump = versionBumpPriority[mainVersionBump] >= versionBumpPriority[wrapperVersionBump] 
+            ? mainVersionBump 
+            : wrapperVersionBump;
+            
+        console.log(`Version bump type (main): ${mainVersionBump}`);
+        console.log(`Version bump type (wrapper): ${wrapperVersionBump}`);
+        console.log(`Final version bump type: ${versionBump}`);
         
         // Calculate new version before merge
         const newVersion = bumpVersion(currentVersion, versionBump);
@@ -123,42 +154,87 @@ async function release() {
         
         // Generate changelog and release notes
         console.log('Generating changelog...');
-        const lastTag = execSync('git describe --tags --abbrev=0').toString().trim();
         
-        // Generate the formatted changelog entry
-        const currentDate = new Date().toISOString().split('T')[0];
-        const changelogCmd = `git cliff --config cliff.toml --tag "v${newVersion}" --unreleased --strip all`;
-        const releaseNotes = execSync(changelogCmd).toString().trim();
+        // Delete existing tags if they exist
+        try {
+            // Main repository
+            exec(`git tag -d v${newVersion} || true`);
+            exec(`git push origin :refs/tags/v${newVersion} || true`);
+            
+            // Wrapper repository
+            exec(`cd tak-manager-wrapper && git tag -d v${newVersion} || true`);
+            exec(`cd tak-manager-wrapper && git push origin :refs/tags/v${newVersion} || true`);
+        } catch (error) {
+            // Tags don't exist, that's fine
+            console.log('No existing tags to delete');
+        }
+        
+        // First, commit any wrapper changes and update its changelog
+        console.log('Updating wrapper repository...');
+        try {
+            // Commit any pending changes in wrapper
+            exec(`cd tak-manager-wrapper && git add . && git commit -m "chore: prepare tak-manager-wrapper@${newVersion} for release" || true`);
+            
+            // Generate and update wrapper's changelog
+            const wrapperChangelogCmd = `cd tak-manager-wrapper && git cliff --config cliff.toml --tag "v${newVersion}" --output CHANGELOG.md`;
+            exec(wrapperChangelogCmd);
+            exec(`cd tak-manager-wrapper && git add CHANGELOG.md`);
+            exec(`cd tak-manager-wrapper && git commit --amend --no-edit`);
+            
+            // Create wrapper tag
+            exec(`cd tak-manager-wrapper && git tag -a v${newVersion} -m "TAK Manager Wrapper v${newVersion}"`);
+        } catch (error) {
+            console.log('Error updating wrapper repository:', error);
+        }
+        
+        // Update the main repository's submodule reference
+        exec('git add tak-manager-wrapper');
+        exec(`git commit -m "chore: update wrapper submodule for v${newVersion}" || true`);
+        
+        // Generate main repository's changelog
+        console.log('Generating main repository changelog...');
+        const mainChangelogCmd = `git cliff --config cliff.toml --tag "v${newVersion}" --output CHANGELOG.md`;
+        exec(mainChangelogCmd);
+        
+        // Read both changelogs for the release notes
+        const mainChangelog = fs.readFileSync('CHANGELOG.md', 'utf8');
+        const wrapperChangelog = fs.readFileSync('tak-manager-wrapper/CHANGELOG.md', 'utf8');
+        
+        // Extract the latest version entries from both changelogs
+        const extractLatestEntry = (changelog) => {
+            const versionMatch = changelog.match(/## \[\d+\.\d+\.\d+\] - \d{4}-\d{2}-\d{2}[\s\S]*?(?=## \[|$)/);
+            return versionMatch ? versionMatch[0].trim() : '';
+        };
+        
+        const mainEntry = extractLatestEntry(mainChangelog);
+        const wrapperEntry = extractLatestEntry(wrapperChangelog);
+        
+        // Combine the entries for the release notes
+        const releaseNotes = [
+            mainEntry.replace(`## [${newVersion}] - ${currentDate}\n\n`, ''),
+            wrapperEntry ? '\n### Wrapper Changes\n\n' + wrapperEntry.replace(`## [${newVersion}] - ${currentDate}\n\n`, '') : ''
+        ].filter(Boolean).join('\n\n');
         
         // Create the formatted entry with version header
+        const currentDate = new Date().toISOString().split('T')[0];
         const formattedEntry = `## [${newVersion}] - ${currentDate}\n\n${releaseNotes}`;
-        
-        // Update CHANGELOG.md
-        const changelogPath = path.join(process.cwd(), 'CHANGELOG.md');
-        let changelog = fs.readFileSync(changelogPath, 'utf8');
-        const versionHeader = '## [';
-        const insertIndex = changelog.indexOf(versionHeader);
-        changelog = changelog.slice(0, insertIndex) + formattedEntry + '\n\n' + changelog.slice(insertIndex);
-        fs.writeFileSync(changelogPath, changelog);
         
         // Stage and commit changelog
         exec('git add CHANGELOG.md');
         exec(`git commit --amend --no-edit`);
         
-        // Delete existing tag if it exists
-        try {
-            exec(`git tag -d v${newVersion}`);
-            exec(`git push origin :refs/tags/v${newVersion}`);
-        } catch (error) {
-            // Tag doesn't exist, that's fine
-        }
-        
-        // Create new tag with formatted release notes
+        // Create main repository tag
         exec(`git tag -a v${newVersion} -m "TAK Manager v${newVersion}" -m "${formattedEntry}"`);
         
-        // Push changes and tags to main
+        // Push changes and tags
+        console.log('Pushing tags to both repositories...');
+        // Main repository
         exec('git push origin main');
         exec(`git push origin v${newVersion}`);
+        
+        // Wrapper repository
+        exec('cd tak-manager-wrapper && git push origin HEAD');
+        exec(`cd tak-manager-wrapper && git push origin v${newVersion}`);
         
         // Create release in Gitea if token exists
         const giteaToken = process.env.GITEA_TOKEN;
