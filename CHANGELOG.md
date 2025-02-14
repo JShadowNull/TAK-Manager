@@ -6,6 +6,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.0.5] - 2025-02-14
+
+## [1.0.5] - 2025-02-14
+
+
+### Other 📦
+
+
+- Merge branch 'dev'
+
+
+### Added 🚀
+
+
+- Add update checking and network features
+
+
+### Fixed 🔧
+
+
+- Correct release script command
+
+
+### Other 📦
+
+
+- Revert to version 1.0.4 and update changelog
+- Update server dependencies to latest versions
+- Update package dependencies and version management
+- Merge dev into main for release
+- Release tak-manager@1.1.0 [skip ci]
+- Revert version to 1.0.4 across project files
+- Release tak-manager@1.0.5 [skip ci]
+- Update package dependencies
+- Release tak-manager@1.0.6 [skip ci]
+- Revert version to 1.0.4 and clean up changelog
+
 ## [1.0.4] - 2025-02-14
 
 
