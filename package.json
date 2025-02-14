@@ -1,6 +1,6 @@
 {
   "name": "tak-manager-root",
-  "version": "1.0.4",
+  "version": "1.1.0",
   "private": true,
   "workspaces": [
     "client",
@@ -26,5 +26,8 @@
     "standard-version": "^9.5.0"
   },
   "author": "Jacob Olsen",
-  "description": "TAK Manager - A comprehensive TAK Server management solution"
+  "description": "TAK Manager - A comprehensive TAK Server management solution",
+  "dependencies": {
+    "@radix-ui/react-tooltip": "^1.1.8"
+  }
 }
