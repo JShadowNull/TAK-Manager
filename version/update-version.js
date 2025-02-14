@@ -11,6 +11,7 @@ const paths = {
   wrapper: path.join(rootDir, 'tak-manager-wrapper/web/package.json'),
   dockerCompose: path.join(rootDir, 'docker-compose.prod.yml'),
   innoSetup: path.join(rootDir, 'tak-manager-wrapper/inno-tak.iss'),
+  versionTxt: path.join(rootDir, 'tak-manager-wrapper/version.txt'), // Added path for version.txt
 };
 
 // Read version from root package.json
@@ -47,6 +48,13 @@ function updateInnoSetup(filePath) {
   return oldContent !== content; // return true if content changed
 }
 
+// Update version.txt
+function updateVersionTxt(filePath) {
+  console.log(`Updating version in ${filePath}`);
+  const content = `v${version}\n`;
+  fs.writeFileSync(filePath, content);
+}
+
 try {
   let changes = false;
   
@@ -56,6 +64,7 @@ try {
   changes = updatePackageJson(paths.wrapper) || changes;
   changes = updateDockerCompose(paths.dockerCompose) || changes;
   changes = updateInnoSetup(paths.innoSetup) || changes;
+  changes = updateVersionTxt(paths.versionTxt) || changes; // Update version.txt
   
   if (changes) {
     console.log(`Successfully updated files to version ${version}`);
