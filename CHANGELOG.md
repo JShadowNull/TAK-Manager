@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.4] - 2025-02-14
 
+## [1.0.4] - 2025-02-14
+
+
+### Changed 🔄
+
+
+- Improve release process and version management
+- Improve version bump detection in release script
+- Simplify release script changelog and release generation
+- Improve Gitea release script JSON handling and escaping
+
+
+### Other 📦
+
+
+- Merge dev into main for release
+- Release tak-manager@1.0.4 [skip ci]
+- Release tak-manager@1.0.5 [skip ci]
+- Revert version and update release process
+- Release tak-manager@1.0.6 [skip ci]
+- Release tak-manager@1.0.7 [skip ci]
+- Enhance changelog generation and release process
+- Release tak-manager@1.0.8 [skip ci]
+- Release tak-manager@1.0.9 [skip ci]
+- Release tak-manager@1.0.10 [skip ci]
+- Release tak-manager@1.0.11 [skip ci]
+- Release tak-manager@1.0.12 [skip ci]
+- Release tak-manager@1.0.13 [skip ci]
+- Release tak-manager@1.0.14 [skip ci]
+- Revert version to 1.0.3 and update release script
+- Revert version to 1.0.3
+- Revert version to 1.0.3 and clean up release artifacts
+- Commit current changes
+- Revert version to 1.0.3 and update release scripts
+- Revert version to 1.0.3 and add Gitea token support in release script
+- Revert version to 1.0.3 and improve Gitea release script
+- Revert version to 1.0.3 and refactor release script
+- Release tak-manager@1.1.0 [skip ci]
+- Release tak-manager@1.2.0 [skip ci]
+- Update wrapper submodule for v1.2.0
+- Revert to version 1.0.3 and enhance release script
+- Update wrapper submodule for v1.1.0
+- Update wrapper submodule for v1.0.4
+- Chore: prepare for v1.0.3 release
+- Removed deprecated components and files
+
+## [1.0.4] - 2025-02-14
+
 
 ### Changed 🔄
 
