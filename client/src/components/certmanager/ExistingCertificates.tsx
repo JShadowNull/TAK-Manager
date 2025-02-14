@@ -403,21 +403,25 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
       </CardHeader>
       <CardContent>
         <div className="space-y-6">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-2 md:gap-4">
-            <div className="w-full md:max-w-[30rem]">
-              <Input
-                type="text"
-                placeholder="Search certificates..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full"
-              />
+          <div className="space-y-4">
+            <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4">
+              <div className="w-full">
+                <Input
+                  type="text"
+                  placeholder="Search certificates..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full"
+                />
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2 items-center">
+
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
                 onClick={handleSelectAll}
                 disabled={isOperationInProgress}
+                className="whitespace-nowrap"
               >
                 {selectedCerts.size === filteredCertificates.length && filteredCertificates.length > 0 
                   ? 'Deselect All' 
@@ -432,6 +436,7 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
                     disabled={isOperationInProgress}
                     loading={currentOperation === 'delete_certs_batch'}
                     loadingText={`Deleting ${selectedCerts.size} certificates...`}
+                    className="whitespace-nowrap"
                   >
                     Delete Selected ({selectedCerts.size})
                   </Button>
@@ -441,19 +446,12 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
                     disabled={isOperationInProgress}
                     loading={currentOperation === 'download_batch'}
                     loadingText={`Downloading ${selectedCerts.size} certificates...`}
+                    className="whitespace-nowrap"
                   >
                     Download Selected ({selectedCerts.size})
                   </Button>
                 </>
               )}
-              
-              <Button
-                variant="primary"
-                onClick={onCreateDataPackage}
-                disabled={isOperationInProgress}
-              >
-                Create Data Packages
-              </Button>
             </div>
           </div>
 
@@ -577,6 +575,17 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
                 )}
               </div>
             </ScrollArea>
+          </div>
+
+          <div className="flex justify-end pt-4">
+            <Button
+              variant="primary"
+              onClick={onCreateDataPackage}
+              disabled={isOperationInProgress}
+              className="whitespace-nowrap"
+            >
+              Create Data Packages
+            </Button>
           </div>
         </div>
       </CardContent>
