@@ -25,6 +25,7 @@ import {
   TooltipTrigger,
 } from "@/components/shared/ui/shadcn/tooltip/tooltip";
 import Popups from './PackageGeneratorPopups';
+import { useLocation } from 'react-router-dom';
 
 interface CertOption {
   label: string;
@@ -39,6 +40,11 @@ interface PreferenceState {
 interface ApiResponse {
   success: boolean;
   files: string[];
+}
+
+interface SelectedCertificate {
+  identifier: string;
+  p12Path: string;
 }
 
 interface BulkGeneratorSectionProps {
@@ -57,7 +63,13 @@ const BulkGeneratorSection: React.FC<BulkGeneratorSectionProps> = ({
   disabled = false,
   validationErrors
 }) => {
+  const location = useLocation();
+  const navigationState = location.state as { selectedCertificates?: SelectedCertificate[], fromCertManager?: boolean } | null;
+  
   const [selectedCerts, setSelectedCerts] = useState<CertOption[]>([]);
+  const [pendingSelections, setPendingSelections] = useState<SelectedCertificate[]>(
+    navigationState?.selectedCertificates || []
+  );
   const [availableCerts, setAvailableCerts] = useState<CertOption[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [bulkFileNames, setBulkFileNames] = useState<Record<string, string>>({});
@@ -93,7 +105,7 @@ const BulkGeneratorSection: React.FC<BulkGeneratorSectionProps> = ({
     onValidationChange(errors);
   };
 
-  // Fetch available client certificates
+  // Modified certificate fetching to handle pending selections
   const fetchCertificates = useCallback(async () => {
     const abortController = new AbortController();
 
@@ -108,10 +120,30 @@ const BulkGeneratorSection: React.FC<BulkGeneratorSectionProps> = ({
       if (data.success && data.files) {
         // Filter for only .p12 certificates
         const p12Certs = data.files.filter(file => file.toLowerCase().endsWith('.p12'));
-        setAvailableCerts(p12Certs.map(file => ({
+        const availableCertOptions = p12Certs.map(file => ({
           label: file.replace(/\.p12$/i, ""),
           value: `cert/${file}`
-        })));
+        }));
+        setAvailableCerts(availableCertOptions);
+
+        // Handle any pending selections from navigation
+        if (pendingSelections.length > 0) {
+          const certsToSelect = availableCertOptions.filter(cert => 
+            pendingSelections.some(pending => pending.p12Path === cert.value)
+          );
+          
+          setSelectedCerts(certsToSelect);
+          
+          // Set initial file names
+          const initialFileNames: Record<string, string> = {};
+          certsToSelect.forEach(cert => {
+            initialFileNames[cert.value] = cert.label;
+          });
+          setBulkFileNames(initialFileNames);
+          
+          // Clear pending selections after applying them
+          setPendingSelections([]);
+        }
       }
     } catch (error: unknown) {
       if (error instanceof Error && error.name === 'AbortError') {
@@ -123,7 +155,7 @@ const BulkGeneratorSection: React.FC<BulkGeneratorSectionProps> = ({
     return () => {
       abortController.abort();
     };
-  }, []);
+  }, [pendingSelections]);
 
   React.useEffect(() => {
     let isSubscribed = true;

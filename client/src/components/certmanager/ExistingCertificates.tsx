@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Checkbox } from "@/components/shared/ui/shadcn/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/shared/ui/shadcn/tooltip/tooltip";
 import CertificateOperationPopups from './CertificateOperationPopups';
+import { useNavigate } from 'react-router-dom';
 
 interface Certificate {
   identifier: string;
@@ -26,7 +27,6 @@ interface ExistingCertificatesProps {
 type Operation = 'delete_certs' | 'delete_certs_batch' | 'download' | 'download_batch' | null;
 
 const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
-  onCreateDataPackage,
   certificates: initialCertificates = [],
   onOperationProgress,
   isLoading: initialLoading = false
@@ -44,6 +44,7 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
   const [successfulDelete, setSuccessfulDelete] = useState<string | null>(null);
   const [deletingCerts, setDeletingCerts] = useState<Set<string>>(new Set());
   const [downloadingCerts, setDownloadingCerts] = useState<Set<string>>(new Set());
+  const navigate = useNavigate();
 
   // Fetch certificates
   const fetchCertificates = async () => {
@@ -395,6 +396,23 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
     }
   };
 
+  const handleCreateDataPackages = () => {
+    const selectedCertIds = Array.from(selectedCerts);
+    const selectedCertificates = certificates
+      .filter(cert => selectedCertIds.includes(cert.identifier))
+      .map(cert => ({
+        identifier: cert.identifier,
+        p12Path: `cert/${cert.identifier}.p12`
+      }));
+
+    navigate('/data-package?tab=generator', {
+      state: {
+        selectedCertificates,
+        fromCertManager: true
+      }
+    });
+  };
+
   return (
     <Card className="w-full max-w-6xl mx-auto">
       <CardHeader>
@@ -580,7 +598,7 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
           <div className="flex justify-end pt-4">
             <Button
               variant="primary"
-              onClick={onCreateDataPackage}
+              onClick={handleCreateDataPackages}
               disabled={isOperationInProgress}
               className="whitespace-nowrap"
             >
