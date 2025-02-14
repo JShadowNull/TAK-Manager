@@ -39,7 +39,12 @@ interface PreferenceState {
 
 interface ApiResponse {
   success: boolean;
-  files: string[];
+  certificates: Array<{
+    identifier: string;
+    role: string;
+    passwordHashed: boolean;
+    groups: string[];
+  }>;
 }
 
 interface SelectedCertificate {
@@ -105,24 +110,23 @@ const BulkGeneratorSection: React.FC<BulkGeneratorSectionProps> = ({
     onValidationChange(errors);
   };
 
-  // Modified certificate fetching to handle pending selections
+  // Modified certificate fetching to use certmanager API
   const fetchCertificates = useCallback(async () => {
     const abortController = new AbortController();
 
     try {
-      const response = await fetch('/api/datapackage/certificate-files', {
+      const response = await fetch('/api/certmanager/certificates', {
         signal: abortController.signal
       });
       if (!response.ok) {
         throw new Error(`Failed to fetch certificates: ${response.statusText}`);
       }
       const data = await response.json() as ApiResponse;
-      if (data.success && data.files) {
-        // Filter for only .p12 certificates
-        const p12Certs = data.files.filter(file => file.toLowerCase().endsWith('.p12'));
-        const availableCertOptions = p12Certs.map(file => ({
-          label: file.replace(/\.p12$/i, ""),
-          value: `cert/${file}`
+      if (data.success && Array.isArray(data.certificates)) {
+        // Convert certificates to the format we need
+        const availableCertOptions = data.certificates.map(cert => ({
+          label: cert.identifier,
+          value: `cert/${cert.identifier}.p12`
         }));
         setAvailableCerts(availableCertOptions);
 
