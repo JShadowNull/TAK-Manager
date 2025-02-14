@@ -26,8 +26,5 @@
     "standard-version": "^9.5.0"
   },
   "author": "Jacob Olsen",
-  "description": "TAK Manager - A comprehensive TAK Server management solution",
-  "dependencies": {
-    "@radix-ui/react-tooltip": "^1.1.8"
-  }
+  "description": "TAK Manager - A comprehensive TAK Server management solution"
 }
