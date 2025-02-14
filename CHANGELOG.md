@@ -6,6 +6,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.1.1] - 2025-02-14
+
+## [1.1.1] - 2025-02-14
+
+
+### Other 📦
+
+
+- Merge branch 'dev' of ssh://10.72.72.25:2222/Jake/Tak-Manager into dev
+
+
+### Added 🚀
+
+
+- Existing certs page now properly links selected certs to package generator
+- Add Existing Data Packages tab to Data Package page
+- Add tooltips to TAK Server connection configuration fields
+
+
+### Changed 🔄
+
+
+- Improve ExistingCertificates UI layout and responsiveness
+- Package generator select certs now only displays user certs
+
+
+### Fixed 🔧
+
+
+- Configure webview startup with local storage
+
+
+### Other 📦
+
+
+- Bump version to 1.1.0 and update submodule [skip ci]
+- Simplify Windows docker image build script
+- Remove unneeded requirements file
+- Release tak-manager@1.1.1 [skip ci]
+
 ## [1.1.0] - 2025-02-14
 
 ## [1.1.0] - 2025-02-14
