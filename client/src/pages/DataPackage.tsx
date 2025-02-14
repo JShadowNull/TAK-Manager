@@ -6,6 +6,7 @@ import BulkGeneratorSection from '../components/datapackage/BulkGeneratorSection
 import { PreferenceState } from '../components/datapackage/AtakPreferencesSection/atakPreferencesConfig';
 import { useTakServerRequired } from '../components/shared/hooks/useTakServerRequired';
 import TakServerRequiredDialog from '../components/shared/TakServerRequiredDialog';
+import ExistingDataPackages from '../components/datapackage/ExistingDataPackages/ExistingDataPackages';
 
 interface ValidationErrors {
   cotStreams: Record<string, string>;
@@ -205,6 +206,12 @@ const DataPackage: React.FC = () => {
               >
                 Package Generator
               </TabsTrigger>
+              <TabsTrigger 
+                value="existing-packages" 
+                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:rounded-lg"
+              >
+                Existing Packages
+              </TabsTrigger>
             </TabsList>
           </div>
 
@@ -236,6 +243,11 @@ const DataPackage: React.FC = () => {
                   disabled={validationStatus.hasErrors}
                   validationErrors={validationStatus.errors}
                 />
+              </div>
+            </TabsContent>
+            <TabsContent value="existing-packages" className="w-full">
+              <div className="bg-card rounded-lg">
+                <ExistingDataPackages />
               </div>
             </TabsContent>
           </div>

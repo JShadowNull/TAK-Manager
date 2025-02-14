@@ -10,6 +10,7 @@ from backend.config.logging_config import configure_logging
 from backend.routes.dashboard_routes import dashboard
 from backend.routes.docker_manager_routes import dockermanager
 from backend.routes.data_package_route import datapackage
+from backend.routes.data_package_manager_routes import datapackage_manager
 from backend.routes.takserver_routes import takserver
 from backend.routes.ota_routes import ota
 from backend.routes.certmanager_routes import certmanager
@@ -37,6 +38,7 @@ def create_app():
     app.include_router(dashboard, prefix='/api/dashboard')
     app.include_router(dockermanager, prefix='/api/docker-manager')
     app.include_router(datapackage, prefix='/api/datapackage')
+    app.include_router(datapackage_manager, prefix='/api/datapackage')
     app.include_router(takserver, prefix='/api/takserver')
     app.include_router(ota, prefix='/api/ota')
     app.include_router(certmanager, prefix='/api/certmanager')
