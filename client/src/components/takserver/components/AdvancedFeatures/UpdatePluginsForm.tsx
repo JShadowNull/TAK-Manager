@@ -100,7 +100,7 @@ const UpdatePluginsForm: React.FC<UpdatePluginsFormProps> = ({ onClose, onUpdate
           <h4 className="text-sm font-semibold text-selectedColor mb-2">Purpose</h4>
           <p className="text-sm text-muted-foreground leading-relaxed">
             Update the plugins available through OTA updates on your TAK Server. This allows you to add new plugins or update existing ones
-            that will be available to your ATAK users. Download the updated plugins ZIP file from <a href="https://tak.gov/products/tak-server" target="_blank" rel="noopener noreferrer" className="foreground hover:text-textSecondary">TAK.gov</a> and upload it here.
+            that will be available to your ATAK users. Download the updated plugins ZIP file from <a href="https://tak.gov/products/tak-server" target="_blank" rel="noopener noreferrer" className="foreground hover:text-muted-foreground text-primary">TAK.gov</a> and upload it here.
           </p>
         </div>
 

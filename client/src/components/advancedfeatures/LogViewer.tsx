@@ -227,7 +227,7 @@ const LogViewer: React.FC = () => {
           <div className="flex-1 overflow-hidden border rounded-lg mx-4">
             <ScrollArea 
               ref={scrollAreaRef}
-              className="h-full font-mono text-muted-foreground text-sm bg-background px-2 break-normal [&_*::selection]:bg-blue-500/80 [&_*::selection]:text-primary [&_*::-moz-selection]:bg-black/80"
+              className="h-full font-mono text-muted-foreground text-sm bg-background px-2 break-normal [&_*::selection]:bg-blue-500/80 [&_*::selection]:text-primary"
               onScroll={handleScroll}
             >
               {error ? (

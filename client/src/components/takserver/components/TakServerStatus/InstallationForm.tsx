@@ -183,7 +183,7 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
               <li>This will install TAK Server and PostgreSQL database within Docker Desktop</li>
               <li>Certificate enrollment will be configured by default for client authentication</li>
               <li>All data will be stored in your Documents folder using Docker volumes</li>
-              <li>For the TAK Server ZIP file, please download the Docker version from <a href="https://tak.gov/products/tak-server" target="_blank" rel="noopener noreferrer" className="foreground hover:text-textSecondary">TAK.gov</a></li>
+              <li>For the TAK Server ZIP file, please download the Docker version from <a href="https://tak.gov/products/tak-server" target="_blank" rel="noopener noreferrer" className="foreground hover:text-muted-foreground text-primary">TAK.gov</a></li>
             </ul>
           </div>
 

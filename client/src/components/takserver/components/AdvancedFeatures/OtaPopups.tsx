@@ -208,7 +208,7 @@ const OtaPopups: React.FC<OtaPopupsProps> = ({
             />
             {configureTerminalOutput.length > 0 && (
               <ScrollArea 
-                className="w-full rounded-md border p-4 mt-4 h-[300px] bg-background"
+                className="w-full rounded-md border p-4 mt-4 h-[300px] bg-background [&_*::selection]:bg-blue-500/80 [&_*::selection]:text-primary"
                 content={configureTerminalOutput}
                 autoScroll={true}
               >

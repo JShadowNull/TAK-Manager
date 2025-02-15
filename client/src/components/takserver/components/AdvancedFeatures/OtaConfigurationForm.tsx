@@ -100,7 +100,7 @@ const OtaConfigurationForm: React.FC<OtaConfigurationFormProps> = ({ onClose, on
           <h4 className="text-sm font-semibold text-selectedColor mb-2">Purpose</h4>
           <p className="text-sm text-muted-foreground leading-relaxed">
             OTA (Over-The-Air) updates enable ATAK users to easily discover and install available plugins and ATAK versions directly from their devices. 
-            This feature streamlines the distribution of updates and new capabilities to your ATAK users without requiring manual installation. Download the plugins ZIP file from <a href="https://tak.gov/products/tak-server" target="_blank" rel="noopener noreferrer" className="foreground hover:text-textSecondary">TAK.gov</a> and upload it here.
+            This feature streamlines the distribution of updates and new capabilities to your ATAK users without requiring manual installation. Download the plugins ZIP file from <a href="https://tak.gov/products/tak-server" target="_blank" rel="noopener noreferrer" className="foreground hover:text-muted-foreground text-primary">TAK.gov</a> and upload it here.
           </p>
         </div>
 
