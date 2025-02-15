@@ -6,6 +6,7 @@ import {
   Key,
   Database,
   Menu,
+  Settings,
 } from "lucide-react"
 import { ModeToggle } from "@/components/shared/ui/shadcn/mode-toggle"
 import { Sheet, SheetContent } from "@/components/shared/ui/shadcn/sheet"
@@ -160,6 +161,14 @@ const items = [
     url: "/data-package",
     icon: Database,
     iconColor: "text-pink-500",
+    alwaysShow: false,
+    showWhen: (takServerInstalled: boolean) => takServerInstalled,
+  },
+  {
+    title: "Advanced Features",
+    url: "/advanced-features",
+    icon: Settings,
+    iconColor: "text-purple-500",
     alwaysShow: false,
     showWhen: (takServerInstalled: boolean) => takServerInstalled,
   },

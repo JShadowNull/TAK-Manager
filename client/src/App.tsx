@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard'
 import Takserver from './pages/Takserver'
 import DataPackage from './pages/DataPackage'
 import CertManager from './pages/CertManager'
+import AdvancedFeatures from './pages/AdvancedFeatures'
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
               <Route path="takserver" element={<Takserver />} />
               <Route path="data-package" element={<DataPackage />} />
               <Route path="cert-manager" element={<CertManager />} />
+              <Route path="advanced-features" element={<AdvancedFeatures />} />
             </Route>
           </Routes>
         </TakServerProvider>

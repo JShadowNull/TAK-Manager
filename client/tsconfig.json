@@ -24,5 +24,4 @@
     "forceConsistentCasingInFileNames": true
   },
   "include": ["src"]
-}
-    
+}    
