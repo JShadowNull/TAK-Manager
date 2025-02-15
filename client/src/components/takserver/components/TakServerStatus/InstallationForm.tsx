@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Input } from '../../../shared/ui/shadcn/input';
 import { Button } from '../../../shared/ui/shadcn/button';
 import { HelpIconTooltip } from '../../../shared/ui/shadcn/tooltip/HelpIconTooltip';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Wand2 } from 'lucide-react';
 import { z } from 'zod';
 import Popups from './TakOperationPopups';
 
@@ -160,6 +160,31 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
     onCancel(); // Close the form
   };
 
+  const generateSecurePassword = () => {
+    const length = 15;
+    const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+    const numbers = '0123456789';
+    const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+    
+    let password = '';
+    
+    // Ensure at least one of each required character type
+    password += uppercase[Math.floor(Math.random() * uppercase.length)];
+    password += lowercase[Math.floor(Math.random() * lowercase.length)];
+    password += numbers[Math.floor(Math.random() * numbers.length)];
+    password += symbols[Math.floor(Math.random() * symbols.length)];
+    
+    // Fill the rest with random characters
+    const allChars = uppercase + lowercase + numbers + symbols;
+    for (let i = password.length; i < length; i++) {
+      password += allChars[Math.floor(Math.random() * allChars.length)];
+    }
+    
+    // Shuffle the password
+    return password.split('').sort(() => Math.random() - 0.5).join('');
+  };
+
   return (
     <>
       <div className="w-full border border-border bg-card p-6 rounded-lg break-normal">
@@ -225,27 +250,48 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
                     <HelpIconTooltip
                       tooltip="Password must be at least 8 characters"
                       iconSize={14}
+                      triggerMode="hover"
                     />
                     <span className="text-red-500">*</span>
                   </label>
                 </div>
-                <div className="relative">
-                  <Input
-                    id="postgres_password"
-                    type={showDbPassword ? "text" : "password"}
-                    value={formData.postgres_password}
-                    onChange={handleInputChange}
-                    placeholder="Enter PostgreSQL password (min. 8 characters)"
-                    className={`w-full pr-10 ${errors.postgres_password ? 'border-red-500' : ''}`}
-                    required
-                  />
-                  <button
+                <div className="relative flex gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      id="postgres_password"
+                      type={showDbPassword ? "text" : "password"}
+                      value={formData.postgres_password}
+                      onChange={handleInputChange}
+                      placeholder="Database password"
+                      className={`w-full pr-10 ${errors.postgres_password ? 'border-red-500' : ''}`}
+                      required
+                    />
+                    <Button
+                      type="button"
+                      onClick={() => setShowDbPassword(!showDbPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 bg-transparent hover:bg-transparent text-muted-foreground hover:text-primary"
+                      tooltip="Show/Hide password"
+                      triggerMode="hover"
+                      tooltipDelay={800}
+                    >
+                      {showDbPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </Button>
+                  </div>
+                  <Button
                     type="button"
-                    onClick={() => setShowDbPassword(!showDbPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => {
+                      const newPassword = generateSecurePassword();
+                      handleInputChange({
+                        target: { id: 'postgres_password', value: newPassword }
+                      } as React.ChangeEvent<HTMLInputElement>);
+                    }}
+                    className="h-10 w-10 shrink-0"
+                    title="Generate secure password"
                   >
-                    {showDbPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
+                    <Wand2 className="h-4 w-4" />
+                  </Button>
                 </div>
                 {errors.postgres_password && (
                   <p className="text-sm text-red-500">{errors.postgres_password}</p>
@@ -259,27 +305,48 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
                     <HelpIconTooltip
                       tooltip="Password must be at least 8 characters"
                       iconSize={14}
+                      triggerMode="hover"
                     />
                     <span className="text-red-500">*</span>
                   </label>
                 </div>
-                <div className="relative">
-                  <Input
-                    id="certificate_password"
-                    type={showCertPassword ? "text" : "password"}
-                    value={formData.certificate_password}
-                    onChange={handleInputChange}
-                    placeholder="Enter certificate password (min. 8 characters)"
-                    className={`w-full pr-10 ${errors.certificate_password ? 'border-red-500' : ''}`}
-                    required
-                  />
-                  <button
+                <div className="relative flex gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      id="certificate_password"
+                      type={showCertPassword ? "text" : "password"}
+                      value={formData.certificate_password}
+                      onChange={handleInputChange}
+                      placeholder="Enter certificate password (min. 8 characters)"
+                      className={`w-full pr-10 ${errors.certificate_password ? 'border-red-500' : ''}`}
+                      required
+                    />
+                    <Button
+                      type="button"
+                      onClick={() => setShowCertPassword(!showCertPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 bg-transparent hover:bg-transparent text-muted-foreground hover:text-primary"
+                      tooltip="Show/Hide password"
+                      triggerMode="hover"
+                      tooltipDelay={800}
+                    >
+                      {showCertPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </Button>
+                  </div>
+                  <Button
                     type="button"
-                    onClick={() => setShowCertPassword(!showCertPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => {
+                      const newPassword = generateSecurePassword();
+                      handleInputChange({
+                        target: { id: 'certificate_password', value: newPassword }
+                      } as React.ChangeEvent<HTMLInputElement>);
+                    }}
+                    className="h-10 w-10 shrink-0"
+                    title="Generate secure password"
                   >
-                    {showCertPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
+                    <Wand2 className="h-4 w-4" />
+                  </Button>
                 </div>
                 {errors.certificate_password && (
                   <p className="text-sm text-red-500">{errors.certificate_password}</p>
@@ -294,6 +361,7 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
                     <HelpIconTooltip
                       tooltip="Organization name can only contain letters, numbers, spaces, hyphens, underscores, and periods"
                       iconSize={14}
+                      triggerMode="hover"
                     />
                     <span className="text-red-500">*</span>
                   </label>
@@ -320,6 +388,7 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
                     <HelpIconTooltip
                       tooltip="Organizational unit can only contain letters, numbers, spaces, hyphens, underscores, and periods"
                       iconSize={14}
+                      triggerMode="hover"
                     />
                     <span className="text-red-500">*</span>
                   </label>
@@ -346,6 +415,7 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
                     <HelpIconTooltip
                       tooltip="State/Province can only contain letters, spaces, hyphens, and apostrophes"
                       iconSize={14}
+                      triggerMode="hover"
                     />
                     <span className="text-red-500">*</span>
                   </label>
@@ -372,6 +442,7 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
                     <HelpIconTooltip
                       tooltip="City can only contain letters, spaces, hyphens, and apostrophes"
                       iconSize={14}
+                      triggerMode="hover"
                     />
                     <span className="text-red-500">*</span>
                   </label>
@@ -398,6 +469,7 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
                     <HelpIconTooltip
                       tooltip="Name can only contain letters, spaces, hyphens, and apostrophes"
                       iconSize={14}
+                      triggerMode="hover"
                     />
                     <span className="text-red-500">*</span>
                   </label>

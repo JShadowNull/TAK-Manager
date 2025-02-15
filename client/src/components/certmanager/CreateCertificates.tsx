@@ -10,7 +10,7 @@ import { Separator } from "@/components/shared/ui/shadcn/separator";
 import { HelpIconTooltip } from '../shared/ui/shadcn/tooltip/HelpIconTooltip';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/shared/ui/shadcn/tooltip/tooltip";
 import { useCertificateValidation, useBatchValidation } from './hooks/useCertificateValidation';
-import { Trash2, PlusCircle } from 'lucide-react';
+import { Trash2, PlusCircle, Wand2, Eye, EyeOff } from 'lucide-react';
 import { cn } from "@/lib/utils";
 
 // Types
@@ -90,6 +90,7 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
   const [currentOperation, setCurrentOperation] = useState<Operation>(null);
   const [isOperationInProgress, setIsOperationInProgress] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [passwordVisibility, setPasswordVisibility] = useState<{ [key: number]: boolean }>({});
 
   // Single certificate state
   const [certFields, setCertFields] = useState([{
@@ -322,6 +323,38 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
     };
   }, [isBatchMode, onOperationProgress]);
 
+  const generateSecurePassword = () => {
+    const length = 15;
+    const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+    const numbers = '0123456789';
+    const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+    
+    let password = '';
+    
+    // Ensure at least one of each required character type
+    password += uppercase[Math.floor(Math.random() * uppercase.length)];
+    password += lowercase[Math.floor(Math.random() * lowercase.length)];
+    password += numbers[Math.floor(Math.random() * numbers.length)];
+    password += symbols[Math.floor(Math.random() * symbols.length)];
+    
+    // Fill the rest with random characters
+    const allChars = uppercase + lowercase + numbers + symbols;
+    for (let i = password.length; i < length; i++) {
+      password += allChars[Math.floor(Math.random() * allChars.length)];
+    }
+    
+    // Shuffle the password
+    return password.split('').sort(() => Math.random() - 0.5).join('');
+  };
+
+  const togglePasswordVisibility = (index: number) => {
+    setPasswordVisibility(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }));
+  };
+
   return (
     <Card className="w-full max-w-6xl mx-auto">
       <CardHeader>
@@ -332,18 +365,21 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
         <form className="space-y-6">
           {/* Mode Switch */}
           <div className="flex items-center space-x-4">
-            <Label htmlFor="batch-mode" className="flex items-center space-x-2">
+            <Label htmlFor="batch-mode" className="flex items-center">
               <span>Mode: {isBatchMode ? 'Batch' : 'Single'}</span>
               <HelpIconTooltip 
                 tooltip="Switch between single and batch certificate creation"
                 triggerMode="hover"
+                className='pl-2'
               />
             </Label>
-            <Switch
-              id="batch-mode"
-              checked={isBatchMode}
-              onCheckedChange={setIsBatchMode}
-            />
+            <div>
+              <Switch
+                id="batch-mode"
+                checked={isBatchMode}
+                onCheckedChange={setIsBatchMode}
+              />
+            </div>
           </div>
 
           <Separator />
@@ -385,7 +421,14 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
                       )} */}
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor={`group-${index}`}>Groups</Label>
+                      <Label htmlFor={`group-${index}`} className="flex items-center gap-2 break-normal">
+                        Groups
+                        <HelpIconTooltip 
+                          tooltip="Comma-separated list of groups. Leave as __ANON__ for default group. Example: Group1,Group2"
+                          triggerMode="hover"
+                          iconSize={14}
+                        />
+                      </Label>
                       <Input
                         id={`group-${index}`}
                         value={field.group}
@@ -397,27 +440,52 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
                           // displayErrors[`group${index}`] && "border-red-500"
                         )}
                       />
-                      {/* {displayErrors[`group${index}`] && (
-                        <p className="text-sm text-red-500 font-medium">{displayErrors[`group${index}`]}</p>
-                      )} */}
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor={`password-${index}`}>Password (Optional)</Label>
-                      <Input
-                        type="password"
-                        id={`password-${index}`}
-                        value={field.password}
-                        onChange={(e) => handleCertFieldChange(index, 'password', e.target.value)}
-                        onBlur={() => handleBlur(`password${index}`)}
-                        placeholder="Enter password"
-                        className={cn(
-                          "w-fit",
-                          // displayErrors[`password${index}`] && "border-red-500"
-                        )}
-                      />
-                      {/* {displayErrors[`password${index}`] && (
-                        <p className="text-sm text-red-500 font-medium">{displayErrors[`password${index}`]}</p>
-                      )} */}
+                      <Label htmlFor={`password-${index}`} className="flex items-center gap-2 break-normal">
+                        Password (Optional)
+                        <HelpIconTooltip 
+                          tooltip="Optional password for the certificate. If not provided no password will be set."
+                          triggerMode="hover"
+                          iconSize={14}
+                        />
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <div className="relative">
+                          <Input
+                            type={passwordVisibility[index] ? "text" : "password"}
+                            id={`password-${index}`}
+                            value={field.password}
+                            onChange={(e) => handleCertFieldChange(index, 'password', e.target.value)}
+                            onBlur={() => handleBlur(`password${index}`)}
+                            placeholder="Enter password"
+                            className={cn(
+                              "w-full pr-10",
+                              // displayErrors[`password${index}`] && "border-red-500"
+                            )}
+                          />
+                      <Button
+                        type="button"
+                        onClick={() => togglePasswordVisibility(index)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 bg-transparent hover:bg-transparent text-muted-foreground hover:text-primary"
+                        tooltip="Show/Hide password"
+                        triggerMode="hover"
+                        tooltipDelay={800}
+                      >
+                        {passwordVisibility[index] ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </Button>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => handleCertFieldChange(index, 'password', generateSecurePassword())}
+                          className="h-10 w-10 shrink-0"
+                          title="Generate secure password"
+                        >
+                          <Wand2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                     <div className="flex items-center space-x-2">
                       <Switch
@@ -465,7 +533,14 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
                   )} */}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="batchGroup">Groups</Label>
+                  <Label htmlFor="batchGroup" className="flex items-center gap-2">
+                    Groups
+                    <HelpIconTooltip 
+                      tooltip="Comma-separated list of groups. Leave as __ANON__ for no group. Example: Group1,Group2"
+                      triggerMode="hover"
+                      iconSize={14}
+                    />
+                  </Label>
                   <Input
                     id="batchGroup"
                     value={batchGroup}
@@ -477,9 +552,6 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
                       // displayErrors.batchGroup && "border-red-500"
                     )}
                   />
-                  {/* {displayErrors.batchGroup && (
-                    <p className="text-sm text-red-500 font-medium">{displayErrors.batchGroup}</p>
-                  )} */}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="prefixType">Suffix Type</Label>
