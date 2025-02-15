@@ -4,6 +4,7 @@ import { useTakServerRequired } from '../components/shared/hooks/useTakServerReq
 import TakServerRequiredDialog from '../components/shared/TakServerRequiredDialog';
 import CoreConfigEditor from '../components/advancedfeatures/CoreConfigEditor';
 import BackupManager from '../components/advancedfeatures/BackupManager';
+import LogViewer from '../components/advancedfeatures/LogViewer';
 
 const AdvancedFeatures: React.FC = () => {
   // TAK Server check
@@ -46,6 +47,12 @@ const AdvancedFeatures: React.FC = () => {
               >
                 Backup Manager
               </TabsTrigger>
+              <TabsTrigger 
+                value="logs" 
+                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:rounded-lg"
+              >
+                Logs
+              </TabsTrigger>
             </TabsList>
           </div>
 
@@ -58,6 +65,11 @@ const AdvancedFeatures: React.FC = () => {
             <TabsContent value="backups" className="w-full">
               <div className="bg-card rounded-lg">
                 <BackupManager />
+              </div>
+            </TabsContent>
+            <TabsContent value="logs" className="w-full">
+              <div className="bg-card rounded-lg">
+                <LogViewer />
               </div>
             </TabsContent>
           </div>

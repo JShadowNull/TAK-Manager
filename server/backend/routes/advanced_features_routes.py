@@ -1,11 +1,36 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from ..services.scripts.takserver.core_config import CoreConfigManager
+from ..services.scripts.takserver.log_manager import LogManager
+from sse_starlette.sse import EventSourceResponse
 import os
 
 # Create router
 advanced_features = APIRouter()
 core_config_manager = CoreConfigManager()
+log_manager = LogManager()
+
+@advanced_features.get("/takserver/logs")
+async def stream_logs():
+    """Stream TAK Server container logs"""
+    return EventSourceResponse(log_manager.stream_logs())
+
+@advanced_features.get("/takserver/logs/list")
+async def list_logs():
+    """Get list of available log files"""
+    try:
+        logs = log_manager.get_available_logs()
+        return {"logs": logs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@advanced_features.get("/takserver/logs/{log_file}")
+async def stream_log(log_file: str):
+    """Stream a specific log file"""
+    try:
+        return EventSourceResponse(log_manager.stream_log_file(log_file))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 class XMLContent(BaseModel):
     content: str
