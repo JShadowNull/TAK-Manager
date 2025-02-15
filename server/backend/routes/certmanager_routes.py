@@ -7,6 +7,7 @@ from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, AsyncGenerator
 from backend.services.scripts.cert_manager.certmanager import CertManager
+from backend.services.scripts.takserver.cert_xml_editor import CertConfigManager
 import json
 import asyncio
 from backend.config.logging_config import configure_logging
@@ -30,6 +31,7 @@ async def emit_event(data: Dict[str, Any]):
         _latest_cert_status = data
 
 cert_manager = CertManager(emit_event=emit_event)
+cert_config_manager = CertConfigManager()
 
 # ============================================================================
 # Pydantic Models
@@ -52,6 +54,9 @@ class DeleteRequest(BaseModel):
 
 class DownloadRequest(BaseModel):
     usernames: List[str]
+
+class CertConfigRequest(BaseModel):
+    content: str
 
 # ============================================================================
 # Routes
@@ -184,3 +189,36 @@ async def download_certificates(data: DownloadRequest):
     except Exception as e:
         logger.error(f"Error downloading certificates: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# Certificate XML Editor Routes
+@certmanager.get("/certificates/{identifier}/config")
+async def get_cert_config(identifier: str) -> Dict[str, Any]:
+    """Get the XML configuration for a specific certificate"""
+    try:
+        content = cert_config_manager.read_cert_config(identifier)
+        return {"success": True, "content": content}
+    except Exception as e:
+        logger.error(f"Error reading certificate config: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+@certmanager.post("/certificates/{identifier}/config")
+async def update_cert_config(identifier: str, request: CertConfigRequest) -> Dict[str, Any]:
+    """Update the XML configuration for a specific certificate"""
+    try:
+        cert_config_manager.update_cert_config(identifier, request.content)
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Error updating certificate config: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+@certmanager.post("/certificates/{identifier}/validate")
+async def validate_cert_config(identifier: str, request: CertConfigRequest) -> Dict[str, Any]:
+    """Validate the XML configuration for a specific certificate"""
+    try:
+        is_valid, error_msg = cert_config_manager.validate_cert_config(request.content, identifier)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=error_msg)
+        return {"valid": is_valid}
+    except Exception as e:
+        logger.error(f"Error validating certificate config: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))

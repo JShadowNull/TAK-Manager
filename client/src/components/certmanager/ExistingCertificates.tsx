@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/shared/ui/shadcn/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/shared/ui/shadcn/tooltip/tooltip";
 import CertificateOperationPopups from './CertificateOperationPopups';
 import { useNavigate } from 'react-router-dom';
+import CertificateConfigEditor from './CertificateConfigEditor';
 
 interface Certificate {
   identifier: string;
@@ -44,6 +45,7 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
   const [successfulDelete, setSuccessfulDelete] = useState<string | null>(null);
   const [deletingCerts, setDeletingCerts] = useState<Set<string>>(new Set());
   const [downloadingCerts, setDownloadingCerts] = useState<Set<string>>(new Set());
+  const [selectedCertForEdit, setSelectedCertForEdit] = useState<string | null>(null);
   const navigate = useNavigate();
 
   // Fetch certificates
@@ -413,200 +415,235 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
     });
   };
 
+  const handleCertificateClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    const identifier = (e.currentTarget as HTMLDivElement).dataset.identifier;
+    if (identifier) {
+      setSelectedCertForEdit(identifier);
+    }
+  };
+
+  const handleConfigSave = () => {
+    // Refresh certificates list after config save
+    fetchCertificates();
+  };
+
   return (
-    <Card className="w-full max-w-6xl mx-auto">
-      <CardHeader>
-        <CardTitle>Existing Certificates</CardTitle>
-        <CardDescription>Manage and view your existing TAK certificates</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-6">
-          <div className="space-y-4">
-            <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4">
-              <div className="w-full">
-                <Input
-                  type="text"
-                  placeholder="Search certificates..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full"
-                />
+    <>
+      <Card className="w-full max-w-6xl mx-auto">
+        <CardHeader>
+          <CardTitle>Existing Certificates</CardTitle>
+          <CardDescription>Manage and view your existing TAK certificates</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-6">
+            <div className="space-y-4">
+              <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4">
+                <div className="w-full">
+                  <Input
+                    type="text"
+                    placeholder="Search certificates..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handleSelectAll}
+                  disabled={isOperationInProgress}
+                  className="whitespace-nowrap"
+                >
+                  {selectedCerts.size === filteredCertificates.length && filteredCertificates.length > 0 
+                    ? 'Deselect All' 
+                    : 'Select All'}
+                </Button>
+                
+                {selectedCerts.size > 0 && (
+                  <>
+                    <Button
+                      variant="danger"
+                      onClick={handleBatchDeleteClick}
+                      disabled={isOperationInProgress}
+                      loading={currentOperation === 'delete_certs_batch'}
+                      loadingText={`Deleting ${selectedCerts.size} certificates...`}
+                      className="whitespace-nowrap"
+                    >
+                      Delete Selected ({selectedCerts.size})
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => handleDownload()}
+                      disabled={isOperationInProgress}
+                      loading={currentOperation === 'download_batch'}
+                      loadingText={`Downloading ${selectedCerts.size} certificates...`}
+                      className="whitespace-nowrap"
+                    >
+                      Download Selected ({selectedCerts.size})
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="outline"
-                onClick={handleSelectAll}
-                disabled={isOperationInProgress}
-                className="whitespace-nowrap"
-              >
-                {selectedCerts.size === filteredCertificates.length && filteredCertificates.length > 0 
-                  ? 'Deselect All' 
-                  : 'Select All'}
-              </Button>
-              
-              {selectedCerts.size > 0 && (
-                <>
-                  <Button
-                    variant="danger"
-                    onClick={handleBatchDeleteClick}
-                    disabled={isOperationInProgress}
-                    loading={currentOperation === 'delete_certs_batch'}
-                    loadingText={`Deleting ${selectedCerts.size} certificates...`}
-                    className="whitespace-nowrap"
-                  >
-                    Delete Selected ({selectedCerts.size})
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => handleDownload()}
-                    disabled={isOperationInProgress}
-                    loading={currentOperation === 'download_batch'}
-                    loadingText={`Downloading ${selectedCerts.size} certificates...`}
-                    className="whitespace-nowrap"
-                  >
-                    Download Selected ({selectedCerts.size})
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
+            {error && (
+              <p className="text-sm text-destructive">Error on Operation: {error}</p>
+            )}
 
-          {error && (
-            <p className="text-sm text-destructive">Error on Operation: {error}</p>
-          )}
-
-          <div className="h-[400px] border rounded-lg">
-            <ScrollArea className="h-full">
-              <div className="space-y-2 p-4">
-                {isLoading ? (
-                  <div className="text-center text-muted-foreground py-4">
-                    Loading certificates...
-                  </div>
-                ) : filteredCertificates.length === 0 ? (
-                  <div className="text-center text-muted-foreground py-4">
-                    {searchTerm ? 'No matching certificates found' : 'No certificates found'}
-                  </div>
-                ) : (
-                  filteredCertificates.map((cert) => (
-                    <div 
-                      key={cert.identifier} 
-                      className="flex flex-col md:flex-row items-start md:items-center justify-between p-3 border rounded-lg bg-muted/50 hover:bg-muted/60 transition-all duration-200 gap-2"
-                    >
-                      <div className="flex items-center gap-4 flex-1 w-full md:w-auto">
-                        <Checkbox
-                          checked={selectedCerts.has(cert.identifier)}
-                          onCheckedChange={() => handleSelectCert(cert.identifier)}
-                          disabled={isOperationInProgress}
-                        />
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium">{cert.identifier}</span>
-                          {cert.role === 'ROLE_ADMIN' && (
-                            <span className="text-sm text-primary">(Admin)</span>
-                          )}
+            <div className="h-[400px] border rounded-lg">
+              <ScrollArea className="h-full">
+                <div className="space-y-2 p-4">
+                  {isLoading ? (
+                    <div className="text-center text-muted-foreground py-4">
+                      Loading certificates...
+                    </div>
+                  ) : filteredCertificates.length === 0 ? (
+                    <div className="text-center text-muted-foreground py-4">
+                      {searchTerm ? 'No matching certificates found' : 'No certificates found'}
+                    </div>
+                  ) : (
+                    filteredCertificates.map((cert) => (
+                      <div 
+                        key={cert.identifier} 
+                        className="flex flex-col md:flex-row items-start md:items-center justify-between p-3 border rounded-lg bg-muted/50 hover:bg-muted/60 transition-all duration-200 gap-2 cursor-pointer"
+                        onClick={handleCertificateClick}
+                        data-identifier={cert.identifier}
+                      >
+                        <div className="flex items-center gap-4 flex-1 w-full md:w-auto">
+                          <Checkbox
+                            checked={selectedCerts.has(cert.identifier)}
+                            onCheckedChange={() => {
+                              handleSelectCert(cert.identifier);
+                            }}
+                            onClick={(e: React.MouseEvent) => {
+                              e.stopPropagation();
+                            }}
+                            disabled={isOperationInProgress}
+                          />
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-medium">{cert.identifier}</span>
+                            {cert.role === 'ROLE_ADMIN' && (
+                              <span className="text-sm text-primary">(Admin)</span>
+                            )}
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="flex items-center gap-1">
+                                    {cert.passwordHashed ? (
+                                      <>
+                                        <LockKeyhole className="h-4 w-4 text-muted-foreground" />
+                                        <span className="text-xs text-muted-foreground">Password Configured</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <LockKeyholeOpen className="h-4 w-4 text-muted-foreground" />
+                                        <span className="text-xs text-muted-foreground">No Password</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>{cert.passwordHashed ? "Password Protected" : "No Password Set"}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            {cert.groups.map((group, index) => (
+                              <Chip
+                                key={index}
+                                label={group}
+                                size="small"
+                                sx={{
+                                  backgroundColor: 'hsl(var(--muted))',
+                                  color: 'hsl(var(--muted-foreground))',
+                                  height: '20px',
+                                  fontSize: '0.75rem',
+                                  '& .MuiChip-label': {
+                                    padding: '0 8px',
+                                  },
+                                  '&:hover': {
+                                    color: 'hsl(var(--primary))',
+                                  },
+                                }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex gap-1">
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <div className="flex items-center gap-1 cursor-text">
-                                  {cert.passwordHashed ? (
-                                    <>
-                                      <LockKeyhole className="h-4 w-4 text-muted-foreground" />
-                                      <span className="text-xs text-muted-foreground">Password Configured</span>
-                                    </>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                                    e.stopPropagation();
+                                    handleDownload(cert.identifier);
+                                  }}
+                                  disabled={isOperationInProgress}
+                                  className="relative hover:text-green-500 dark:hover:text-green-600"
+                                >
+                                  {downloadingCerts.has(cert.identifier) ? (
+                                    <Loader2 className="h-5 w-5 animate-spin" />
                                   ) : (
-                                    <>
-                                      <LockKeyholeOpen className="h-4 w-4 text-muted-foreground" />
-                                      <span className="text-xs text-muted-foreground">No Password</span>
-                                    </>
+                                    <ArrowDownToLine className="h-5 w-5" />
                                   )}
-                                </div>
+                                </Button>
                               </TooltipTrigger>
                               <TooltipContent>
-                                <p>{cert.passwordHashed ? "Password Protected" : "No Password Set"}</p>
+                                <p>Download .p12 extension</p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
-                          {cert.groups.map((group, index) => (
-                            <Chip
-                              key={index}
-                              label={group}
-                              size="small"
-                              sx={{
-                                backgroundColor: 'hsl(var(--muted))',
-                                color: 'hsl(var(--muted-foreground))',
-                                height: '20px',
-                                fontSize: '0.75rem',
-                                '& .MuiChip-label': {
-                                  padding: '0 8px',
-                                },
-                                '&:hover': {
-                                  color: 'hsl(var(--primary))', // Change text color on hover
-                                },
-                              }}
-                            />
-                          ))}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                              e.stopPropagation();
+                              handleDeleteClick(cert.identifier);
+                            }}
+                            disabled={isOperationInProgress}
+                            className="relative dark:hover:text-red-600 hover:text-red-500"
+                          >
+                            {(isOperationInProgress && currentOperation === 'delete_certs' && certToDelete === cert.identifier) || 
+                             (currentOperation === 'delete_certs_batch' && deletingCerts.has(cert.identifier)) ? (
+                              <Loader2 className="h-5 w-5 animate-spin" />
+                            ) : successfulDelete === cert.identifier ? (
+                              <Check className="h-5 w-5 text-primary" />
+                            ) : (
+                              <Trash2 className="h-5 w-5" />
+                            )}
+                          </Button>
                         </div>
                       </div>
-                      <div className="flex gap-1">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDownload(cert.identifier)}
-                                disabled={isOperationInProgress}
-                                className="relative hover:text-green-500 dark:hover:text-green-600"
-                              >
-                                {downloadingCerts.has(cert.identifier) ? (
-                                  <Loader2 className="h-5 w-5 animate-spin" />
-                                ) : (
-                                  <ArrowDownToLine className="h-5 w-5" />
-                                )}
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Download .p12 extension</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDeleteClick(cert.identifier)}
-                          disabled={isOperationInProgress}
-                          className="relative dark:hover:text-red-600 hover:text-red-500"
-                        >
-                          {(isOperationInProgress && currentOperation === 'delete_certs' && certToDelete === cert.identifier) || 
-                           (currentOperation === 'delete_certs_batch' && deletingCerts.has(cert.identifier)) ? (
-                            <Loader2 className="h-5 w-5 animate-spin" />
-                          ) : successfulDelete === cert.identifier ? (
-                            <Check className="h-5 w-5 text-primary" />
-                          ) : (
-                            <Trash2 className="h-5 w-5" />
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </ScrollArea>
-          </div>
+                    ))
+                  )}
+                </div>
+              </ScrollArea>
+            </div>
 
-          <div className="flex justify-end pt-4">
-            <Button
-              variant="primary"
-              onClick={handleCreateDataPackages}
-              disabled={isOperationInProgress}
-              className="whitespace-nowrap"
-            >
-              Create Data Packages
-            </Button>
+            <div className="flex justify-end pt-4">
+              <Button
+                variant="primary"
+                onClick={handleCreateDataPackages}
+                disabled={isOperationInProgress}
+                className="whitespace-nowrap"
+              >
+                Create Data Packages
+              </Button>
+            </div>
           </div>
-        </div>
-      </CardContent>
+        </CardContent>
+      </Card>
+
+      <CertificateConfigEditor
+        identifier={selectedCertForEdit || ''}
+        isOpen={!!selectedCertForEdit}
+        onClose={() => setSelectedCertForEdit(null)}
+        onSave={handleConfigSave}
+      />
 
       <CertificateOperationPopups
         showSingleDeleteConfirm={showSingleDeleteConfirm}
@@ -617,7 +654,7 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
         onBatchDeleteConfirm={handleBatchDeleteConfirm}
         onClose={handleCloseConfirm}
       />
-    </Card>
+    </>
   );
 };
 
