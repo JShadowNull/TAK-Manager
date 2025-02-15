@@ -9,12 +9,13 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/shared/ui/shadcn/dialog";
-import { CheckCircle, AlertCircle } from "lucide-react";
+import { CheckCircle, AlertCircle, RotateCcw } from "lucide-react";
 import { EditorView } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import CodeMirror from '@uiw/react-codemirror';
 import { xml } from '@codemirror/lang-xml';
 import { oneDark } from '@codemirror/theme-one-dark';
+import { useTakServer } from '@/components/shared/ui/shadcn/sidebar/app-sidebar';
 
 interface NotificationState {
   show: boolean;
@@ -24,8 +25,10 @@ interface NotificationState {
 }
 
 const CoreConfigEditor: React.FC = () => {
+  const { serverState } = useTakServer();
   const [xmlContent, setXmlContent] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isRestarting, setIsRestarting] = useState(false);
   const [notification, setNotification] = useState<NotificationState>({
     show: false,
     title: '',
@@ -36,6 +39,44 @@ const CoreConfigEditor: React.FC = () => {
   useEffect(() => {
     fetchConfig();
   }, []);
+
+  useEffect(() => {
+    const eventSource = new EventSource('/api/takserver/operation-status-stream');
+
+    eventSource.addEventListener('operation-status', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.status === 'complete' || data.status === 'error') {
+          setIsRestarting(false);
+          if (data.error) {
+            showNotification('Error', data.error, 'error');
+          }
+        }
+      } catch (error) {
+        setIsRestarting(false);
+      }
+    });
+
+    return () => {
+      eventSource.close();
+    };
+  }, []);
+
+  const handleRestart = async () => {
+    try {
+      setIsRestarting(true);
+      const response = await fetch('/api/takserver/restart-takserver', {
+        method: 'POST'
+      });
+
+      if (!response.ok) {
+        throw new Error(`Operation failed: ${response.statusText}`);
+      }
+    } catch (error) {
+      setIsRestarting(false);
+      showNotification('Error', error instanceof Error ? error.message : 'Operation failed', 'error');
+    }
+  };
 
   const showNotification = (title: string, message: string, type: 'success' | 'error') => {
     setNotification({ show: true, title, message, type });
@@ -106,7 +147,11 @@ const CoreConfigEditor: React.FC = () => {
       
       const data = await response.json();
       if (response.ok) {
-        showNotification('Success', 'Configuration saved successfully', 'success');
+        showNotification(
+          'Success', 
+          'Configuration saved successfully. Restart TAK Server for changes to take effect.',
+          'success'
+        );
       } else {
         throw new Error(data.error || data.detail || 'Failed to save configuration');
       }
@@ -120,7 +165,38 @@ const CoreConfigEditor: React.FC = () => {
     <>
       <Card className="w-full">
         <CardHeader>
-          <CardTitle>Core Configuration Editor</CardTitle>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <CardTitle>Core Configuration Editor</CardTitle>
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  {serverState.isRunning ? (
+                    <>
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                    </>
+                  ) : (
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                  )}
+                </span>
+                <span className={`text-sm ${serverState.isRunning ? 'text-green-500' : 'text-red-500'}`}>
+                  {serverState.isRunning ? 'TAK Server Running' : 'TAK Server Not Running'}
+                </span>
+              </div>
+            </div>
+            {serverState.isRunning && (
+              <Button
+                variant="outline"
+                onClick={handleRestart}
+                disabled={isRestarting}
+                loading={isRestarting}
+                loadingText="Restarting..."
+                leadingIcon={<RotateCcw className="h-4 w-4" />}
+              >
+                Restart TAK Server
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">

@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/shared/ui
 import { useTakServerRequired } from '../components/shared/hooks/useTakServerRequired';
 import TakServerRequiredDialog from '../components/shared/TakServerRequiredDialog';
 import CoreConfigEditor from '../components/advancedfeatures/CoreConfigEditor';
+import BackupManager from '../components/advancedfeatures/BackupManager';
 
 const AdvancedFeatures: React.FC = () => {
   // TAK Server check
@@ -39,7 +40,12 @@ const AdvancedFeatures: React.FC = () => {
               >
                 Core Config
               </TabsTrigger>
-              {/* Add more tabs here as needed */}
+              <TabsTrigger 
+                value="backups" 
+                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:rounded-lg"
+              >
+                Backup Manager
+              </TabsTrigger>
             </TabsList>
           </div>
 
@@ -49,7 +55,11 @@ const AdvancedFeatures: React.FC = () => {
                 <CoreConfigEditor />
               </div>
             </TabsContent>
-            {/* Add more tab content here as needed */}
+            <TabsContent value="backups" className="w-full">
+              <div className="bg-card rounded-lg">
+                <BackupManager />
+              </div>
+            </TabsContent>
           </div>
         </Tabs>
       </div>
