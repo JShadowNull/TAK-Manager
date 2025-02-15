@@ -279,8 +279,8 @@ const SidebarTrigger = React.forwardRef<
 >(({ className, onClick, ...props }, ref) => {
   const { toggleSidebar } = useSidebar()
 
-  const handleClick = React.useCallback(() => {
-    onClick?.()
+  const handleClick = React.useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    onClick?.(e)
     toggleSidebar()
   }, [onClick, toggleSidebar])
 
