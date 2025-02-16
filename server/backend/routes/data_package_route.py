@@ -157,22 +157,11 @@ async def get_certificate_files():
     try:
         logger.debug("[get_certificate_files] Starting certificate file retrieval")
         data_package = DataPackage()
-        version = await data_package.read_version_txt()
-        logger.debug(f"[get_certificate_files] Read version: {version}")
-        
-        if version:
-            container_name = f"takserver-{version}"
-            logger.debug(f"[get_certificate_files] Looking for certificates in container: {container_name}")
-            cert_files = await data_package.list_cert_files(container_name)
-            logger.debug(f"[get_certificate_files] Found certificate files: {cert_files}")
-            return {
-                'success': True,
-                'files': cert_files
-            }
-        logger.debug("[get_certificate_files] No version found, returning empty list")
+        cert_files = await data_package.list_cert_files()  # Updated to use the new script method
+        logger.debug(f"[get_certificate_files] Found certificate files: {cert_files}")
         return {
             'success': True,
-            'files': []
+            'files': cert_files
         }
     except Exception as e:
         error_message = str(e)
