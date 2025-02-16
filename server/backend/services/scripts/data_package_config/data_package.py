@@ -23,7 +23,8 @@ class DataPackage:
         self._last_status = None
         self._progress = 0
         self._last_cert_list = None
-        self.working_dir = self.get_default_working_directory()
+        self.home_dir = "/home/tak-manager"
+        self.working_dir = os.path.join(self.home_dir, "takserver")
 
     def stop(self):
         """Stop the current configuration process"""
@@ -144,12 +145,10 @@ class DataPackage:
             await asyncio.sleep(2)  # Check every 2 seconds
 
     def get_default_working_directory(self):
-        """Get the working directory from environment variable."""
-        base_dir = '/home/tak-manager'  # Use the container mount point directly
-        working_dir = os.path.join(base_dir, 'takserver-docker')
-        if not os.path.exists(working_dir):
-            os.makedirs(working_dir, exist_ok=True)
-        return working_dir
+        """Get the working directory."""
+        if not os.path.exists(self.working_dir):
+            os.makedirs(self.working_dir, exist_ok=True)
+        return self.working_dir
 
     async def copy_certificates_from_container(self, temp_dir, ca_certs, client_certs, channel: str = 'data-package'):
         """
@@ -394,10 +393,9 @@ class DataPackage:
         Creates a clean zip file for ATAK data package from the temporary directory.
         """
         self.check_stop()
-        working_dir = self.get_default_working_directory()
         
-        # Create datapackages subdirectory
-        packages_dir = os.path.join(working_dir, 'datapackages')
+        # Create datapackages subdirectory in home_dir
+        packages_dir = os.path.join(self.home_dir, 'datapackages')
         os.makedirs(packages_dir, exist_ok=True)
         
         # Ensure clean zip_name

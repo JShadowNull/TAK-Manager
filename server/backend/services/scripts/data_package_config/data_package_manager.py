@@ -11,8 +11,8 @@ logger = configure_logging(__name__)
 
 class DataPackageManager:
     def __init__(self, emit_event: Optional[Callable[[Dict[str, Any]], None]] = None):
-        self.base_dir = '/home/tak-manager'
-        self.packages_dir = os.path.join(self.base_dir, 'takserver-docker/datapackages')
+        self.home_dir = '/home/tak-manager'
+        self.packages_dir = os.path.join(self.home_dir, 'datapackages')
         os.makedirs(self.packages_dir, exist_ok=True)
         self.emit_event = emit_event
         self._last_status = None
