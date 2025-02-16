@@ -7,7 +7,7 @@ from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, AsyncGenerator
 from backend.services.scripts.cert_manager.certmanager import CertManager
-from backend.services.scripts.takserver.cert_xml_editor import CertConfigManager
+from backend.services.scripts.cert_manager.cert_xml_editor import CertConfigManager
 import json
 import asyncio
 from backend.config.logging_config import configure_logging

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from ..services.scripts.takserver.core_config import CoreConfigManager
-from ..services.scripts.takserver.log_manager import LogManager
+from ..services.scripts.system.log_manager import LogManager
 from sse_starlette.sse import EventSourceResponse
 import os
 
