@@ -5,6 +5,7 @@ import subprocess
 from typing import AsyncGenerator, Dict, Any, List
 from ..takserver.check_status import TakServerStatus
 from backend.config.logging_config import configure_logging
+from backend.services.helpers.directories import DirectoryHelper
 
 logger = configure_logging(__name__)
 
@@ -13,17 +14,18 @@ class LogManager:
     def __init__(self):
         self.tak_status = TakServerStatus()
         self._logs_dir = None
+        self.directory_helper = DirectoryHelper()
 
     @property
     def logs_dir(self) -> str:
         """Get the logs directory path based on current TAK Server version"""
         if not self._logs_dir:
-            version = self.tak_status.get_takserver_version()
+            version = self.directory_helper.get_takserver_version()
             if not version:
                 raise Exception("TAK Server is not installed")
             
-            base_dir = '/home/tak-manager/takserver'
-            self._logs_dir = os.path.join(base_dir, f"takserver-{version}", "tak", "logs")
+            tak_dir = self.directory_helper.get_tak_directory()
+            self._logs_dir = os.path.join(tak_dir, "logs")
             
             if not os.path.exists(self._logs_dir):
                 raise Exception("Logs directory not found")

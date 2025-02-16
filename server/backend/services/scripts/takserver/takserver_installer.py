@@ -14,6 +14,7 @@ import asyncio
 import docker
 import xml.etree.ElementTree as ET
 from dotenv import load_dotenv
+from backend.services.helpers.directories import DirectoryHelper
 
 # Load environment variables from .env file
 load_dotenv()
@@ -34,7 +35,8 @@ class TakServerInstaller:
         self.run_command = RunCommand()
         self.docker_manager = DockerManager()
         self.docker_client = docker.from_env()
-        self.working_dir = self.get_default_working_directory()
+        self.directory_helper = DirectoryHelper()
+        self.working_dir = self.directory_helper.get_default_working_directory()
         self.docker_zip_path = docker_zip_path
         self.postgres_password = postgres_password
         self.certificate_password = certificate_password
@@ -78,22 +80,11 @@ class TakServerInstaller:
                 await self.emit_event(new_status)
                 self._last_status = new_status
 
-    def get_default_working_directory(self) -> str:
-        """Get the working directory."""
-        base_dir = '/home/tak-manager'
-        working_dir = os.path.join(base_dir, 'takserver')
-        if not os.path.exists(working_dir):
-            os.makedirs(working_dir, exist_ok=True)
-        return working_dir
-
     async def create_working_directory(self) -> None:
         """Create the working directory."""
         try:
-            if os.path.exists(self.working_dir):
-                shutil.rmtree(self.working_dir)
-            os.makedirs(self.working_dir)
+            self.directory_helper.ensure_clean_directory(self.working_dir)
             self.cert_config.update_working_dir(self.working_dir)
-            
         except Exception as e:
             raise Exception(f"Error creating working directory: {str(e)}")
 
@@ -103,44 +94,66 @@ class TakServerInstaller:
             if not os.path.exists(self.docker_zip_path):
                 raise FileNotFoundError(f"ZIP file not found at {self.docker_zip_path}")
 
-            zip_filename = os.path.basename(self.docker_zip_path)
-            match = re.search(r'takserver-(.+)\.zip', zip_filename)
-            if not match:
-                raise ValueError("Failed to extract version from ZIP filename")
+            # Prepare temp directory
+            temp_extract_dir = self.directory_helper.get_temp_extract_directory()
+            self.directory_helper.ensure_clean_directory(temp_extract_dir)
 
-            self.takserver_version = match.group(1).lower()
-
-            # Create shell command string instead of list for unzip
-            unzip_command = f"unzip {self.docker_zip_path} -d {self.working_dir}"
+            # Extract to temp directory
+            unzip_command = f"unzip {self.docker_zip_path} -d {temp_extract_dir}"
             result = await self.run_command.run_command_async(
                 unzip_command,
                 'install',
                 emit_event=self.emit_event,
-                shell=True  # Set shell=True for shell commands
+                shell=True
             )
             if not result.success:
                 raise Exception(result.stderr)
 
-            self.extracted_folder_name = zip_filename.replace(".zip", "")
-            self.tak_dir = os.path.join(self.working_dir, self.extracted_folder_name, "tak")
+            # Find the tak directory in the extracted contents
+            extracted_contents = os.listdir(temp_extract_dir)
+            if not extracted_contents:
+                raise ValueError("Zip file appears to be empty")
 
-            if not os.path.exists(self.tak_dir):
-                raise ValueError(f"TAK directory not found at {self.tak_dir}")
+            # The TAK directory should be in the first (and only) subdirectory
+            temp_extracted_folder = os.path.join(temp_extract_dir, extracted_contents[0])
+            temp_tak_dir = os.path.join(temp_extracted_folder, "tak")
 
-            version_file_path = os.path.join(self.working_dir, "version.txt")
+            if not os.path.exists(temp_tak_dir):
+                raise ValueError(f"TAK directory not found in extracted contents")
+
+            # Get version from the extracted files
+            self.takserver_version = self.directory_helper.get_tak_version_from_extracted(temp_tak_dir)
+
+            # Create the standardized folder name and paths
+            self.extracted_folder_name = self.directory_helper.get_standardized_folder_name()
+            final_path = self.directory_helper.get_docker_compose_directory()
+
+            # Ensure clean target directory
+            self.directory_helper.ensure_clean_directory(final_path)
+
+            # Move the contents to the final location
+            shutil.move(temp_extracted_folder, final_path)
+
+            # Set the final tak_dir path
+            self.tak_dir = self.directory_helper.get_tak_directory()
+
+            # Write version to working directory
+            version_file_path = self.directory_helper.get_version_file_path()
             with open(version_file_path, "w") as version_file:
                 version_file.write(f"{self.takserver_version}\n")
 
             self.cert_config.update_tak_dir(self.tak_dir)
             
         except Exception as e:
+            self.directory_helper.cleanup_temp_directory()
             raise Exception(f"Error during ZIP extraction: {str(e)}")
+        finally:
+            self.directory_helper.cleanup_temp_directory()
 
     async def copy_coreconfig(self) -> None:
         """Copy CoreConfig.xml from example."""
         try:
-            core_config_path = os.path.join(self.tak_dir, "CoreConfig.xml")
-            example_core_config = os.path.join(self.tak_dir, "CoreConfig.example.xml")
+            core_config_path, example_core_config = self.directory_helper.get_core_config_paths(self.tak_dir)
 
             if not os.path.exists(core_config_path):
                 if os.path.exists(example_core_config):
@@ -383,7 +396,7 @@ volumes:
     async def start_docker_compose(self) -> None:
         """Start Docker Compose services."""
         try:
-            docker_compose_dir = os.path.join(self.working_dir, self.extracted_folder_name)
+            docker_compose_dir = self.directory_helper.get_docker_compose_directory()
             await self.create_env_file()
 
             # Clean up existing containers and images
@@ -463,7 +476,7 @@ volumes:
     async def verify_containers(self) -> None:
         """Verify containers are running."""
         try:
-            docker_compose_dir = os.path.join(self.working_dir, self.extracted_folder_name)
+            docker_compose_dir = self.directory_helper.get_docker_compose_directory()
             result = await self.run_command.run_command_async(
                 ["docker-compose", "ps"],
                 'install',
@@ -479,7 +492,7 @@ volumes:
     async def restart_takserver(self) -> None:
         """Restart TAK Server containers."""
         try:
-            docker_compose_dir = os.path.join(self.working_dir, self.extracted_folder_name)
+            docker_compose_dir = self.directory_helper.get_docker_compose_directory()
             result = await self.run_command.run_command_async(
                 ["docker-compose", "restart"],
                 'install',
@@ -531,9 +544,6 @@ volumes:
 
             # Docker build and deployment (15-80%)
             await self.update_status("in_progress", progress, "Starting Docker container setup...")
-            
-            # Create a background task to update progress during docker build
-            docker_compose_dir = os.path.join(self.working_dir, self.extracted_folder_name)
             
             # Start progress updater for docker build
             build_start_progress = progress

@@ -12,21 +12,21 @@ import time
 import asyncio
 import docker
 from backend.config.logging_config import configure_logging
+from backend.services.helpers.directories import DirectoryHelper
 
 # Configure logging using centralized config
 logger = configure_logging(__name__)
 
 class OTAUpdate:
     def __init__(self, ota_zip_path, emit_event: Optional[Callable[[Dict[str, Any]], None]] = None):
-        self.ota_zip_path = ota_zip_path  # Store the path to the OTA zip file
         self.run_command = RunCommand()
+        self.directory_helper = DirectoryHelper()
         self.generate_content = GenerateOTAContent()
-        self.tak_status = TakServerStatus()
-        self._last_status = None
+        self.ota_zip_path = ota_zip_path
         self.emit_event = emit_event
+        self.tak_status = TakServerStatus(emit_event=emit_event)
+        self._last_status = None
         self.docker_client = docker.from_env()
-        self.working_dir = self.get_default_working_directory()  # Initialize working_dir
-        logger.debug(f"OTAUpdate initialized with zip path: {json.dumps({'ota_zip_path': ota_zip_path})}")
 
     async def update_status(self, status: str, progress: float, message: str, error: Optional[str] = None) -> None:
         """Update installation status."""
@@ -46,85 +46,21 @@ class OTAUpdate:
                 await self.emit_event(new_status)
                 self._last_status = new_status
 
-    def get_default_working_directory(self):
-        """Get the working directory."""
-        base_dir = '/home/tak-manager'
-        working_dir = os.path.join(base_dir, 'takserver')
-        if not os.path.exists(working_dir):
-            os.makedirs(working_dir, exist_ok=True)
-        return working_dir
-
-    def get_docker_compose_dir(self):
-        """Get the docker compose directory."""
-        version = self.get_takserver_version()
-        if not version:
-            raise Exception("Could not determine TAK Server version")
-        path_version = self._get_path_version(version)
-        return os.path.join(self.working_dir, f"takserver-{path_version}")
-
-    def get_takserver_version(self):
-        """Get TAK Server version from version.txt."""
-        version_file_path = os.path.join(self.working_dir, "version.txt")
-        
-        if os.path.exists(version_file_path):
-            try:
-                with open(version_file_path, "r") as version_file:
-                    version = version_file.read().strip()
-                    if not version:
-                        return None
-                    return version
-            except Exception:
-                return None
-        return None
-
-    def _get_path_version(self, version):
-        """Convert version string for path use."""
-        if not version:
-            return None
-        parts = version.split('-')
-        if len(parts) >= 3:
-            return f"{parts[0]}-RELEASE-{parts[2]}"
-        return version
-
-    async def stop_takserver(self) -> None:
-        """Stop TAKServer containers if needed"""
-        logger.debug("Stopping TAKServer containers.")
-        try:
-            await self.tak_status.stop_containers()
-            logger.debug("TAKServer containers stopped successfully.")
-        except Exception as e:
-            logger.error(f"Error in stop_takserver: {str(e)}")
-            raise
-
-    async def start_takserver(self) -> None:
-        """Start TAKServer containers if needed"""
-        logger.debug("Starting TAKServer containers.")
-        try:
-            await self.tak_status.start_containers()
-            logger.debug("TAKServer containers started successfully.")
-        except Exception as e:
-            logger.error(f"Error in start_takserver: {str(e)}")
-            raise
-
     async def update_dockerfile(self) -> None:
         """Updates the Dockerfile with new content."""
         try:
-            logger.debug("Starting update_dockerfile method.")
-            docker_compose_dir = self.get_docker_compose_dir()
+            version = self.directory_helper.get_takserver_version()
+            docker_compose_dir = self.directory_helper.get_docker_compose_directory(version)
             dockerfile_path = os.path.join(docker_compose_dir, "docker", "Dockerfile.takserver")
 
-            logger.debug(f"Checking if Dockerfile exists at: {dockerfile_path}")
             if not os.path.exists(dockerfile_path):
                 logger.error(f"Dockerfile not found at {dockerfile_path}")
                 raise FileNotFoundError(f"Dockerfile not found at {dockerfile_path}")
 
-            logger.debug("Generating new Dockerfile content.")
             new_dockerfile_content = self.generate_content.update_dockerfile()
 
-            logger.debug(f"Writing new content to Dockerfile at: {dockerfile_path}")
             with open(dockerfile_path, 'w') as dockerfile:
                 dockerfile.write(new_dockerfile_content)
-            logger.debug("Dockerfile updated successfully.")
         except Exception as e:
             logger.error(f"Error updating Dockerfile: {str(e)}")
             raise
@@ -132,13 +68,11 @@ class OTAUpdate:
     async def rebuild_takserver(self) -> None:
         """Rebuild and restart TAK Server containers."""
         try:
-            logger.debug("Getting docker compose directory...")
-            docker_compose_dir = self.get_docker_compose_dir()
-            logger.debug(f"Using docker compose directory: {docker_compose_dir}")
+            version = self.directory_helper.get_takserver_version()
+            docker_compose_dir = self.directory_helper.get_docker_compose_directory(version)
             
             # Build and start containers using docker-compose
             logger.info("Building and starting Docker containers...")
-            logger.debug("Running docker-compose up command with build and force-recreate flags...")
             result = await self.run_command.run_command_async(
                 ["docker-compose", "up", "-d", "--build", "--force-recreate"],
                 'ota',
@@ -147,10 +81,7 @@ class OTAUpdate:
                 ignore_errors=True
             )
             if not result.success:
-                logger.debug(f"Docker compose command failed with stderr: {result.stderr}")
                 raise Exception(f"Failed to rebuild containers: {result.stderr}")
-
-            logger.debug("Docker compose command completed successfully")
 
         except Exception as e:
             logger.error(f"Error in rebuild_takserver: {str(e)}")
@@ -158,8 +89,8 @@ class OTAUpdate:
 
     async def check_if_generate_inf_script_exists(self) -> bool:
         try:
-            script_path = '/opt/android-sdk/build-tools/33.0.0/generate-inf.sh'
-            version = self.get_takserver_version()
+            script_path = self.directory_helper.get_generate_inf_script_path()
+            version = self.directory_helper.get_takserver_version()
             takserver_container_name = f"takserver-{version}"
 
             try:
@@ -167,19 +98,16 @@ class OTAUpdate:
                 exit_code, _ = container.exec_run(f"test -f {script_path}")
                 return exit_code == 0
             except docker.errors.NotFound:
-                logger.error(f"Container {takserver_container_name} not found")
                 return False
-            except Exception as e:
-                logger.error(f"Error checking script existence: {str(e)}")
+            except Exception:
                 return False
-        except Exception as e:
-            logger.error(f"Error in check_if_generate_inf_script_exists: {str(e)}")
+        except Exception:
             raise
 
     async def create_generate_inf_script(self) -> None:
         temp_script_path = None
         try:
-            version = self.get_takserver_version()
+            version = self.directory_helper.get_takserver_version()
             takserver_container_name = f"takserver-{version}"
 
             script_exists = await self.check_if_generate_inf_script_exists()
@@ -217,14 +145,11 @@ class OTAUpdate:
                 container.exec_run('chmod +x /opt/android-sdk/build-tools/33.0.0/generate-inf.sh')
 
             except docker.errors.NotFound:
-                logger.error(f"Container {takserver_container_name} not found")
                 raise Exception(f"Container {takserver_container_name} not found")
-            except Exception as e:
-                logger.error(f"Error creating script in container: {str(e)}")
-                raise Exception(f"Error creating script in container: {str(e)}")
+            except Exception:
+                raise Exception("Error creating script in container")
 
-        except Exception as e:
-            logger.error(f"Error in create_generate_inf_script: {str(e)}")
+        except Exception:
             raise
         finally:
             if temp_script_path and os.path.exists(temp_script_path):
@@ -232,7 +157,7 @@ class OTAUpdate:
 
     async def check_and_remove_existing_plugin_folder(self) -> None:
         try:
-            version = self.get_takserver_version()
+            version = self.directory_helper.get_takserver_version()
             takserver_container_name = f"takserver-{version}"
 
             check_command = [
@@ -274,7 +199,7 @@ class OTAUpdate:
                     for dir in dirs:
                         os.rmdir(os.path.join(root, dir))
 
-                version = self.get_takserver_version()
+                version = self.directory_helper.get_takserver_version()
                 takserver_container_name = f"takserver-{version}"
 
                 copy_command = [
@@ -293,7 +218,7 @@ class OTAUpdate:
 
     async def run_generate_inf_script(self) -> None:
         try:
-            version = self.get_takserver_version()
+            version = self.directory_helper.get_takserver_version()
             takserver_container_name = f"takserver-{version}"
 
             command = [
@@ -317,14 +242,6 @@ class OTAUpdate:
             logger.error(f"Error in run_generate_inf_script: {str(e)}")
             raise
 
-    async def restart_takserver_containers(self) -> None:
-        """Restart TAKServer containers using TakServerStatus"""
-        try:
-            success = self.tak_status.restart_containers()
-            if not success:
-                raise Exception("Failed to restart TAKServer containers")
-        except Exception as e:
-            raise
     async def main(self) -> bool:
         """Main configuration process"""
         try:
@@ -346,7 +263,7 @@ class OTAUpdate:
 
             # Check TAKServer status (0-2%)
             await self.update_status("in_progress", progress, "Checking TAKServer status...")
-            await self.stop_takserver()
+            await self.tak_status.stop_containers()
             progress += weights['setup']
             await self.update_status("in_progress", progress, "TAKServer status verified")
 
@@ -411,6 +328,7 @@ class OTAUpdate:
             await self.check_and_remove_existing_plugin_folder()
             await self.extract_and_prepare_plugins()
             await self.run_generate_inf_script()
+            await self.tak_status.restart_containers()
 
             plugin_progress_task.cancel()
             try:
@@ -446,7 +364,7 @@ class OTAUpdate:
 
             # Check TAKServer status (0-10%)
             await self.update_status("in_progress", progress, "Checking TAKServer status...")
-            await self.start_takserver()
+            await self.tak_status.start_containers()
             progress += weights['setup']
             await self.update_status("in_progress", progress, "TAKServer status verified")
 
@@ -480,6 +398,7 @@ class OTAUpdate:
             await self.update_status("in_progress", progress, "Running generate-inf script")
             await self.create_generate_inf_script()
             await self.run_generate_inf_script()
+            await self.tak_status.restart_containers()
             progress = 100
             
             # Emit completion status

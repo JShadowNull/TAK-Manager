@@ -12,6 +12,7 @@ import uuid
 import time
 import asyncio
 from backend.config.logging_config import configure_logging
+from backend.services.helpers.directories import DirectoryHelper
 
 logger = configure_logging(__name__)
 
@@ -23,8 +24,8 @@ class DataPackage:
         self._last_status = None
         self._progress = 0
         self._last_cert_list = None
-        self.home_dir = "/home/tak-manager"
-        self.working_dir = os.path.join(self.home_dir, "takserver")
+        self.directory_helper = DirectoryHelper()
+        self.working_dir = self.directory_helper.get_default_working_directory()
 
     def stop(self):
         """Stop the current configuration process"""
@@ -55,27 +56,12 @@ class DataPackage:
                 self._last_status = new_status
                 self._progress = progress
 
-    async def read_version_txt(self):
-        """Get TAK Server version from version.txt."""
-        version_file_path = os.path.join(self.working_dir, "version.txt")
-
-        if os.path.exists(version_file_path):
-            try:
-                with open(version_file_path, "r") as version_file:
-                    version = version_file.read().strip()
-                    return version if version else None
-            except Exception:
-                return None
-        return None
-
-    async def list_cert_files(self, container_name) -> list:
-        """Lists certificate files in the specified container's /opt/tak/certs/files directory."""
+    async def list_cert_files(self) -> list:
+        """Lists certificate files in the /opt/tak/certs/files directory on the host."""
         try:
-            logger.debug(f"Listing certificate files in container {container_name}")
-            list_files_command = [
-                'docker', 'exec', container_name,
-                'ls', '/opt/tak/certs/files'
-            ]
+            logger.debug("Listing certificate files on the host")
+            certs_directory = self.directory_helper.get_cert_directory()
+            list_files_command = ['ls', certs_directory]
             
             result = await self.run_command.run_command_async(
                 list_files_command,
@@ -96,67 +82,13 @@ class DataPackage:
             logger.error(f"Error listing certificate files: {str(e)}")
             return []
 
-    async def certificate_monitor(self) -> AsyncGenerator[Dict[str, Any], None]:
-        """Generate certificate list update events."""
-        while True:
-            try:
-                version = await self.read_version_txt()
-                if version:
-                    container_name = f"takserver-{version}"
-                    cert_files = await self.list_cert_files(container_name)
-                    
-                    # Only emit if the certificate list has changed
-                    cert_list = sorted(cert_files) if cert_files else []
-                    if cert_list != self._last_cert_list:
-                        self._last_cert_list = cert_list
-                        event_data = {
-                            'type': 'certificate_list',
-                            'certificates': cert_list,
-                            'timestamp': time.time()
-                        }
-                        yield {
-                            "event": "certificate_list",
-                            "data": json.dumps(event_data)
-                        }
-                else:
-                    # Reset last cert list if server is not running
-                    if self._last_cert_list is not None:
-                        self._last_cert_list = None
-                        yield {
-                            "event": "certificate_list",
-                            "data": json.dumps({
-                                'type': 'certificate_list',
-                                'certificates': [],
-                                'timestamp': time.time()
-                            })
-                        }
-            except Exception as e:
-                logger.error(f"Error monitoring certificates: {str(e)}")
-                if self._last_cert_list is not None:
-                    self._last_cert_list = None
-                    yield {
-                        "event": "certificate_list",
-                        "data": json.dumps({
-                            'type': 'certificate_list',
-                            'certificates': [],
-                            'timestamp': time.time()
-                        })
-                    }
-            await asyncio.sleep(2)  # Check every 2 seconds
-
-    def get_default_working_directory(self):
-        """Get the working directory."""
-        if not os.path.exists(self.working_dir):
-            os.makedirs(self.working_dir, exist_ok=True)
-        return self.working_dir
-
     async def copy_certificates_from_container(self, temp_dir, ca_certs, client_certs, channel: str = 'data-package'):
         """
         Copies the specified certificates from the container to the temporary directory.
         Only copies certificates if valid names are provided.
         """
         self.check_stop()
-        version = await self.read_version_txt()
+        version = await self.directory_helper.get_takserver_version()
         container_name = f"takserver-{version}"
 
         # Create cert directory in temp directory
@@ -394,9 +326,8 @@ class DataPackage:
         """
         self.check_stop()
         
-        # Create datapackages subdirectory in home_dir
-        packages_dir = os.path.join(self.home_dir, 'datapackages')
-        os.makedirs(packages_dir, exist_ok=True)
+        # Create datapackages subdirectory using DirectoryHelper
+        packages_dir = self.directory_helper.get_data_packages_directory()
         
         # Ensure clean zip_name
         zip_name = zip_name.replace(' ', '_')

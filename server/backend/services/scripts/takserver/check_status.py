@@ -7,18 +7,16 @@ import logging
 from backend.config.logging_config import configure_logging
 import asyncio
 import docker
+from backend.services.helpers.directories import DirectoryHelper
 
 # Setup logging
 logger = configure_logging(__name__)
-# Set log level to INFO
-logger.setLevel(logging.INFO)
-
-
 
 class TakServerStatus:
     def __init__(self, emit_event: Optional[Callable[[Dict[str, Any]], Coroutine[Any, Any, None]]] = None):
         self.run_command = RunCommand()
-        self.working_dir = self.get_default_working_directory()
+        self.directory_helper = DirectoryHelper()
+        self.working_dir = self.directory_helper.get_default_working_directory()
         self.emit_event = emit_event
         self.docker_client = docker.from_env()
 
@@ -35,59 +33,9 @@ class TakServerStatus:
             await self.emit_event(status_data)
         return status_data
 
-    def get_default_working_directory(self):
-        """Get the working directory."""
-        base_dir = '/home/tak-manager'
-        working_dir = os.path.join(base_dir, 'takserver')
-        if not os.path.exists(working_dir):
-            os.makedirs(working_dir, exist_ok=True)
-        return working_dir
-
-    def get_docker_compose_dir(self):
-        """Get the docker compose directory."""
-        version = self.get_takserver_version()
-        if not version:
-            raise Exception("Could not determine TAK Server version")
-        path_version = self._get_path_version(version)
-        return os.path.join(self.working_dir, f"takserver-{path_version}")
-
-    def get_takserver_version(self):
-        """Get TAK Server version from version.txt."""
-        version_file_path = os.path.join(self.working_dir, "version.txt")
-        
-        if os.path.exists(version_file_path):
-            try:
-                with open(version_file_path, "r") as version_file:
-                    version = version_file.read().strip()
-                    if not version:
-                        return None
-                    return version
-            except Exception:
-                return None
-        return None
-
-    def _get_path_version(self, version):
-        """Convert version string for path use."""
-        if not version:
-            return None
-        parts = version.split('-')
-        if len(parts) >= 3:
-            return f"{parts[0]}-RELEASE-{parts[2]}"
-        return version
-
     def check_installation(self):
         """Check if TAK Server is installed."""
-        if not os.path.exists(self.working_dir):
-            logger.debug(f"Working directory does not exist: {self.working_dir}")
-            return False
-
-        version = self.get_takserver_version()
-        if not version:
-            logger.debug("Could not determine TAK Server version")
-            return False
-
-        path_version = self._get_path_version(version)
-        docker_compose_path = os.path.join(self.working_dir, f"takserver-{path_version}", "docker-compose.yml")
+        docker_compose_path = self.directory_helper.get_docker_compose_directory()
         
         if not os.path.exists(docker_compose_path):
             logger.debug("docker-compose.yml not found")
@@ -100,7 +48,7 @@ class TakServerStatus:
         if not self.check_installation():
             return False
 
-        version = self.get_takserver_version()
+        version = self.directory_helper.get_takserver_version()
         if not version:
             return False
 
@@ -132,15 +80,16 @@ class TakServerStatus:
     async def get_status(self) -> Dict[str, Any]:
         """Get TAK Server installation and running state."""
         is_installed = self.check_installation()
-        version = self.get_takserver_version() if is_installed else None
+        version = self.directory_helper.get_takserver_version() if is_installed else None
         is_running = await self.check_containers_running() if is_installed else False
         
         status = {
             "isInstalled": is_installed,
             "isRunning": is_running,
-            "version": self._get_path_version(version) if version else "Not Installed"
+            "version": version if version else "Not Installed"
         }
         return status
+
     async def start_containers(self) -> Dict[str, Any]:
         """Start TAK Server containers."""
         try:
@@ -149,7 +98,7 @@ class TakServerStatus:
                 logger.debug("TAK Server is not installed, cannot start containers")
                 return await self.update_status("start", "error", "TAK Server is not installed")
 
-            docker_compose_dir = self.get_docker_compose_dir()
+            docker_compose_dir = self.directory_helper.get_docker_compose_directory()
             logger.debug(f"Using docker compose directory: {docker_compose_dir}")
             await self.update_status("start", "in_progress", "Starting TAK Server containers...")
             
@@ -199,7 +148,7 @@ class TakServerStatus:
                 logger.debug("TAK Server is not installed, cannot stop containers")
                 return await self.update_status("stop", "error", "TAK Server is not installed")
 
-            docker_compose_dir = self.get_docker_compose_dir()
+            docker_compose_dir = self.directory_helper.get_docker_compose_directory()
             logger.debug(f"Using docker compose directory: {docker_compose_dir}")
             await self.update_status("stop", "in_progress", "Stopping TAK Server containers...")
             
@@ -249,7 +198,7 @@ class TakServerStatus:
                 logger.debug("TAK Server is not installed, cannot restart containers")
                 return await self.update_status("restart", "error", "TAK Server is not installed")
 
-            docker_compose_dir = self.get_docker_compose_dir()
+            docker_compose_dir = self.directory_helper.get_docker_compose_directory()
             logger.debug(f"Using docker compose directory: {docker_compose_dir}")
             await self.update_status("restart", "in_progress", "Restarting TAK Server containers...")
             

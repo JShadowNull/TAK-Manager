@@ -5,11 +5,13 @@ import time
 from typing import Dict, Any, Optional, Callable
 import docker
 import asyncio
+from backend.services.helpers.directories import DirectoryHelper
 
 class TakServerUninstaller:
     def __init__(self, emit_event: Optional[Callable[[Dict[str, Any]], None]] = None):
         self.run_command = RunCommand()
-        self.working_dir = self.get_default_working_directory()
+        self.directory_helper = DirectoryHelper()
+        self.working_dir = self.directory_helper.get_default_working_directory()
         self.emit_event = emit_event
         self.docker_client = docker.from_env()
 
@@ -26,51 +28,10 @@ class TakServerUninstaller:
                 "timestamp": int(time.time() * 1000)
             })
 
-    def get_default_working_directory(self):
-        """Get the working directory."""
-        base_dir = '/home/tak-manager'
-        working_dir = os.path.join(base_dir, 'takserver')
-        if not os.path.exists(working_dir):
-            os.makedirs(working_dir, exist_ok=True)
-        return working_dir
-    
-    def get_upload_directory(self):
-        """Get the upload directory."""
-        base_dir = '/home/tak-manager'
-        upload_dir = os.path.join(base_dir, 'uploads')
-        if not os.path.exists(upload_dir):
-            os.makedirs(upload_dir, exist_ok=True)
-        return upload_dir
-
-    def get_takserver_version(self):
-        """Get TAK Server version from version.txt."""
-        version_file_path = os.path.join(self.working_dir, "version.txt")
-        if os.path.exists(version_file_path):
-            with open(version_file_path, "r") as version_file:
-                return version_file.read().strip()
-        return None
-        
-    def _get_path_version(self, version):
-        """Convert version string for path use."""
-        if not version:
-            return None
-        parts = version.split('-')
-        if len(parts) >= 3:
-            return f"{parts[0]}-RELEASE-{parts[2]}"
-        return version
-
-    def get_docker_compose_dir(self):
-        """Get the docker compose directory."""
-        version = self.get_takserver_version()
-        if not version:
-            raise Exception("Could not determine TAK Server version")
-        path_version = self._get_path_version(version)
-        return os.path.join(self.working_dir, f"takserver-{path_version}")
-
     async def stop_and_remove_containers(self):
         """Stop and remove all TAK Server containers."""
         try:
-            docker_compose_dir = self.get_docker_compose_dir()
+            docker_compose_dir = self.directory_helper.get_docker_compose_directory()
             
             result = await self.run_command.run_command_async(
                 ["docker-compose", "down", "--rmi", "all", "--volumes", "--remove-orphans"],
@@ -90,46 +51,12 @@ class TakServerUninstaller:
     async def clean_docker_build_cache(self):
         """Clean Docker build cache."""
         try:
-            # Clean BuildKit containers
-            result = await self.run_command.run_command_async(
-                ["docker", "ps", "-aq", "--filter", "name=buildkit"],
-                'uninstall',
-                emit_event=self.emit_event,
-                ignore_errors=True
-            )
-            if result.stdout.strip():
-                containers = result.stdout.strip().split('\n')
-                await self.run_command.run_command_async(
-                    ["docker", "rm", "-f"] + containers,
-                    'uninstall',
-                    emit_event=self.emit_event,
-                    ignore_errors=True
-                )
-
-            # Clean BuildKit volumes
-            result = await self.run_command.run_command_async(
-                ["docker", "volume", "ls", "-q", "--filter", "name=buildkit"],
-                'uninstall',
-                emit_event=self.emit_event,
-                ignore_errors=True
-            )
-            if result.stdout.strip():
-                volumes = result.stdout.strip().split('\n')
-                await self.run_command.run_command_async(
-                    ["docker", "volume", "rm", "-f"] + volumes,
-                    'uninstall',
-                    emit_event=self.emit_event,
-                    ignore_errors=True
-                )
-
-            # Remove BuildKit image
             await self.run_command.run_command_async(
-                ["docker", "rmi", "-f", "moby/buildkit:buildx-stable-1"],
+                ["docker", "system", "prune", "-f"],
                 'uninstall',
                 emit_event=self.emit_event,
                 ignore_errors=True
             )
-
             return True
 
         except Exception as e:
@@ -147,7 +74,7 @@ class TakServerUninstaller:
                 if not result.success or os.path.exists(self.working_dir):
                     raise Exception("Failed to remove installation directory")
 
-            upload_dir = self.get_upload_directory()
+            upload_dir = self.directory_helper.get_upload_directory()
             if os.path.exists(upload_dir):
                 result = await self.run_command.run_command_async(
                     ["rm", "-rf", upload_dir],

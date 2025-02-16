@@ -1,50 +1,32 @@
 import os
 from lxml import etree
 from typing import Dict, Any, Optional, Tuple
+from backend.services.helpers.directories import DirectoryHelper
+from backend.config.logging_config import configure_logging
+
+logger = configure_logging(__name__)
 
 class CertConfigManager:
     def __init__(self):
-        self.home_dir = "/home/tak-manager"
-        self.working_dir = os.path.join(self.home_dir, "takserver")
+        self.directory_helper = DirectoryHelper()
 
     def _initialize_paths(self):
         """Initialize paths that require version detection"""
-        version = self.get_takserver_version()
+        version = self.directory_helper.get_takserver_version()
         if not version:
             raise Exception("Could not detect TAK Server version. Ensure version.txt exists and is not empty.")
             
-        path_version = self._get_path_version(version)
-        if not path_version:
-            raise Exception(f"Invalid version format: {version}")
-            
-        self.tak_path = os.path.join(self.working_dir, "takserver-" + path_version, "tak")
-        self.config_path = os.path.join(self.tak_path, "UserAuthenticationFile.xml")
-        self.schema_path = os.path.join(self.tak_path, "UserAuthenticationFile.xsd")
-        self.namespace = {"ns": "http://bbn.com/marti/xml/bindings"}
-
-    def get_takserver_version(self):
-        """Get TAK Server version from version.txt."""
-        version_file_path = os.path.join(self.working_dir, "version.txt")
+        self.tak_path = self.directory_helper.get_tak_directory()  # Let it use the version from get_takserver_version()
+        logger.debug(f"TAK Path: {self.tak_path}")  # Debugging path
         
-        if os.path.exists(version_file_path):
-            try:
-                with open(version_file_path, "r") as version_file:
-                    version = version_file.read().strip()
-                    if not version:
-                        return None
-                    return version
-            except Exception:
-                return None
-        return None
-    
-    def _get_path_version(self, version):
-        """Convert version string for path use."""
-        if not version:
-            return None
-        parts = version.split('-')
-        if len(parts) >= 3:
-            return f"{parts[0]}-RELEASE-{parts[2]}"
-        return version
+        self.config_path = os.path.join(self.tak_path, "UserAuthenticationFile.xml")
+        logger.debug(f"Config Path: {self.config_path}")  # Debugging path
+        
+        self.schema_path = os.path.join(self.tak_path, "UserAuthenticationFile.xsd")
+        logger.debug(f"Schema Path: {self.schema_path}")  # Debugging path
+        
+        self.namespace = {"ns": "http://bbn.com/marti/xml/bindings"}
+        logger.debug(f"Namespace: {self.namespace}")  # Debugging namespace
 
     def read_cert_config(self, identifier: str) -> str:
         """Read the configuration for a specific certificate"""

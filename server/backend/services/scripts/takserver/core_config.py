@@ -5,43 +5,22 @@ from typing import Dict, Any, Tuple, List
 from datetime import datetime
 import shutil
 from backend.config.logging_config import configure_logging
+from backend.services.helpers.directories import DirectoryHelper
 
 # Configure logging using centralized config
 logger = configure_logging(__name__)
 
 class CoreConfigManager:
     def __init__(self):
-        self.home_dir = "/home/tak-manager"
-        self.working_dir = os.path.join(self.home_dir, "takserver")
-        self.backups_dir = os.path.join(self.home_dir, "config_backups")
-        
-        logger.debug(f"Home directory: {self.home_dir}")
-        logger.debug(f"Working directory: {self.working_dir}")
-        logger.debug(f"Backups directory: {self.backups_dir}")
-        
-        # Ensure backups directory exists
-        if not os.path.exists(self.backups_dir):
-            os.makedirs(self.backups_dir)
+        self.directory_helper = DirectoryHelper()
+        self.backups_dir = self.directory_helper.get_backups_directory()
             
     def _initialize_paths(self):
         """Initialize paths that require version detection"""
-        version = self.get_takserver_version()
-        if not version:
-            raise Exception("Could not detect TAK Server version. Ensure version.txt exists and is not empty.")
-            
-        path_version = self._get_path_version(version)
-        if not path_version:
-            raise Exception(f"Invalid version format: {version}")
-            
-        self.tak_path = os.path.join(self.working_dir, "takserver-" + path_version, "tak")
+        self.tak_path = self.directory_helper.get_tak_directory()
         self.config_path = os.path.join(self.tak_path, "CoreConfig.xml")
         self.validate_script = os.path.join(self.tak_path, "validateConfig.sh")
         self.init_backup_path = os.path.join(self.backups_dir, "init_backup.xml")
-
-        logger.debug(f"TAK path: {self.tak_path}")
-        logger.debug(f"Config path: {self.config_path}")
-        logger.debug(f"Validate script path: {self.validate_script}")
-        logger.debug(f"Initial backup path: {self.init_backup_path}")
 
     def ensure_init_backup(self) -> None:
         """Ensure initial backup exists, create if it doesn't"""
@@ -52,32 +31,6 @@ class CoreConfigManager:
             else:
                 raise Exception("CoreConfig.xml not found")
             
-    def get_takserver_version(self):
-        """Get TAK Server version from version.txt."""
-        version_file_path = os.path.join(self.working_dir, "version.txt")
-        
-        logger.debug(f"Version file path: {version_file_path}")
-        
-        if os.path.exists(version_file_path):
-            try:
-                with open(version_file_path, "r") as version_file:
-                    version = version_file.read().strip()
-                    if not version:
-                        return None
-                    return version
-            except Exception:
-                return None
-        return None
-    
-    def _get_path_version(self, version):
-        """Convert version string for path use."""
-        if not version:
-            return None
-        parts = version.split('-')
-        if len(parts) >= 3:
-            return f"{parts[0]}-RELEASE-{parts[2]}"
-        return version
-
     def create_backup(self, name: str = "") -> Dict[str, str]:
         """Create a new backup with timestamp"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
