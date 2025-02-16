@@ -13,11 +13,80 @@ logger = configure_logging(__name__)
 class CertManager:
     def __init__(self, emit_event: Optional[Callable[[Dict[str, Any]], None]] = None):
         self.run_command = RunCommand()
-        self.working_dir = self.get_default_working_directory()
+        self.home_dir = '/home/tak-manager'
+        self.working_dir = os.path.join(self.home_dir, 'takserver')
+        if not os.path.exists(self.working_dir):
+            os.makedirs(self.working_dir, exist_ok=True)
         self.emit_event = emit_event
         self._last_status = None
         self._last_certificates = None
         self._monitor_task = None
+
+    def get_default_working_directory(self):
+        """Get the working directory."""
+        return self.working_dir
+
+    def _get_path_version(self, version):
+        """Convert version string for path use."""
+        if not version:
+            return None
+        parts = version.split('-')
+        if len(parts) >= 3:
+            return f"{parts[0]}-RELEASE-{parts[2]}"
+        return version
+
+    def get_container_name(self) -> str:
+        """Get TAK Server container name based on version."""
+        version = self.get_takserver_version()
+        if not version:
+            raise Exception("Could not determine TAK Server version")
+        return f"takserver-{version}"
+
+    def get_takserver_version(self):
+        """Get TAK Server version from version.txt if it exists."""
+        version_file_path = os.path.join(self.working_dir, "version.txt")
+        if os.path.exists(version_file_path):
+            with open(version_file_path, "r") as version_file:
+                return version_file.read().strip()
+        return None
+
+    def get_cert_directory(self):
+        """Get the certificate directory path."""
+        version = self.get_takserver_version()
+        if not version:
+            raise Exception("Could not determine TAK Server version")
+        path_version = self._get_path_version(version)
+        return os.path.join(self.working_dir, f"takserver-{path_version}", "certs", "files")
+
+    async def get_auth_file_path(self):
+        """Get the UserAuthenticationFile.xml path."""
+        try:
+            version = self.get_takserver_version()
+            if not version:
+                raise Exception("Could not determine TAK Server version")
+            
+            path_version = self._get_path_version(version)
+            auth_file = os.path.join(self.working_dir, f"takserver-{path_version}", "tak", "UserAuthenticationFile.xml")
+            
+            if not os.path.exists(auth_file):
+                await self.update_status(
+                    "fetch",
+                    "error",
+                    "Authentication file not found",
+                    {"path": auth_file}
+                )
+                raise Exception(f"Authentication file not found at: {auth_file}")
+                
+            return auth_file
+            
+        except Exception as e:
+            await self.update_status(
+                "fetch",
+                "error",
+                f"Error getting auth file path: {str(e)}",
+                {"error": str(e)}
+            )
+            raise
 
     async def start_monitoring(self):
         """Start monitoring certificates for changes."""
@@ -114,14 +183,6 @@ class CertManager:
                 "timestamp": int(time.time() * 1000)
             })
 
-    def get_default_working_directory(self):
-        """Get the working directory from environment variable."""
-        base_dir = '/home/tak-manager'  # Use the container mount point directly
-        working_dir = os.path.join(base_dir, 'takserver-docker')
-        if not os.path.exists(working_dir):
-            os.makedirs(working_dir, exist_ok=True)
-        return working_dir
-
     def get_container_name(self) -> str:
         """Get TAK Server container name based on version."""
         version = self.get_takserver_version()
@@ -142,36 +203,8 @@ class CertManager:
         version = self.get_takserver_version()
         if not version:
             raise Exception("Could not determine TAK Server version")
-        return os.path.join(self.working_dir, f"takserver-docker-{version}", "certs", "files")
-
-    async def get_auth_file_path(self):
-        """Get the UserAuthenticationFile.xml path."""
-        try:
-            version = self.get_takserver_version()
-            if not version:
-                raise Exception("Could not determine TAK Server version")
-            
-            auth_file = os.path.join(self.working_dir, f"takserver-docker-{version}", "tak", "UserAuthenticationFile.xml")
-            
-            if not os.path.exists(auth_file):
-                await self.update_status(
-                    "fetch",
-                    "error",
-                    "Authentication file not found",
-                    {"path": auth_file}
-                )
-                raise Exception(f"Authentication file not found at: {auth_file}")
-                
-            return auth_file
-            
-        except Exception as e:
-            await self.update_status(
-                "fetch",
-                "error",
-                f"Error getting auth file path: {str(e)}",
-                {"error": str(e)}
-            )
-            raise
+        path_version = self._get_path_version(version)
+        return os.path.join(self.working_dir, f"takserver-{path_version}", "certs", "files")
 
     async def get_registered_certificates(self) -> list:
         """Parse UserAuthenticationFile.xml and return registered certificate information."""
