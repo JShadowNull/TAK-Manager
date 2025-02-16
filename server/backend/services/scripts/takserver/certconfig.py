@@ -28,6 +28,7 @@ class CertConfig:
         self.organizational_unit = organizational_unit
         self.tak_dir = tak_dir
         self.working_dir = working_dir
+        self.home_dir = "/home/tak-manager"
         self.emit_event = emit_event
     def update_tak_dir(self, tak_dir: str) -> None:
         """Update the TAK directory."""
@@ -40,7 +41,7 @@ class CertConfig:
     async def copy_client_cert_to_webaccess(self, container_name: str) -> None:
         """Copy the client certificate to webaccess folder."""
         cert_name = f"{self.name}.p12"
-        webaccess_dir = os.path.join(self.working_dir, "webaccess")
+        webaccess_dir = os.path.join(self.home_dir, "webaccess")
 
         # Create directory on host
         mkdir_result = await self.run_command.run_command_async(

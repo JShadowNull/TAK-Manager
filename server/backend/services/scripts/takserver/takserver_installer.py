@@ -81,7 +81,7 @@ class TakServerInstaller:
     def get_default_working_directory(self) -> str:
         """Get the working directory."""
         base_dir = '/home/tak-manager'
-        working_dir = os.path.join(base_dir, 'takserver-docker')
+        working_dir = os.path.join(base_dir, 'takserver')
         if not os.path.exists(working_dir):
             os.makedirs(working_dir, exist_ok=True)
         return working_dir
@@ -104,7 +104,7 @@ class TakServerInstaller:
                 raise FileNotFoundError(f"ZIP file not found at {self.docker_zip_path}")
 
             zip_filename = os.path.basename(self.docker_zip_path)
-            match = re.search(r'takserver-docker-(.+)\.zip', zip_filename)
+            match = re.search(r'takserver-(.+)\.zip', zip_filename)
             if not match:
                 raise ValueError("Failed to extract version from ZIP filename")
 
@@ -281,7 +281,7 @@ class TakServerInstaller:
             if not host_base_dir:
                 raise ValueError("TAK_SERVER_INSTALL_DIR environment variable is not set")
                 
-            host_tak_dir = os.path.join(host_base_dir, 'tak-manager', 'data', 'takserver-docker', self.extracted_folder_name, "tak")
+            host_tak_dir = os.path.join(host_base_dir, 'tak-manager', 'data', 'takserver', self.extracted_folder_name, "tak")
             host_plugins_dir = os.path.join(host_tak_dir, "webcontent")
             
             env_content = f"""TAK_DIR={host_tak_dir}
@@ -299,7 +299,7 @@ PLUGINS_DIR={host_plugins_dir}
             docker_compose_path = os.path.join(self.working_dir, self.extracted_folder_name, "docker-compose.yml")
             
             host_base_dir = os.getenv('TAK_SERVER_INSTALL_DIR')
-            host_tak_dir = os.path.join(host_base_dir, 'tak-manager', 'data', 'takserver-docker', self.extracted_folder_name, "tak")
+            host_tak_dir = os.path.join(host_base_dir, 'tak-manager', 'data', 'takserver', self.extracted_folder_name, "tak")
             host_plugins_dir = os.path.join(host_tak_dir, "webcontent")
             
             # Convert paths to Docker format by detecting Windows-style paths
