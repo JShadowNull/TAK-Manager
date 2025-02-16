@@ -79,6 +79,7 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
   const [showCertPassword, setShowCertPassword] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [showInstallProgress, setShowInstallProgress] = useState(false);
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
   const [formData, setFormData] = useState<FormData>({
     docker_zip_file: null,
     postgres_password: '',
@@ -91,36 +92,78 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
   });
 
   const validateField = (name: string, value: any) => {
-    try {
-      if (name === 'docker_zip_file' && value instanceof File) {
-        formSchema.shape.docker_zip_file.parse(value);
-      } else {
-        formSchema.shape[name as keyof typeof formSchema.shape].parse(value);
+    if (name === 'docker_zip_file') {
+      if (!value) {
+        return 'Docker ZIP file is required';
       }
-      setErrors(prev => ({ ...prev, [name]: '' }));
-    } catch (error: any) {
-      setErrors(prev => ({ ...prev, [name]: error.errors?.[0]?.message || 'Invalid input' }));
+      if (!(value instanceof File)) {
+        return 'Invalid file type';
+      }
+      if (!value.name.toLowerCase().endsWith('.zip')) {
+        return 'File must be a ZIP file';
+      }
+      if (value.size > 5000000000) {
+        return 'File size must be less than 5GB';
+      }
+      return '';
+    }
+
+    try {
+      formSchema.shape[name as keyof typeof formSchema.shape].parse(value);
+      return '';
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return error.errors[0]?.message || 'Invalid input';
+      }
+      return 'Invalid input';
     }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value, files, type } = e.target;
-    const newValue = type === 'file' ? files?.[0] || null : value;
     
+    const newValue = type === 'file' ? files?.[0] || null : value;
     setFormData(prev => ({
       ...prev,
       [id]: newValue
     }));
-    
-    validateField(id, newValue);
+
+    // Only validate and update errors if form has been submitted once
+    if (hasAttemptedSubmit) {
+      const fieldError = validateField(id, newValue);
+      setErrors(prev => ({
+        ...prev,
+        [id]: fieldError,
+        submit: '' // Clear any submit-level errors
+      }));
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors: { [key: string]: string } = {};
+
+    // Validate all fields
+    Object.entries(formData).forEach(([key, value]) => {
+      const fieldError = validateField(key, value);
+      if (fieldError) {
+        newErrors[key] = fieldError;
+      }
+    });
+
+    return newErrors;
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setHasAttemptedSubmit(true);
+    
+    const validationErrors = validateForm();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
     
     try {
-      formSchema.parse(formData);
-      
       // Clear any previous errors and show progress popup before making API call
       setErrors({});
       setShowInstallProgress(true);
@@ -142,16 +185,8 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
       }
     } catch (error) {
       console.error('Installation error:', error);
-      if (error instanceof z.ZodError) {
-        const newErrors: { [key: string]: string } = {};
-        error.errors.forEach(err => {
-          if (err.path?.[0]) {
-            newErrors[err.path[0]] = err.message;
-          }
-        });
-        setErrors(newErrors);
-        setShowInstallProgress(false); // Only close on validation error
-      }
+      setShowInstallProgress(false);
+      setErrors({ submit: error instanceof Error ? error.message : 'An error occurred during installation' });
     }
   };
 

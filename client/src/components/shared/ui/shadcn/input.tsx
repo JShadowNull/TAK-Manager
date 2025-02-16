@@ -61,11 +61,23 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
 
     const handleFileChange = (file: File | null) => {
       setSelectedFile(file);
-      if (onChange) {
+      if (onChange && file) {
         const event = {
           target: {
-            files: file ? [file] : [],
-            value: file ? file.name : '',
+            type: 'file',
+            files: [file],
+            value: file.name,
+            id,
+            name: props.name,
+          }
+        } as unknown as React.ChangeEvent<HTMLInputElement>;
+        onChange(event);
+      } else if (onChange) {
+        const event = {
+          target: {
+            type: 'file',
+            files: [],
+            value: '',
             id,
             name: props.name,
           }
@@ -92,14 +104,15 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
     React.useEffect(() => {
       if (type === 'file' && fileInputRef.current) {
         const fileInput = fileInputRef.current;
-        const handleChange = () => {
-          const file = fileInput.files?.[0] || null;
+        const handleChange = (e: Event) => {
+          const input = e.target as HTMLInputElement;
+          const file = input.files?.[0] || null;
           handleFileChange(file);
         };
         fileInput.addEventListener('change', handleChange);
         return () => fileInput.removeEventListener('change', handleChange);
       }
-    }, [type]);
+    }, [type, onChange]);
 
     if (type === 'select') {
       return (
@@ -125,8 +138,8 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         <div className="relative">
           <div 
             className={cn(
-              "flex items-center justify-center w-full h-32 px-4 transition bg-background border-2 border-dashed rounded-lg appearance-none cursor-copy hover:border-accent-foreground focus:outline-none",
-              error ? "border-red-500" : isDragging ? "border-green-500 cursor-copy" : "border-border",
+              "flex items-center justify-center w-full h-32 px-4 transition bg-background border-2 border-dashed rounded-lg appearance-none cursor-pointer hover:border-accent-foreground focus:outline-none",
+              error ? "border-red-500" : isDragging ? "border-green-500" : "border-border",
               selectedFile ? "border-accent" : "",
               className
             )}
@@ -152,7 +165,9 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
               setIsDragging(false);
               
               const file = e.dataTransfer.files?.[0] || null;
-              handleFileChange(file);
+              if (file) {
+                handleFileChange(file);
+              }
             }}
           >
             <input
@@ -162,6 +177,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
               disabled={disabled}
               required={required}
               className="hidden"
+              accept={props.accept}
               {...props}
             />
             
