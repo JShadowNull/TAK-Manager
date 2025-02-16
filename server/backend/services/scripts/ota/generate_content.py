@@ -15,7 +15,7 @@ class GenerateOTAContent():
     def get_default_working_directory(self):
         """Get the working directory from environment variable."""
         base_dir = '/home/tak-manager'  # Use the container mount point directly
-        working_dir = os.path.join(base_dir, 'takserver-docker')
+        working_dir = os.path.join(base_dir, 'takserver')
         if not os.path.exists(working_dir):
             os.makedirs(working_dir, exist_ok=True)
             logger.debug(f"[GenerateOTAContent] Created working directory: {working_dir}")

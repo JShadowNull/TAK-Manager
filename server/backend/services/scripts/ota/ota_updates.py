@@ -49,7 +49,7 @@ class OTAUpdate:
     def get_default_working_directory(self):
         """Get the working directory."""
         base_dir = '/home/tak-manager'
-        working_dir = os.path.join(base_dir, 'takserver-docker')
+        working_dir = os.path.join(base_dir, 'takserver')
         if not os.path.exists(working_dir):
             os.makedirs(working_dir, exist_ok=True)
         return working_dir
@@ -60,7 +60,7 @@ class OTAUpdate:
         if not version:
             raise Exception("Could not determine TAK Server version")
         path_version = self._get_path_version(version)
-        return os.path.join(self.working_dir, f"takserver-docker-{path_version}")
+        return os.path.join(self.working_dir, f"takserver-{path_version}")
 
     def get_takserver_version(self):
         """Get TAK Server version from version.txt."""
