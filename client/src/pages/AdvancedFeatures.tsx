@@ -22,15 +22,15 @@ const AdvancedFeatures: React.FC = () => {
     sessionStorage.setItem('advancedFeaturesTab', currentTab);
   }, [currentTab]);
 
-  // Show dialog immediately if server is not running
+  // Show dialog immediately if server is not running and current tab is "logs"
   useEffect(() => {
-    if (!isServerRunning) {
+    if (!isServerRunning && currentTab === 'logs') {
       showDialog(true);
     }
-  }, [isServerRunning, showDialog]);
+  }, [isServerRunning, currentTab, showDialog]);
 
   const renderContent = () => (
-    <div className={`bg-background text-foreground pt-4 ${!isServerRunning ? 'pointer-events-none opacity-50' : ''}`}>
+    <div className={`bg-background text-foreground pt-4`}>
       <div className="mx-auto space-y-8">
         <Tabs defaultValue={currentTab} onValueChange={setCurrentTab} className="w-full">
           <div className="flex justify-center mb-8">
@@ -67,7 +67,7 @@ const AdvancedFeatures: React.FC = () => {
                 <BackupManager />
               </div>
             </TabsContent>
-            <TabsContent value="logs" className="w-full">
+            <TabsContent value="logs" className={`w-full ${!isServerRunning ? 'pointer-events-none opacity-50' : ''}`}>
               <div className="bg-card rounded-lg">
                 <LogViewer />
               </div>
