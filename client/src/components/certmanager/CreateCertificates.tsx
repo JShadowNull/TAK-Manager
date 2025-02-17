@@ -12,6 +12,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useCertificateValidation, useBatchValidation } from './hooks/useCertificateValidation';
 import { Trash2, PlusCircle, Wand2, Eye, EyeOff } from 'lucide-react';
 import { cn } from "@/lib/utils";
+import { toast } from "../shared/ui/shadcn/toast/use-toast";
 
 // Types
 interface CertField {
@@ -202,6 +203,8 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
   };
 
   const formatCertificateData = (): CertificateData => {
+    const certificateNames: string[] = []; // Array to hold certificate names
+
     if (isBatchMode) {
       const groups = batchGroup
         .split(',')
@@ -218,18 +221,23 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
         includeGroupInName: true
       };
     } else {
-      return {
-        mode: 'single',
-        certificates: certFields
-          .filter(field => field.name.trim())
-          .map(field => ({
+      const certificates = certFields
+        .filter(field => field.name.trim())
+        .map(field => {
+          certificateNames.push(field.name.trim()); // Collect certificate names
+          return {
             username: field.name.trim(),
             groups: field.group
               ? field.group.split(',').map(g => g.trim()).filter(g => g)
               : ['__ANON__'],
             is_admin: field.isAdmin,
             password: field.password || undefined
-          }))
+          };
+        });
+
+      return {
+        mode: 'single',
+        certificates
       };
     }
   };
@@ -257,6 +265,13 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
       }
 
       // Reset form on success will be handled by SSE complete event
+      const certificateCount = data.mode === 'batch' ? data.count : data.certificates.length;
+      const certificateNames = data.mode === 'batch' ? [data.name] : data.certificates.map(cert => cert.username);
+
+      toast({
+        title: "Certificates Created",
+        description: `Successfully created ${certificateCount} certificate(s): ${certificateNames.join(', ')}.`
+      });
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Operation failed');
       setIsOperationInProgress(false);
@@ -434,7 +449,6 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
                         value={field.group}
                         onChange={(e) => handleCertFieldChange(index, 'group', e.target.value)}
                         onBlur={() => handleBlur(`group${index}`)}
-                        placeholder="Enter groups"
                         className={cn(
                           "w-fit",
                           // displayErrors[`group${index}`] && "border-red-500"
@@ -470,7 +484,6 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
                         className="absolute right-3 top-1/2 -translate-y-1/2 bg-transparent hover:bg-transparent text-muted-foreground hover:text-primary"
                         tooltip="Show/Hide password"
                         triggerMode="hover"
-                        tooltipDelay={800}
                       >
                         {passwordVisibility[index] ? <EyeOff size={16} /> : <Eye size={16} />}
                       </Button>
@@ -481,7 +494,8 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
                           size="icon"
                           onClick={() => handleCertFieldChange(index, 'password', generateSecurePassword())}
                           className="h-10 w-10 shrink-0"
-                          title="Generate secure password"
+                          tooltip="Generate secure password"
+                          triggerMode="hover"
                         >
                           <Wand2 className="h-4 w-4" />
                         </Button>
@@ -502,8 +516,10 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
                 onClick={handleAddCertField}
                 variant="outline"
                 size="icon"
-                className="ml-auto block"
+                className="ml-2 block"
                 type="button"
+                tooltip="Add Certificate"
+                triggerMode="hover"
               >
                 <PlusCircle className="h-4 w-4" />
                 <span className="sr-only">Add Certificate</span>
