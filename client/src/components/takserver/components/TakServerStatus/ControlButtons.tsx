@@ -33,14 +33,18 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
       try {
         const data = JSON.parse(event.data);
         
-        // Handle operation status events
-        if (data.status === 'complete' || data.status === 'error') {
-          setIsOperationInProgress(false);
-          setCurrentOperation(null);
-          if (data.error) {
-            setError(data.error);
-          } else {
-            setError(null);
+        // Only handle operation type events for operation state
+        if (data.type === 'operation') {
+          if (data.status === 'complete' || data.status === 'error') {
+            setIsOperationInProgress(false);
+            setCurrentOperation(null);
+            if (data.error) {
+              setError(data.error);
+            } else {
+              setError(null);
+            }
+          } else if (data.status === 'in_progress') {
+            setIsOperationInProgress(true);
           }
         }
       } catch (error) {

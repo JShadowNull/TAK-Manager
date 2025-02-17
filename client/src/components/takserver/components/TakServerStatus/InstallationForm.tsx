@@ -185,7 +185,6 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
       }
     } catch (error) {
       console.error('Installation error:', error);
-      setShowInstallProgress(false);
       setErrors({ submit: error instanceof Error ? error.message : 'An error occurred during installation' });
     }
   };

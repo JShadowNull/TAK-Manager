@@ -66,13 +66,18 @@ const Popups: React.FC<PopupsProps> = ({
             isError: data.isError,
             timestamp: data.timestamp
           }]);
-        } else {
+        } else if (data.type === 'status') {
           setInstallProgress(data.progress);
           if (data.error) {
             setInstallError(data.error);
+            setInstallTerminalOutput(prev => [...prev, {
+              message: data.error,
+              isError: true,
+              timestamp: data.timestamp || Date.now()
+            }]);
             setIsInstallationComplete(true);
           }
-          if (data.status === 'complete') {
+          if (data.status === 'complete' || data.status === 'error') {
             setIsInstallationComplete(true);
           }
         }
@@ -82,9 +87,7 @@ const Popups: React.FC<PopupsProps> = ({
     });
 
     return () => {
-      if (isInstallationComplete && showInstallComplete) {
-        installStatus.close();
-      }
+      installStatus.close();
     };
   }, [showInstallProgress]);
 
@@ -115,6 +118,11 @@ const Popups: React.FC<PopupsProps> = ({
           setUninstallProgress(data.progress);
           if (data.error) {
             setUninstallError(data.error);
+            setUninstallTerminalOutput(prev => [...prev, {
+              message: data.error,
+              isError: true,
+              timestamp: data.timestamp || Date.now()
+            }]);
             setIsUninstallationComplete(true);
           }
           if (data.status === 'complete') {
