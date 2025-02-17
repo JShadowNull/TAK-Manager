@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { AppSidebar } from '../shadcn/sidebar/app-sidebar';
 import { SidebarProvider } from '../shadcn/sidebar/sidebar';
 import { ScrollArea } from '@/components/shared/ui/shadcn/scroll-area';
+import { Toaster } from "@/components/shared/ui/shadcn/toast/toaster"
 
 const Layout: React.FC = () => {
   return (
@@ -19,6 +20,7 @@ const Layout: React.FC = () => {
           </main>
         </div>
       </div>
+      <Toaster />
     </SidebarProvider>
   );
 };

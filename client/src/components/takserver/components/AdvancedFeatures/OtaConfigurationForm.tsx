@@ -6,9 +6,8 @@ import OtaPopups from './OtaPopups';
 
 interface OtaConfigurationFormProps {
   onClose: () => void;
+  onConfigureStart: () => void;
 }
-
-
 
 interface OtaFormData {
   ota_zip_file: File | null;

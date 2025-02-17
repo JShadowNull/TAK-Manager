@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '../shared/ui/shadcn/button';
 import OtaPopups from './components/AdvancedFeatures/OtaPopups';
 import OtaConfigurationForm from './components/AdvancedFeatures/OtaConfigurationForm';
 import UpdatePluginsForm from './components/AdvancedFeatures/UpdatePluginsForm';
+import { Copy, RefreshCw } from 'lucide-react';
+import { Input } from '../shared/ui/shadcn/input';
+import { toast } from "../shared/ui/shadcn/toast/use-toast"
+
 
 const AdvancedFeatures: React.FC = () => {
   const [showOtaForm, setShowOtaForm] = useState<boolean>(false);
@@ -18,6 +22,14 @@ const AdvancedFeatures: React.FC = () => {
     setShowUpdateProgress(false);
   };
 
+  const [inputValue, setInputValue] = useState<string>(() => {
+    return localStorage.getItem('ota_url_link') || "https://your-ip-address:8443/plugins";
+  });
+
+  useEffect(() => {
+    localStorage.setItem('ota_url_link', inputValue);
+  }, [inputValue]);
+
   return (
     <>
       <div className="w-full border border-border bg-card p-4 xs:p-6 rounded-lg shadow-lg min-w-fit">
@@ -27,8 +39,35 @@ const AdvancedFeatures: React.FC = () => {
 
             <div className="bg-sidebar border border-border p-4 rounded-lg mb-4">
               <p className="text-sm text-primary">
-                Once configured, use https://your-ip-address:8443/plugins in ATAK for update url to check for plugins and install them
+                Once configured, enter your server ip address and port below and paste into ATAK for update url to check for plugins and install them
               </p>
+              <div className="flex items-center gap-2 mt-2">
+                <Input 
+                  type="text" 
+                  id="ota-zip-file" 
+                  value={inputValue}
+                  className="w-1/3"
+                  onChange={(e) => setInputValue(e.target.value)}
+                />
+                <Button variant="outline" size="icon" className="w-10 h-10" tooltip="Copy to clipboard" triggerMode="hover" onClick={() => {
+                  navigator.clipboard.writeText(inputValue);
+                  toast({
+                    title: "Copied to clipboard",
+                    description: inputValue
+                  });
+                }}>
+                  <Copy/>
+                </Button>
+                <Button variant="outline" size="icon" className="w-10 h-10" tooltip="Restore default url" triggerMode="hover" onClick={() => {
+                  setInputValue("https://your-ip-address:8443/plugins");
+                  toast({
+                    title: "Default url restored",
+                    description: "https://your-ip-address:8443/plugins"
+                  });
+                }}>
+                  <RefreshCw/>
+                </Button>
+              </div>
             </div>
           </div>
 
