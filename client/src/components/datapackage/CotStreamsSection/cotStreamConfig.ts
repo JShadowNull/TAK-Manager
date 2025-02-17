@@ -60,7 +60,8 @@ export const generateCotStreamItems = (count: number): CotStreamItem[] => {
           { value: "tcp", text: "TCP" }
         ],
         placeholder: "Select protocol",
-        required: true
+        required: true,
+        value: "ssl"
       },
       {
         name: `CA certificate for TAK Server`,
