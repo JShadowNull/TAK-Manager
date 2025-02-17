@@ -80,7 +80,6 @@ export function TakServerProvider({ children }: { children: React.ReactNode }) {
         const data = await response.json();
         setServerState(data);
       } catch (error) {
-        // Removed console.error
         setServerState(prev => ({ 
           ...prev, 
           error: error instanceof Error ? error.message : 'Failed to fetch server status' 
@@ -96,13 +95,11 @@ export function TakServerProvider({ children }: { children: React.ReactNode }) {
 
     // Handle connection open
     serverStatus.onopen = () => {
-      // Removed console.debug
+      // Connection opened
     };
 
     // Handle errors and reconnection
     serverStatus.onerror = () => {
-      // Handle the error appropriately, e.g., log it or update state
-      console.error("Server status error occurred"); // Log the error
       // The browser will automatically try to reconnect
     };
 
@@ -110,18 +107,26 @@ export function TakServerProvider({ children }: { children: React.ReactNode }) {
     serverStatus.addEventListener('server-status', (event) => {
       try {
         const data = JSON.parse(event.data);
-        // Removed console.debug
-        if (data.isInstalled !== undefined && data.isRunning !== undefined) {
-          setServerState(data);
+        
+        // Handle both direct status updates and operation events
+        if (data.type === 'status') {
+          const statusData = data.data;
+          if (statusData && typeof statusData.isInstalled !== 'undefined') {
+            setServerState(statusData);
+          }
+        } else if (data.type === 'operation') {
+          // Fetch latest status after operation completes
+          if (data.status === 'complete' || data.status === 'error') {
+            fetchStatus();
+          }
         }
       } catch (error) {
-        // Removed console.error
+        // Error parsing event data
       }
     });
 
     // Cleanup on unmount
     return () => {
-      // Removed console.debug
       serverStatus.close();
     };
   }, []);
