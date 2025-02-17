@@ -50,11 +50,27 @@ function bumpVersion(version, type) {
 function determineVersionBumpFromMessages(commitMessages) {
     console.log('Analyzing commits:', commitMessages);
     
-    if (commitMessages.includes('BREAKING CHANGE')) return 'major';
-    if (commitMessages.includes('feat:')) return 'minor';
-    if (commitMessages.includes('fix:')) return 'patch';
-    if (commitMessages.includes('beta')) return 'prerelease';
-    return 'patch'; // Default to patch if no conventional commits found
+    // Split into individual commits and process each one
+    const commits = Array.isArray(commitMessages) ? commitMessages : commitMessages.split('\n\n');
+    
+    // Check each commit message
+    for (const commit of commits) {
+        const message = commit.trim();
+        if (!message) continue;
+        
+        // Check for breaking changes first
+        if (message.includes('BREAKING CHANGE') || message.startsWith('feat!:')) {
+            return 'major';
+        }
+        
+        // Check for features
+        if (message.startsWith('feat:') || message.startsWith('feat(')) {
+            return 'minor';
+        }
+    }
+    
+    // Default to patch if no major/minor changes found
+    return 'patch';
 }
 
 function runWithRetries(command, maxAttempts = 3) {
@@ -88,7 +104,7 @@ async function release() {
         
         // Capture commits from dev before merge
         console.log('Analyzing commits from dev branch...');
-        const commitMessages = execSync('git log main..dev --pretty=format:"%B"').toString();
+        const commitMessages = execSync('git log main..dev --pretty=format:"%B%n%n"').toString().trim();
         console.log('Commits to be included:', commitMessages);
         
         // Determine version bump based on captured commits
