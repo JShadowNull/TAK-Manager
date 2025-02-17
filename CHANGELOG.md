@@ -6,6 +6,61 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.1.2] - 2025-02-17
+
+## [1.1.2] - 2025-02-17
+
+
+### Added 🚀
+
+
+- Add advanced features page with ability to edit CoreConfig.xml
+- Add backup management for CoreConfig.xml
+- Increase default webview window size
+- Add log viewer for TAK Server in Advanced Features
+- Enhance password management in certificate and installation forms
+- Add certificate configuration editing capability
+- Implement LogManager for TAK Server log management
+- Add CertConfigManager for XML certificate configuration management
+- Add DirectoryHelper with comprehensive path management for TAK Server
+- Add Radix UI Toast component and enhance OTA configuration UI
+- Enhance CreateCertificates component with improved UX and toast notifications
+- Set default protocol to SSL in CoT stream configuration
+
+
+### Changed 🔄
+
+
+- Update TAK Server scripts to use consistent directory paths
+- Update data package directory paths
+- Reorganize import paths for certificate and log management modules
+- Centralize directory management with DirectoryHelper
+- Simplify certificate file retrieval in data package route
+- Enhance TAK Server status event handling and error management
+- Improve OTA configuration form with enhanced validation and progress tracking
+- Improve TAK Server operation and installation event handling
+- Improve SSE event handling and queue management across routes
+- Improve command execution and output handling in RunCommand
+- Improve AdvancedFeatures tab and server status handling
+- Improve TAK Server certificate configuration with robust service initialization
+
+
+### Fixed 🔧
+
+
+- Improve text selection and link styling across components
+- Update SidebarTrigger to correctly pass mouse event to onClick handler
+- Improve file input handling and form validation in TakServer installation
+- Update working directory path for TAK Server OTA scripts
+- Handle potential webview window creation errors
+
+
+### Other 📦
+
+
+- Remove deprecated configuration and documentation files
+- Release tak-manager@1.1.2 [skip ci]
+
 ## [1.1.1] - 2025-02-14
 
 ## [1.1.1] - 2025-02-14
