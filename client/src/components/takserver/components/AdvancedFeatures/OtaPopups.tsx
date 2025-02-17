@@ -65,25 +65,20 @@ const OtaPopups: React.FC<OtaPopupsProps> = ({
           setConfigureTerminalOutput(prev => [...prev, {
             message: data.message,
             isError: data.isError,
-            timestamp: data.timestamp || Date.now()
+            timestamp: data.timestamp
           }]);
-        } else {
+        } else if (data.type === 'status') {
           setConfigureProgress(data.progress);
-          setConfigureTerminalOutput(prev => [...prev, {
-            message: data.message,
-            isError: false,
-            timestamp: data.timestamp || Date.now()
-          }]);
           if (data.error) {
             setConfigureError(data.error);
             setConfigureTerminalOutput(prev => [...prev, {
-              message: `Error: ${data.error}`,
+              message: data.error,
               isError: true,
               timestamp: data.timestamp || Date.now()
             }]);
             setIsConfigurationComplete(true);
           }
-          if (data.status === 'complete') {
+          if (data.status === 'complete' || data.status === 'error') {
             setIsConfigurationComplete(true);
           }
         }
@@ -120,25 +115,20 @@ const OtaPopups: React.FC<OtaPopupsProps> = ({
           setUpdateTerminalOutput(prev => [...prev, {
             message: data.message,
             isError: data.isError,
-            timestamp: data.timestamp || Date.now()
+            timestamp: data.timestamp
           }]);
-        } else {
+        } else if (data.type === 'status') {
           setUpdateProgress(data.progress);
-          setUpdateTerminalOutput(prev => [...prev, {
-            message: data.message,
-            isError: false,
-            timestamp: data.timestamp || Date.now()
-          }]);
           if (data.error) {
             setUpdateError(data.error);
             setUpdateTerminalOutput(prev => [...prev, {
-              message: `Error: ${data.error}`,
+              message: data.error,
               isError: true,
               timestamp: data.timestamp || Date.now()
             }]);
             setIsUpdateComplete(true);
           }
-          if (data.status === 'complete') {
+          if (data.status === 'complete' || data.status === 'error') {
             setIsUpdateComplete(true);
           }
         }
