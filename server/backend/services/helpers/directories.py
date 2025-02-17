@@ -35,19 +35,6 @@ class DirectoryHelper:
         return os.path.join(DirectoryHelper.get_default_working_directory(), "version.txt")
 
     @staticmethod
-    def get_tak_version_from_extracted(temp_tak_dir: str) -> str:
-        """Read version from TAK Server's version.txt file."""
-        version_file = os.path.join(temp_tak_dir, "version.txt")
-        if not os.path.exists(version_file):
-            raise ValueError(f"Version file not found at {version_file}")
-        
-        with open(version_file, "r") as f:
-            version = f.read().strip().lower()
-            if not version:
-                raise ValueError("Version file is empty")
-            return version
-
-    @staticmethod
     def get_takserver_version() -> str:
         """Get TAK Server version from version.txt."""
         version_file_path = DirectoryHelper.get_version_file_path()
