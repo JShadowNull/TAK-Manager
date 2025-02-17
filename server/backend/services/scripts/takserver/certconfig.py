@@ -117,18 +117,38 @@ class CertConfig:
 
     async def run_certmod(self, container_name: str) -> None:
         """Configure user certificates."""
-        # Wait for containers to start with progress updates
-        for i in range(15):
+        # Initial longer wait for services to fully initialize
+        initial_wait = 15
+        for i in range(initial_wait):
             if self.emit_event:
                 await self.emit_event({
                     "type": "terminal",
-                    "message": f"Waiting for containers to start... {15-i} seconds remaining",
+                    "message": f"Waiting for TAK Server services to initialize... {initial_wait-i} seconds remaining",
                     "isError": False
                 })
             await asyncio.sleep(1)
 
         retries = 5
         for i in range(1, retries + 1):
+            # Check if the Ignite service is running first
+            check_service = "ps aux | grep distributed-user-file-manager | grep -v grep || true"
+            service_check = await self.run_command.run_command_async(
+                ["docker", "exec", container_name, "bash", "-c", check_service],
+                'install',
+                emit_event=self.emit_event,
+                ignore_errors=True
+            )
+
+            if not service_check.stdout.strip():
+                if self.emit_event:
+                    await self.emit_event({
+                        "type": "terminal",
+                        "message": f"Waiting for user management service to start (Attempt {i}/{retries})",
+                        "isError": False
+                    })
+                await asyncio.sleep(10)  # Wait longer between checks
+                continue
+
             command = f"java -jar /opt/tak/utils/UserManager.jar certmod -A /opt/tak/certs/files/{self.name}.pem"
             result = await self.run_command.run_command_async(
                 ["docker", "exec", container_name, "bash", "-c", command],
@@ -144,10 +164,10 @@ class CertConfig:
                 if self.emit_event:
                     await self.emit_event({
                         "type": "terminal",
-                        "message": f"\nRetrying in 5 seconds... (Attempt {i}/{retries} failed)",
+                        "message": f"\nRetrying in 10 seconds... (Attempt {i}/{retries} failed)",
                         "isError": True
                     })
-                await asyncio.sleep(5)
+                await asyncio.sleep(10)  # Increased wait time between retries
             else:
-                error_message = f"Failed to configure {self.name} user after {retries} attempts"
+                error_message = f"Failed to configure {self.name} user after {retries} attempts try uninstalling and reinstalling TAK Server"
                 raise Exception(error_message)
