@@ -58,27 +58,29 @@ class TakServerInstaller:
             organizational_unit=self.organizational_unit,
             name=self.name,
             tak_dir=None,
-            working_dir=self.working_dir,
             emit_event=self.emit_event
         )
 
     async def update_status(self, status: str, progress: float, message: str, error: Optional[str] = None) -> None:
         """Update installation status."""
         if self.emit_event:
-            new_status = {
+            # Send terminal message
+            await self.emit_event({
+                "type": "terminal",
+                "message": message,
+                "isError": error is not None,
+                "timestamp": int(time.time() * 1000)
+            })
+            
+            # Send progress update
+            await self.emit_event({
                 "type": "status",
                 "status": status,
                 "progress": progress,
-                "message": message,
                 "error": error,
                 "isError": error is not None,
                 "timestamp": int(time.time() * 1000)
-            }
-            
-            # Only emit if status has changed
-            if new_status != self._last_status:
-                await self.emit_event(new_status)
-                self._last_status = new_status
+            })
 
     async def create_working_directory(self) -> None:
         """Create the working directory."""
@@ -114,34 +116,56 @@ class TakServerInstaller:
             if not extracted_contents:
                 raise ValueError("Zip file appears to be empty")
 
-            # The TAK directory should be in the first (and only) subdirectory
+            # Get the first directory
             temp_extracted_folder = os.path.join(temp_extract_dir, extracted_contents[0])
-            temp_tak_dir = os.path.join(temp_extracted_folder, "tak")
+            
+            # If it's a directory and contains a nested directory with same name (ignoring case)
+            if os.path.isdir(temp_extracted_folder):
+                inner_contents = os.listdir(temp_extracted_folder)
+                if len(inner_contents) == 1 and inner_contents[0].lower().startswith('takserver-docker'):
+                    # Move all contents from nested directory up one level
+                    inner_dir = os.path.join(temp_extracted_folder, inner_contents[0])
+                    for item in os.listdir(inner_dir):
+                        src = os.path.join(inner_dir, item)
+                        dst = os.path.join(temp_extracted_folder, item)
+                        shutil.move(src, dst)
+                    os.rmdir(inner_dir)  # Remove empty nested directory
 
-            if not os.path.exists(temp_tak_dir):
+            # Verify tak directory exists
+            if not os.path.exists(os.path.join(temp_extracted_folder, "tak")):
                 raise ValueError(f"TAK directory not found in extracted contents")
 
             # Get version from the extracted files
-            self.takserver_version = self.directory_helper.get_tak_version_from_extracted(temp_tak_dir)
+            version_file = os.path.join(temp_extracted_folder, "tak", "version.txt")
+            if not os.path.exists(version_file):
+                raise ValueError(f"Version file not found at {version_file}")
+            
+            with open(version_file, "r") as f:
+                version = f.read().strip().lower()
+                if not version:
+                    raise ValueError("Version file is empty")
+                self.takserver_version = version
+
+            # Write version to working directory first
+            version_file_path = self.directory_helper.get_version_file_path()
+            with open(version_file_path, "w") as version_file:
+                version_file.write(f"{self.takserver_version}\n")
 
             # Create the standardized folder name and paths
-            self.extracted_folder_name = self.directory_helper.get_standardized_folder_name()
-            final_path = self.directory_helper.get_docker_compose_directory()
+            self.extracted_folder_name = f"takserver-docker-{self.takserver_version}"
+            final_path = os.path.join(self.working_dir, self.extracted_folder_name)
 
             # Ensure clean target directory
             self.directory_helper.ensure_clean_directory(final_path)
 
             # Move the contents to the final location
-            shutil.move(temp_extracted_folder, final_path)
+            for item in os.listdir(temp_extracted_folder):
+                src = os.path.join(temp_extracted_folder, item)
+                dst = os.path.join(final_path, item)
+                shutil.move(src, dst)
 
             # Set the final tak_dir path
-            self.tak_dir = self.directory_helper.get_tak_directory()
-
-            # Write version to working directory
-            version_file_path = self.directory_helper.get_version_file_path()
-            with open(version_file_path, "w") as version_file:
-                version_file.write(f"{self.takserver_version}\n")
-
+            self.tak_dir = os.path.join(final_path, "tak")
             self.cert_config.update_tak_dir(self.tak_dir)
             
         except Exception as e:
@@ -513,57 +537,70 @@ volumes:
             weights = {
                 'setup': 5,
                 'config': 10,
-                'docker_build': 50,  # Heaviest weight for docker build
+                'docker_build': 50,
                 'docker_start': 15,
                 'cert_config': 20
             }
             progress = 0
             
             # Initial setup (0-5%)
-            await self.update_status("in_progress", progress, "Starting TAK Server installation...")
+            await self.update_status("in_progress", progress, "Preparing TAK Server installation environment...")
             await self.create_working_directory()
             progress += weights['setup'] * 0.3
-            await self.update_status("in_progress", progress, "Created working directory")
+            await self.update_status("in_progress", progress, "Working directory created successfully")
             await self.unzip_docker_release()
             progress += weights['setup'] * 0.7
-            await self.update_status("in_progress", progress, "Extracted TAK Server files")
+            await self.update_status("in_progress", progress, "TAK Server files extracted and validated")
 
             # Configuration (5-15%)
             await self.copy_coreconfig()
             progress += weights['config'] * 0.25
-            await self.update_status("in_progress", progress, "Copied configuration files")
+            await self.update_status("in_progress", progress, "Core configuration files initialized")
             await self.update_coreconfig_password()
             progress += weights['config'] * 0.25
-            await self.update_status("in_progress", progress, "Updated database password")
+            await self.update_status("in_progress", progress, "Database credentials configured")
             await self.modify_coreconfig_with_sed_on_host()
             progress += weights['config'] * 0.25
-            await self.update_status("in_progress", progress, "Updated database host")
+            await self.update_status("in_progress", progress, "Server configuration updated with database settings")
             await self.create_docker_compose_file()
             progress += weights['config'] * 0.25
-            await self.update_status("in_progress", progress, "Created Docker Compose files")
+            await self.update_status("in_progress", progress, "Docker environment configured successfully")
 
             # Docker build and deployment (15-80%)
-            await self.update_status("in_progress", progress, "Starting Docker container setup...")
+            await self.update_status("in_progress", progress, "Initializing Docker container setup...")
             
-            # Start progress updater for docker build
             build_start_progress = progress
             build_weight = weights['docker_build']
             
+            # Send build message once before starting docker compose
+            await self.emit_event({
+                "type": "terminal",
+                "message": "Building TAK Server containers... This may take a few minutes",
+                "isError": False,
+                "timestamp": int(time.time() * 1000)
+            })
+
             async def update_build_progress():
                 build_progress = 0
                 while build_progress < build_weight:
-                    await asyncio.sleep(2)  # Update every 2 seconds
-                    build_progress = min(build_progress + 1, build_weight * 0.95)  # Cap at 95% of build weight
-                    await self.update_status("in_progress", build_start_progress + build_progress, 
-                                          "Building Docker containers...")
+                    await asyncio.sleep(2)
+                    build_progress = min(build_progress + 1, build_weight * 0.95)
+                    total_progress = build_start_progress + build_progress
+                    
+                    # Only send status update without terminal message
+                    await self.emit_event({
+                        "type": "status",
+                        "status": "in_progress",
+                        "progress": total_progress,
+                        "error": None,
+                        "isError": False,
+                        "timestamp": int(time.time() * 1000)
+                    })
             
-            # Start progress updater task
             progress_task = asyncio.create_task(update_build_progress())
             
-            # Perform actual docker build
             await self.start_docker_compose()
             
-            # Cancel progress updater and set final build progress
             progress_task.cancel()
             try:
                 await progress_task
@@ -571,33 +608,33 @@ volumes:
                 pass
             
             progress = build_start_progress + weights['docker_build']
-            await self.update_status("in_progress", progress, "Docker containers started")
+            await self.update_status("in_progress", progress, "Docker containers deployed successfully")
             
-            # Container verification
             await self.verify_containers()
             progress += weights['docker_start']
-            await self.update_status("in_progress", progress, "Verified containers are running")
+            await self.update_status("in_progress", progress, "Container health check passed")
 
             # Certificate configuration (80-100%)
-            await self.update_status("in_progress", progress, "Configuring certificates...")
+            await self.update_status("in_progress", progress, "Setting up secure communication certificates...")
             takserver_name = f"takserver-{self.takserver_version}"
             await self.cert_config.configure_cert_metadata(takserver_name)
             progress += weights['cert_config'] * 0.25
-            await self.update_status("in_progress", progress, "Configured certificate metadata")
+            await self.update_status("in_progress", progress, "Certificate metadata configured successfully")
             await self.cert_config.certificate_generation(takserver_name)
             progress += weights['cert_config'] * 0.25
-            await self.update_status("in_progress", progress, "Generated certificates")
+            await self.update_status("in_progress", progress, "Security certificates generated")
             await self.restart_takserver()
             progress += weights['cert_config'] * 0.25
-            await self.update_status("in_progress", progress, "Restarted TAK Server")
+            await self.update_status("in_progress", progress, "TAK Server restarted with new certificates")
             await self.cert_config.run_certmod(takserver_name)
             await self.cert_config.copy_client_cert_to_webaccess(takserver_name)
-            progress = 100  # Ensure we end at exactly 100%
-            await self.update_status("complete", progress, "Installation complete")
+            progress = 100
+            await self.update_status("complete", progress, "TAK Server installation completed successfully")
             return True
 
         except Exception as e:
-            await self.update_status("error", 100, "Installation failed", str(e))
+            error_message = f"Installation failed: {str(e)}"
+            await self.update_status("error", 100, "Installation encountered an error", error_message)
             return False
 
 

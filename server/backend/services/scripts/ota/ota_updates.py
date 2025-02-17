@@ -29,28 +29,30 @@ class OTAUpdate:
         self.docker_client = docker.from_env()
 
     async def update_status(self, status: str, progress: float, message: str, error: Optional[str] = None) -> None:
-        """Update installation status."""
+        """Update OTA status."""
         if self.emit_event:
-            new_status = {
+            # Send terminal message
+            await self.emit_event({
+                "type": "terminal",
+                "message": message,
+                "isError": error is not None,
+                "timestamp": int(time.time() * 1000)
+            })
+            
+            # Send progress update
+            await self.emit_event({
                 "type": "status",
                 "status": status,
                 "progress": progress,
-                "message": message,
                 "error": error,
                 "isError": error is not None,
                 "timestamp": int(time.time() * 1000)
-            }
-            
-            # Only emit if status has changed
-            if new_status != self._last_status:
-                await self.emit_event(new_status)
-                self._last_status = new_status
+            })
 
     async def update_dockerfile(self) -> None:
         """Updates the Dockerfile with new content."""
         try:
-            version = self.directory_helper.get_takserver_version()
-            docker_compose_dir = self.directory_helper.get_docker_compose_directory(version)
+            docker_compose_dir = self.directory_helper.get_docker_compose_directory()
             dockerfile_path = os.path.join(docker_compose_dir, "docker", "Dockerfile.takserver")
 
             if not os.path.exists(dockerfile_path):
@@ -68,8 +70,7 @@ class OTAUpdate:
     async def rebuild_takserver(self) -> None:
         """Rebuild and restart TAK Server containers."""
         try:
-            version = self.directory_helper.get_takserver_version()
-            docker_compose_dir = self.directory_helper.get_docker_compose_directory(version)
+            docker_compose_dir = self.directory_helper.get_docker_compose_directory()
             
             # Build and start containers using docker-compose
             logger.info("Building and starting Docker containers...")
@@ -231,7 +232,7 @@ class OTAUpdate:
                 command,
                 'ota',
                 emit_event=self.emit_event,
-                ignore_errors=True
+                ignore_errors=True,
             )
 
             if not result.success:
@@ -245,15 +246,12 @@ class OTAUpdate:
     async def main(self) -> bool:
         """Main configuration process"""
         try:
-            # Send initial 0% progress
-            await self.update_status("in_progress", 0, "Initializing OTA configuration process")
-
             # Define task weights
             weights = {
                 'setup': 2,          # Initial checks and setup
                 'config': 3,         # Dockerfile and docker-compose updates
-                'docker_build': 48,  # Docker rebuild weight
-                'plugins': 45,       # Plugin operations
+                'docker_build': 30,  # Docker rebuild weight
+                'plugins': 63,       # Plugin operations
                 'script': 2          # Generate inf script operations
             }
             progress = 0
@@ -283,18 +281,22 @@ class OTAUpdate:
             async def update_build_progress():
                 build_progress = 0
                 while build_progress < build_weight:
-                    await asyncio.sleep(2)  # Update every 2 seconds
+                    await asyncio.sleep(3)  # Update every 2 seconds
                     build_progress = min(build_progress + 1, build_weight * 0.95)  # Cap at 95% of build weight
-                    await self.update_status("in_progress", build_start_progress + build_progress, 
-                                          "Building Docker containers...")
+                    total_progress = build_start_progress + build_progress
+                    
+                    # Only send status update without terminal message
+                    await self.emit_event({
+                        "type": "status",
+                        "status": "in_progress",
+                        "progress": total_progress,
+                        "error": None,
+                        "isError": False,
+                        "timestamp": int(time.time() * 1000)
+                    })
             
-            # Start progress updater task
             progress_task = asyncio.create_task(update_build_progress())
-            
-            # Perform actual docker build
             await self.rebuild_takserver()
-            
-            # Cancel progress updater and set final build progress
             progress_task.cancel()
             try:
                 await progress_task
@@ -318,10 +320,19 @@ class OTAUpdate:
             async def update_plugin_progress():
                 plugin_progress = 0
                 while plugin_progress < plugin_weight:
-                    await asyncio.sleep(2)  # Update every 2 seconds
+                    await asyncio.sleep(4)  # Update every 2 seconds
                     plugin_progress = min(plugin_progress + 1, plugin_weight * 0.95)
-                    await self.update_status("in_progress", plugin_start_progress + plugin_progress,
-                                          "Processing plugins...")
+                    total_progress = plugin_start_progress + plugin_progress
+                    
+                    # Only send status update without terminal message
+                    await self.emit_event({
+                        "type": "status",
+                        "status": "in_progress",
+                        "progress": total_progress,
+                        "error": None,
+                        "isError": False,
+                        "timestamp": int(time.time() * 1000)
+                    })
 
             plugin_progress_task = asyncio.create_task(update_plugin_progress())
 
@@ -348,13 +359,12 @@ class OTAUpdate:
     async def update(self) -> bool:
         """Update plugins process"""
         try:
-            # Send initial 0% progress
-            await self.update_status("in_progress", 0, "Initializing OTA update process")
 
             # Define task weights for update process
             weights = {
                 'setup': 10,     # Initial checks
-                'plugins': 80,    # Plugin operations (main task for update)
+                'cleanup': 20,   # Cleanup existing plugin folder
+                'plugins': 60,    # Plugin operations (main task for update)
                 'script': 10      # Generate inf script operations
             }
             progress = 0
@@ -363,10 +373,78 @@ class OTAUpdate:
             await self.update_status("started", progress, "Starting OTA update process")
 
             # Check TAKServer status (0-10%)
-            await self.update_status("in_progress", progress, "Checking TAKServer status...")
+            await self.update_status("in_progress", progress, "Starting TAKServer...")
+
+            setup_start_progress = progress
+            setup_weight = weights['setup']
+
+            async def update_setup_progress():
+                setup_progress = 0
+                while setup_progress < setup_weight:
+                    await asyncio.sleep(0.5)  # Update every 0.5 seconds
+                    setup_progress = min(setup_progress + 1, setup_weight * 0.95)
+                    total_progress = setup_start_progress + setup_progress
+                    
+                    # Only send status update without terminal message
+                    await self.emit_event({
+                        "type": "status",
+                        "status": "in_progress",
+                        "progress": total_progress,
+                        "error": None,
+                        "isError": False,
+                        "timestamp": int(time.time() * 1000)
+                    })
+
+            setup_progress_task = asyncio.create_task(update_setup_progress())
+
+            # Start the TAKServer
             await self.tak_status.start_containers()
-            progress += weights['setup']
-            await self.update_status("in_progress", progress, "TAKServer status verified")
+
+            # Wait for the setup progress task to complete
+            setup_progress_task.cancel()
+            try:
+                await setup_progress_task
+            except asyncio.CancelledError:
+                pass
+            
+            progress += setup_weight  # Update overall progress after starting TAKServer
+            await self.update_status("in_progress", progress, "TAKServer started")
+
+            # Cleanup existing plugin folder (10-30%)
+            await self.update_status("in_progress", progress, "Cleaning environment...")
+            cleanup_start_progress = progress
+            cleanup_weight = weights['cleanup']
+
+            async def update_cleanup_progress():
+                cleanup_progress = 0
+                while cleanup_progress < cleanup_weight:
+                    await asyncio.sleep(0.5)  # Update every 0.5 seconds
+                    cleanup_progress = min(cleanup_progress + 1, cleanup_weight * 0.95)
+                    total_progress = cleanup_start_progress + cleanup_progress
+                    
+                    # Only send status update without terminal message
+                    await self.emit_event({
+                        "type": "status",
+                        "status": "in_progress",
+                        "progress": total_progress,
+                        "error": None,
+                        "isError": False,
+                        "timestamp": int(time.time() * 1000)
+                    })
+
+            cleanup_progress_task = asyncio.create_task(update_cleanup_progress())
+
+            await self.check_and_remove_existing_plugin_folder()
+            await self.extract_and_prepare_plugins()
+            await self.create_generate_inf_script()
+
+            cleanup_progress_task.cancel()
+            try:
+                await cleanup_progress_task
+            except asyncio.CancelledError:
+                pass
+            
+            progress += weights['cleanup']
 
             # Handle plugins (10-90%)
             await self.update_status("in_progress", progress, "Processing plugins...")
@@ -376,15 +454,23 @@ class OTAUpdate:
             async def update_plugin_progress():
                 plugin_progress = 0
                 while plugin_progress < plugin_weight:
-                    await asyncio.sleep(2)  # Update every 2 seconds
+                    await asyncio.sleep(4)  # Update every 2 seconds
                     plugin_progress = min(plugin_progress + 1, plugin_weight * 0.95)
-                    await self.update_status("in_progress", plugin_start_progress + plugin_progress,
-                                          "Processing plugins...")
+                    total_progress = plugin_start_progress + plugin_progress
+                    
+                    # Only send status update without terminal message
+                    await self.emit_event({
+                        "type": "status",
+                        "status": "in_progress",
+                        "progress": total_progress,
+                        "error": None,
+                        "isError": False,
+                        "timestamp": int(time.time() * 1000)
+                    })
 
             plugin_progress_task = asyncio.create_task(update_plugin_progress())
 
-            await self.check_and_remove_existing_plugin_folder()
-            await self.extract_and_prepare_plugins()
+            await self.run_generate_inf_script()
 
             plugin_progress_task.cancel()
             try:
@@ -395,9 +481,8 @@ class OTAUpdate:
             progress += weights['plugins']
 
             # Generate inf script (90-100%)
-            await self.update_status("in_progress", progress, "Running generate-inf script")
-            await self.create_generate_inf_script()
-            await self.run_generate_inf_script()
+            await self.update_status("in_progress", progress, "Restarting TAKServer")
+ 
             await self.tak_status.restart_containers()
             progress = 100
             
