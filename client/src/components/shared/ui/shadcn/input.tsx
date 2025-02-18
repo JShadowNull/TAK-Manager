@@ -15,6 +15,7 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
   hideArrows?: boolean;
   onClearFile?: () => void;
   error?: string;
+  onUpDown?: (increment: boolean) => void;
 }
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
@@ -36,6 +37,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
     hideArrows = false,
     onClearFile,
     error,
+    onUpDown,
     ...props 
   }, ref) => {
     const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -87,17 +89,19 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
     };
 
     const handleNumberChange = (increment: boolean) => {
-      if (type !== 'number' || !onChange) return;
-      
-      const currentValue = Number(value) || 0;
-      const step = props.step ? Number(props.step) : 1;
-      let newValue = increment ? currentValue + step : currentValue - step;
-      
-      // Respect min/max bounds
-      if (min !== undefined) newValue = Math.max(min, newValue);
-      if (max !== undefined) newValue = Math.min(max, newValue);
-      
-      onChange({ target: { value: newValue.toString() } } as React.ChangeEvent<HTMLInputElement>);
+      if (onUpDown) {
+        onUpDown(increment);
+      } else if (type === 'number' && onChange) {
+        const currentValue = Number(value) || 0;
+        const step = props.step ? Number(props.step) : 1;
+        let newValue = increment ? currentValue + step : currentValue - step;
+        
+        // Respect min/max bounds
+        if (min !== undefined) newValue = Math.max(min, newValue);
+        if (max !== undefined) newValue = Math.min(max, newValue);
+        
+        onChange({ target: { value: newValue.toString() } } as React.ChangeEvent<HTMLInputElement>);
+      }
     };
 
     // Handle file input change
@@ -223,7 +227,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
     }
 
     // Number input with custom controls
-    if (type === 'number') {
+    if (type === 'number' || onUpDown) {
       return (
         <div className="relative w-fit">
           <input
