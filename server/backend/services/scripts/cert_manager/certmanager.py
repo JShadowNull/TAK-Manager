@@ -130,10 +130,12 @@ class CertManager:
     async def delete_batch(self, usernames: list) -> bool:
         """Delete multiple certificates in a batch."""
         try:
-            # Get initial certificates list
-            certificates = await self.get_registered_certificates()
+            total_certs = len(usernames)
             completed_certs = 0
 
+            # Get initial certificates list
+            certificates = await self.get_registered_certificates()
+            
             for username in usernames:
                 try:
                     # Verify user exists
@@ -149,8 +151,10 @@ class CertManager:
                 except Exception as e:
                     raise
 
+            return completed_certs == total_certs
+
         except Exception as e:
-            raise
+            raise Exception(f"Error during batch delete: {str(e)}")
 # ============================================================================
 # Create Functions
 # ============================================================================
@@ -227,19 +231,8 @@ class CertManager:
         try:
             container_name = self.get_container_name()
 
-            # First unregister the user from UserManager
-            command = ["docker", "exec", container_name, "bash", "-c", f"java -jar /opt/tak/utils/UserManager.jar usermod -D {username}"]
-            result = await self.run_command.run_command_async(
-                command=command,
-                event_type="delete_certs",
-                ignore_errors=False
-            )
-            
-            if not result.success:
-                raise Exception(f"Failed to unregister user {username} : {result.stderr}")
-
-            # Delete all files matching the username pattern
-            delete_command = ["docker", "exec", container_name, "bash", "-c", f"rm -f /opt/tak/certs/files/{username}* && echo 'Deleted files for {username}'"]
+            # Delete all files first before unregistering
+            delete_command = ["docker", "exec", container_name, "bash", "-c", f"rm -f /opt/tak/certs/files/{username}*"]
             result = await self.run_command.run_command_async(
                 command=delete_command,
                 event_type="delete_certs",
@@ -248,17 +241,17 @@ class CertManager:
             if not result.success:
                 raise Exception(f"Failed to delete files for user {username} : {result.stderr}")
 
-            # Verify no files remain
-            verify_command = ["docker", "exec", container_name, "bash", "-c", f"find /opt/tak/certs/files/ -name '{username}*' -type f"]
+            # Unregister the user only after successful file deletion
+            unregister_command = ["docker", "exec", container_name, "bash", "-c", f"java -jar /opt/tak/utils/UserManager.jar usermod -D {username}"]
             result = await self.run_command.run_command_async(
-                command=verify_command,
+                command=unregister_command,
                 event_type="delete_certs",
                 ignore_errors=False
             )
-            if not result.stdout:
-                return True
-            else:
-                raise Exception(f"Files still exist for user {username}")
+            if not result.success:
+                raise Exception(f"Failed to unregister user {username} : {result.stderr}")
+
+            return True
 
         except Exception as e:
             raise
