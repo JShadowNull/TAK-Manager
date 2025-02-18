@@ -1,14 +1,11 @@
 import os
-from pathlib import Path
 from backend.services.helpers.run_command import RunCommand
 import time
-from typing import Dict, Any, Optional, Callable, Coroutine
+from typing import Dict, Any, Optional
 import logging
 from backend.config.logging_config import configure_logging
-import asyncio
 import docker
 from backend.services.helpers.directories import DirectoryHelper
-import json
 from backend.services.scripts.docker.docker_manager import DockerManager
 # Setup logging
 logger = configure_logging(__name__)
@@ -184,7 +181,7 @@ class TakServerStatus:
                 'operation',
                 emit_event=self.emit_event,
                 working_dir=docker_compose_dir,
-                ignore_errors=True
+                ignore_errors=False
             )
             
             if not result.success:

@@ -3,7 +3,6 @@ import os
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from sse_starlette.sse import EventSourceResponse
 from backend.config.logging_config import configure_logging
 
 # Import routers (equivalent to blueprints)
