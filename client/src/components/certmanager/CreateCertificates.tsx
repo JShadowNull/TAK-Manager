@@ -365,7 +365,8 @@ const CreateCertificates: React.FC = () => {
 
       toast({
         title: "Certificates Created",
-        description: `Successfully created ${certificateCount} certificate(s): ${certificateNames.join(', ')}.`
+        description: `Successfully created ${certificateCount} certificate(s): ${certificateNames.join(', ')}.`,
+        variant: 'success'
       });
     } catch (error) {
       toast({

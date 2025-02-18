@@ -493,7 +493,7 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
                             }}
                             tooltip="Delete Certificate Files"
                             triggerMode="hover"
-                            disabled={isOperationInProgress}
+                            disabled={isOperationInProgress || cert.identifier === filteredCertificates[0]?.identifier}
                             className="relative dark:hover:text-red-600 hover:text-red-500"
                           >
                             {(isOperationInProgress && currentOperation === 'delete_certs' && certToDelete === cert.identifier) || 
