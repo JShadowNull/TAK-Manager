@@ -29,7 +29,6 @@ type Operation = 'delete_certs' | 'delete_certs_batch' | 'download' | 'download_
 
 const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
   certificates: initialCertificates = [],
-  onOperationProgress,
   isLoading: initialLoading = false
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -42,10 +41,11 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
   const [showSingleDeleteConfirm, setShowSingleDeleteConfirm] = useState(false);
   const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
   const [certToDelete, setCertToDelete] = useState<string>();
-  const [successfulDelete, setSuccessfulDelete] = useState<string | null>(null);
   const [deletingCerts, setDeletingCerts] = useState<Set<string>>(new Set());
   const [downloadingCerts, setDownloadingCerts] = useState<Set<string>>(new Set());
   const [selectedCertForEdit, setSelectedCertForEdit] = useState<string | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState<{ [key: string]: boolean }>({});
+  const [deleteSelectedSuccess, setDeleteSelectedSuccess] = useState(false);
   const navigate = useNavigate();
 
   // Fetch certificates
@@ -57,12 +57,13 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
       
       if (data.success && Array.isArray(data.certificates)) {
         setCertificates(data.certificates);
+        console.log('Certificates fetched successfully:', data.certificates);
       } else {
-        console.error('Invalid certificate data received:', data);
+        setError(data.detail || 'Invalid certificate data received');
       }
     } catch (error) {
       console.error('Error fetching certificates:', error);
-      setError('Failed to fetch certificates');
+      setError(error instanceof Error ? error.message : 'Failed to fetch certificates');
     } finally {
       setIsLoading(false);
     }
@@ -72,172 +73,6 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
   useEffect(() => {
     fetchCertificates();
   }, []);
-
-  // Setup SSE for certificate status updates
-  useEffect(() => {
-    const eventSource = new EventSource('/api/certmanager/certificates/status-stream');
-
-    eventSource.addEventListener('certificate-status', async (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        
-        // Handle certificate updates
-        if (data.type === 'certificates_update' && Array.isArray(data.certificates)) {
-          setCertificates(data.certificates);
-        }
-        
-        // Handle terminal messages for downloads
-        if (data.type === 'terminal' && !data.isError && currentOperation === 'download_batch') {
-          const match = data.message.match(/\/([^\/]+)\.p12$/);
-          if (match) {
-            const username = match[1];
-            const response = await fetch('/api/certmanager/certificates/download', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                usernames: [username]
-              })
-            });
-
-            if (response.ok) {
-              const blob = await response.blob();
-              const url = window.URL.createObjectURL(blob);
-              const link = document.createElement('a');
-              link.href = url;
-              link.download = `${username}.p12`;
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-              window.URL.revokeObjectURL(url);
-              
-              setDownloadingCerts(prev => {
-                const next = new Set(prev);
-                next.delete(username);
-                return next;
-              });
-            }
-          }
-        }
-        
-        // Handle operation status
-        if (data.type === 'status') {
-          // Handle operation start
-          if (data.status === 'in_progress') {
-            if (data.operation === 'delete_certs_batch') {
-              setCurrentOperation('delete_certs_batch');
-              setIsOperationInProgress(true);
-            } 
-            else if (data.operation === 'delete_certs' && data.details?.username) {
-              if (currentOperation === 'delete_certs_batch') {
-                setDeletingCerts(prev => new Set([...prev, data.details.username]));
-              } else {
-                setCurrentOperation('delete_certs');
-                setIsOperationInProgress(true);
-                setDeletingCerts(new Set([data.details.username]));
-              }
-            }
-            else if (data.operation === 'download_batch') {
-              setCurrentOperation('download_batch');
-              setIsOperationInProgress(true);
-            }
-            else if (data.operation === 'download' && data.details?.username) {
-              if (currentOperation === 'download_batch') {
-                setDownloadingCerts(prev => new Set([...prev, data.details.username]));
-              } else {
-                setCurrentOperation('download');
-                setIsOperationInProgress(true);
-                setDownloadingCerts(new Set([data.details.username]));
-              }
-            }
-          }
-          
-          // Handle operation completion
-          if (data.status === 'complete') {
-            if (data.operation === 'download_batch') {
-              setDownloadingCerts(new Set());
-              setSelectedCerts(new Set());
-              setIsOperationInProgress(false);
-              setCurrentOperation(null);
-            }
-            else if (data.operation === 'delete_certs' && data.details?.username) {
-              setSuccessfulDelete(data.details.username);
-              setDeletingCerts(prev => {
-                const next = new Set(prev);
-                next.delete(data.details.username);
-                return next;
-              });
-              
-              if (currentOperation !== 'delete_certs_batch') {
-                setIsOperationInProgress(false);
-                setCurrentOperation(null);
-                
-                setTimeout(() => {
-                  setSuccessfulDelete(null);
-                  fetchCertificates();
-                }, 2000);
-              }
-            }
-            else if (data.operation === 'delete_certs_batch') {
-              setDeletingCerts(new Set());
-              setSelectedCerts(new Set());
-              setIsOperationInProgress(false);
-              setCurrentOperation(null);
-              setSuccessfulDelete(null);
-              fetchCertificates();
-            }
-          }
-          
-          // Handle operation errors
-          if (data.status === 'error') {
-            console.error('Operation error:', data.operation, data.message);
-            setError(data.message || 'Operation failed');
-            if (data.operation === 'download' || data.operation === 'download_batch') {
-              setDownloadingCerts(prev => {
-                const next = new Set(prev);
-                if (data.details?.username) {
-                  next.delete(data.details.username);
-                }
-                return next;
-              });
-              if (currentOperation !== 'download_batch') {
-                setIsOperationInProgress(false);
-                setCurrentOperation(null);
-              }
-            } else {
-              setSuccessfulDelete(null);
-              setDeletingCerts(new Set());
-              setDownloadingCerts(new Set());
-              setIsOperationInProgress(false);
-              setCurrentOperation(null);
-            }
-          }
-          
-          if (onOperationProgress) {
-            onOperationProgress(data);
-          }
-        }
-      } catch (error) {
-        console.error('Error processing SSE event:', error);
-        setIsOperationInProgress(false);
-        setCurrentOperation(null);
-        setSuccessfulDelete(null);
-        setDeletingCerts(new Set());
-        setDownloadingCerts(new Set());
-      }
-    });
-
-    eventSource.onerror = () => {
-      setTimeout(() => {
-        eventSource.close();
-      }, 5000);
-    };
-
-    return () => {
-      eventSource.close();
-    };
-  }, [onOperationProgress]);
 
   // Filter certificates based on search term
   const filteredCertificates = useMemo(() => {
@@ -272,6 +107,11 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
       setCurrentOperation(operation);
       setIsOperationInProgress(true);
 
+      // For batch operations, set the loading state for each certificate
+      if (operation === 'delete_certs_batch') {
+        setDeletingCerts(new Set(selectedCerts));
+      }
+
       const response = await fetch('/api/certmanager/certificates/delete', {
         method: 'DELETE',
         headers: {
@@ -286,11 +126,52 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
         const errorData = await response.json();
         throw new Error(errorData.detail || 'Failed to delete certificate(s)');
       }
+
+      // Set operation in progress to false if successful
+      setIsOperationInProgress(false);
+      setCurrentOperation(null);
+      
+      // Handle delete success state
+      if (operation === 'delete_certs') {
+        setDeleteSuccess(prev => ({ ...prev, [username!]: true }));
+        setTimeout(() => {
+          setDeleteSuccess(prev => ({ ...prev, [username!]: false }));
+        }, 1000);
+
+        // Remove the deleted cert from selectedCerts
+        setSelectedCerts(prev => {
+          const newSelectedCerts = new Set(prev);
+          newSelectedCerts.delete(username!);
+          return newSelectedCerts;
+        });
+      } else if (operation === 'delete_certs_batch') {
+        selectedCerts.forEach(certId => {
+          setDeleteSuccess(prev => ({ ...prev, [certId]: true }));
+          setTimeout(() => {
+            setDeleteSuccess(prev => ({ ...prev, [certId]: false }));
+          }, 1000);
+        });
+        
+        // Set success for the "Delete Selected" button
+        setDeleteSelectedSuccess(true);
+        setTimeout(() => {
+          setDeleteSelectedSuccess(false);
+        }, 1000);
+
+        // Delay clearing selected certs until after the success state is shown
+        setTimeout(() => {
+          setSelectedCerts(new Set());
+        }, 1000);
+      }
+
+      setTimeout(() => {
+        fetchCertificates();
+      }, 1000);
+
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Operation failed');
       setIsOperationInProgress(false);
       setCurrentOperation(null);
-      setSuccessfulDelete(null);
       setDeletingCerts(new Set());
     }
   };
@@ -472,7 +353,14 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
                       loadingText={`Deleting ${selectedCerts.size} certificates...`}
                       className="whitespace-nowrap"
                     >
-                      Delete Selected ({selectedCerts.size})
+                      {deleteSelectedSuccess ? (
+                        <span className="flex items-center gap-2">
+                          <Check className="h-5 w-5 text-primary"/> 
+                          {` Deleted ${selectedCerts.size} certificates`}
+                        </span>
+                      ) : (
+                        `Delete Selected (${selectedCerts.size})`
+                      )}
                     </Button>
                     <Button
                       variant="outline"
@@ -490,7 +378,7 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
             </div>
 
             {error && (
-              <p className="text-sm text-destructive">Error on Operation: {error}</p>
+              <p className="text-sm text-destructive">{error}</p>
             )}
 
             <div className="h-[400px] border rounded-lg">
@@ -572,31 +460,30 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
                           </div>
                         </div>
                         <div className="flex gap-1">
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                                    e.stopPropagation();
-                                    handleDownload(cert.identifier);
-                                  }}
-                                  disabled={isOperationInProgress}
-                                  className="relative hover:text-green-500 dark:hover:text-green-600"
-                                >
-                                  {downloadingCerts.has(cert.identifier) ? (
-                                    <Loader2 className="h-5 w-5 animate-spin" />
-                                  ) : (
-                                    <ArrowDownToLine className="h-5 w-5" />
-                                  )}
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Download .p12 extension</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            tooltip="Download .p12 extension"
+                            triggerMode="hover"
+                            onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                              e.stopPropagation();
+                              // Create a direct link for download
+                              const link = document.createElement('a');
+                              link.href = `/api/certmanager/certificates/download?username=${cert.identifier}`;
+                              link.download = `${cert.identifier}.p12`;
+                              document.body.appendChild(link);
+                              link.click();
+                              document.body.removeChild(link);
+                            }}
+                            disabled={isOperationInProgress}
+                            className="relative hover:text-green-500 dark:hover:text-green-600"
+                          >
+                            {downloadingCerts.has(cert.identifier) ? (
+                              <Loader2 className="h-5 w-5 animate-spin" />
+                            ) : (
+                              <ArrowDownToLine className="h-5 w-5" />
+                            )}
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -604,14 +491,16 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
                               e.stopPropagation();
                               handleDeleteClick(cert.identifier);
                             }}
+                            tooltip="Delete Certificate Files"
+                            triggerMode="hover"
                             disabled={isOperationInProgress}
                             className="relative dark:hover:text-red-600 hover:text-red-500"
                           >
                             {(isOperationInProgress && currentOperation === 'delete_certs' && certToDelete === cert.identifier) || 
                              (currentOperation === 'delete_certs_batch' && deletingCerts.has(cert.identifier)) ? (
                               <Loader2 className="h-5 w-5 animate-spin" />
-                            ) : successfulDelete === cert.identifier ? (
-                              <Check className="h-5 w-5 text-primary" />
+                            ) : deleteSuccess[cert.identifier] ? (
+                              <Check className="h-5 w-5 text-green-500 dark:text-green-600" />
                             ) : (
                               <Trash2 className="h-5 w-5" />
                             )}

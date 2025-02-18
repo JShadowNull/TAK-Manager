@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/shared/ui/shadcn/card/card";
 import { Input } from '@/components/shared/ui/shadcn/input';
 import { Label } from "@/components/shared/ui/shadcn/label";
@@ -10,7 +10,7 @@ import { Separator } from "@/components/shared/ui/shadcn/separator";
 import { HelpIconTooltip } from '../shared/ui/shadcn/tooltip/HelpIconTooltip';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/shared/ui/shadcn/tooltip/tooltip";
 import { useCertificateValidation, useBatchValidation } from './hooks/useCertificateValidation';
-import { Trash2, PlusCircle, Wand2, Eye, EyeOff } from 'lucide-react';
+import { Trash2, PlusCircle, Wand2, Eye, EyeOff, Check } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { toast } from "../shared/ui/shadcn/toast/use-toast";
 
@@ -22,20 +22,6 @@ interface CertField {
   password: string;
 }
 
-interface OperationProgress {
-  total: number;
-  completed: number;
-  currentCert: string;
-  step: string;
-  message: string;
-  progress: number;
-  stepProgress?: number;
-}
-
-interface CreateCertificatesProps {
-  onOperationProgress?: (data: OperationProgress) => void;
-}
-
 interface BatchCertificateData {
   mode: 'batch';
   name: string;
@@ -44,6 +30,13 @@ interface BatchCertificateData {
   prefixType: 'numeric' | 'alpha';
   isAdmin: boolean;
   includeGroupInName: boolean;
+  startAt: string | number;
+  certificates?: Array<{
+    username: string;
+    groups: string[];
+    is_admin: boolean;
+    password?: string;
+  }>;
 }
 
 interface SingleCertificateData {
@@ -61,36 +54,45 @@ type CertificateData = BatchCertificateData | SingleCertificateData;
 type Operation = 'create_single' | 'create_batch' | null;
 
 // Helper function for batch mode
-const generateAlphabeticSequence = (n: number): string[] => {
+const generateAlphabeticSequence = (start: string, count: number): string[] => {
   const sequence: string[] = [];
-  let len = 1;
-  let count = 0;
+  const startChar = start.toLowerCase();
   
-  while (count < n) {
+  // Convert a string like 'a' or 'aa' to a number
+  const stringToNumber = (str: string): number => {
+    let num = 0;
+    for (let i = 0; i < str.length; i++) {
+      num = num * 26 + (str.charCodeAt(i) - 97);
+    }
+    return num;
+  };
+
+  // Convert a number to a string like 'a' or 'aa'
+  const numberToString = (num: number): string => {
     let str = '';
-    let num = count;
-    
-    for (let i = 0; i < len; i++) {
+    do {
       str = String.fromCharCode(97 + (num % 26)) + str;
-      num = Math.floor(num / 26);
-    }
-    
-    sequence.push(str);
-    count++;
-    
-    if (count === Math.pow(26, len)) {
-      len++;
-    }
+      num = Math.floor(num / 26) - 1;
+    } while (num >= 0);
+    return str;
+  };
+
+  const startNum = stringToNumber(startChar);
+  
+  for (let i = 0; i < count; i++) {
+    sequence.push(numberToString(startNum + i));
   }
   
   return sequence;
 };
 
-const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProgress }) => {
-  const [isBatchMode, setIsBatchMode] = useState(false);
+const CreateCertificates: React.FC = () => {
+  const [isBatchMode, setIsBatchMode] = useState(() => {
+    // Retrieve the mode from session storage or default to false
+    return sessionStorage.getItem('certificateMode') === 'batch';
+  });
   const [currentOperation, setCurrentOperation] = useState<Operation>(null);
   const [isOperationInProgress, setIsOperationInProgress] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [passwordVisibility, setPasswordVisibility] = useState<{ [key: number]: boolean }>({});
 
   // Single certificate state
@@ -106,10 +108,63 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
   const [batchGroup, setBatchGroup] = useState('__ANON__');
   const [count, setCount] = useState(1);
   const [prefixType, setPrefixType] = useState<'numeric' | 'alpha'>('numeric');
+  const [startAt, setStartAt] = useState<string>('1');
+
+  // Update startAt when prefix type changes
+  useEffect(() => {
+    setStartAt(prefixType === 'numeric' ? '1' : 'a');
+  }, [prefixType]);
+
+  // Update session storage whenever the mode changes
+  useEffect(() => {
+    sessionStorage.setItem('certificateMode', isBatchMode ? 'batch' : 'single');
+  }, [isBatchMode]);
+
+  // Handle startAt increment/decrement
+  const handleStartAtChange = (increment: boolean) => {
+    if (prefixType === 'numeric') {
+      const currentValue = parseInt(startAt, 10);
+      setStartAt((increment ? currentValue + 1 : Math.max(1, currentValue - 1)).toString());
+    } else {
+      const currentValue = startAt.toLowerCase();
+      if (increment) {
+        // Handle increment for alphabetic
+        if (currentValue === 'z') {
+          setStartAt('aa');
+        } else if (currentValue.endsWith('z')) {
+          const prefix = currentValue.slice(0, -1);
+          const nextChar = String.fromCharCode(prefix.charCodeAt(prefix.length - 1) + 1);
+          setStartAt(prefix.slice(0, -1) + nextChar + 'a');
+        } else {
+          const lastChar = currentValue.charAt(currentValue.length - 1);
+          setStartAt(currentValue.slice(0, -1) + String.fromCharCode(lastChar.charCodeAt(0) + 1));
+        }
+      } else {
+        // Handle decrement for alphabetic
+        if (currentValue === 'a') {
+          return; // Don't go below 'a'
+        } else if (currentValue.endsWith('a')) {
+          const prefix = currentValue.slice(0, -1);
+          if (prefix === 'a') {
+            setStartAt('z');
+          } else {
+            const prevChar = String.fromCharCode(prefix.charCodeAt(prefix.length - 1) - 1);
+            setStartAt(prefix.slice(0, -1) + prevChar + 'z');
+          }
+        } else {
+          const lastChar = currentValue.charAt(currentValue.length - 1);
+          setStartAt(currentValue.slice(0, -1) + String.fromCharCode(lastChar.charCodeAt(0) - 1));
+        }
+      }
+    }
+  };
 
   // Validations
   const certFieldsValidation = useCertificateValidation(certFields, []);
   const batchValidation = useBatchValidation(batchName, batchGroup, []);
+
+  // State to track the number of created certificates
+  const [createdCount, setCreatedCount] = useState<number | null>(null);
 
   const handleBlur = useCallback((field: string) => {
     // Validate immediately on blur
@@ -175,8 +230,8 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
 
     const previewCount = Math.min(count, 5);
     const suffixes = prefixType === 'alpha' 
-      ? generateAlphabeticSequence(previewCount)
-      : Array.from({ length: previewCount }, (_, i) => (i + 1).toString());
+      ? generateAlphabeticSequence(startAt as string, previewCount)
+      : Array.from({ length: previewCount }, (_, i) => (parseInt(startAt as string) + i).toString());
 
     const primaryGroup = batchGroup.split(',')[0].trim() || '__ANON__';
     
@@ -203,7 +258,7 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
   };
 
   const formatCertificateData = (): CertificateData => {
-    const certificateNames: string[] = []; // Array to hold certificate names
+    const certificateNames: string[] = [];
 
     if (isBatchMode) {
       const groups = batchGroup
@@ -211,6 +266,32 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
         .map(g => g.trim())
         .filter(g => g);
       
+      // Generate certificate names based on prefix type and start value
+      const certificates = Array.from({ length: count }, (_, index) => {
+        let suffix: string;
+        
+        if (prefixType === 'alpha') {
+          const startChar = (startAt as string).toLowerCase();
+          const sequences = generateAlphabeticSequence(startChar, count);
+          suffix = sequences[index];
+        } else {
+          // Numeric sequence
+          const startNum = parseInt(startAt as string, 10);
+          suffix = (startNum + index).toString();
+        }
+
+        const primaryGroup = groups.length ? groups[0] : '__ANON__';
+        const username = `${batchName.trim()}-${primaryGroup}-${suffix}`;
+        certificateNames.push(username);
+
+        return {
+          username,
+          groups: groups.length ? [groups[0]] : ['__ANON__'],
+          is_admin: false,
+          password: undefined
+        };
+      });
+
       return {
         mode: 'batch',
         name: batchName.trim(),
@@ -218,7 +299,9 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
         count,
         prefixType,
         isAdmin: false,
-        includeGroupInName: true
+        includeGroupInName: true,
+        startAt,
+        certificates
       };
     } else {
       const certificates = certFields
@@ -245,7 +328,6 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
   // Handle certificate creation
   const handleOperation = async (operation: Operation) => {
     try {
-      setError(null);
       setCurrentOperation(operation);
       setIsOperationInProgress(true);
 
@@ -261,82 +343,50 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
       });
 
       if (!response.ok) {
-        throw new Error('Failed to create certificate(s)');
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to create certificate(s)')
       }
 
-      // Reset form on success will be handled by SSE complete event
+      // Reset form on success
+      if (data.mode === 'single') {
+        setCertFields([{
+          name: '',
+          group: '__ANON__',
+          password: '',
+          isAdmin: false
+        }]); // Reset to initial state
+      }
+
       const certificateCount = data.mode === 'batch' ? data.count : data.certificates.length;
       const certificateNames = data.mode === 'batch' ? [data.name] : data.certificates.map(cert => cert.username);
+
+      // Set the created count
+      setCreatedCount(certificateCount);
 
       toast({
         title: "Certificates Created",
         description: `Successfully created ${certificateCount} certificate(s): ${certificateNames.join(', ')}.`
       });
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Operation failed');
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : 'Operation failed',
+        variant: 'destructive', // Adjust the variant as needed
+      });
+    } finally {
+      // Reset loading state and current operation
       setIsOperationInProgress(false);
       setCurrentOperation(null);
+      
+      // Reset created count after a short delay
+      setTimeout(() => {
+        setCreatedCount(null);
+      }, 1000); // Adjust the delay as needed
     }
   };
 
   const handleSingleCreate = () => handleOperation('create_single');
   const handleBatchCreate = () => handleOperation('create_batch');
-
-  // Setup SSE for creation status updates
-  useEffect(() => {
-    const eventSource = new EventSource('/api/certmanager/certificates/status-stream');
-
-    eventSource.addEventListener('certificate-status', (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        
-        if (data.status === 'complete' || data.status === 'error') {
-          setIsOperationInProgress(false);
-          setCurrentOperation(null);
-          if (data.error) {
-            setError(data.error);
-          } else {
-            setError(null);
-            // Reset form on success
-            if (isBatchMode) {
-              setBatchName('');
-              setBatchGroup('__ANON__');
-              setCount(1);
-              setPrefixType('numeric');
-            } else {
-              setCertFields([{
-                name: '',
-                group: '__ANON__',
-                password: '',
-                isAdmin: false
-              }]);
-            }
-          }
-        }
-        
-        // Call onOperationProgress with the status data
-        if (onOperationProgress && data.type === 'status') {
-          const progress: OperationProgress = {
-            total: data.details?.total || 0,
-            completed: data.details?.completed || 0,
-            currentCert: data.details?.username || '',
-            step: data.operation || '',
-            message: data.message || '',
-            progress: data.details?.completed ? (data.details.completed / data.details.total) * 100 : 0,
-            stepProgress: data.details?.stepProgress
-          };
-          onOperationProgress(progress);
-        }
-      } catch (error) {
-        setIsOperationInProgress(false);
-        setCurrentOperation(null);
-      }
-    });
-
-    return () => {
-      eventSource.close();
-    };
-  }, [isBatchMode, onOperationProgress]);
 
   const generateSecurePassword = () => {
     const length = 15;
@@ -368,6 +418,11 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
       ...prev,
       [index]: !prev[index]
     }));
+  };
+
+  const handleGeneratePassword = (index: number) => {
+    const newPassword = generateSecurePassword();
+    handleCertFieldChange(index, 'password', newPassword); // Ensure state is updated correctly
   };
 
   return (
@@ -492,7 +547,7 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
                           type="button"
                           variant="outline"
                           size="icon"
-                          onClick={() => handleCertFieldChange(index, 'password', generateSecurePassword())}
+                          onClick={() => handleGeneratePassword(index)}
                           className="h-10 w-10 shrink-0"
                           tooltip="Generate secure password"
                           triggerMode="hover"
@@ -589,6 +644,42 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
                     min={1}
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="startAt" className="flex items-center gap-2">
+                    Start At
+                    <HelpIconTooltip 
+                      tooltip={prefixType === 'numeric' ? 
+                        "Starting number for certificate sequence" : 
+                        "Starting letter(s) for certificate sequence (a-z, aa-zz, etc)"
+                      }
+                      triggerMode="hover"
+                      iconSize={14}
+                    />
+                  </Label>
+                  <Input
+                    id="startAt"
+                    value={startAt}
+                    onChange={(e) => {
+                      let value = e.target.value.toLowerCase();
+                      if (prefixType === 'numeric') {
+                        // Only allow positive numbers
+                        const num = parseInt(value, 10);
+                        if (!isNaN(num) && num > 0) {
+                          setStartAt(num.toString());
+                        }
+                      } else {
+                        // Only allow alphabetic characters
+                        if (/^[a-z]+$/.test(value)) {
+                          setStartAt(value);
+                        }
+                      }
+                    }}
+                    onUpDown={handleStartAtChange}
+                    type={prefixType === 'numeric' ? 'number' : 'text'}
+                    min={prefixType === 'numeric' ? 1 : undefined}
+                    className="w-fit"
+                  />
+                </div>
               </div>
               {getCertificatePreview() && (
                 <div className="mt-4 text-sm text-muted-foreground">
@@ -598,12 +689,8 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
             </div>
           )}
 
-          {error && (
-            <p className="text-sm text-destructive mb-2">{error}</p>
-          )}
-
           {/* Create Button */}
-          <div className="flex justify-end mt-6">
+          <div className="flex justify-end mt-6 break-normal">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -614,7 +701,14 @@ const CreateCertificates: React.FC<CreateCertificatesProps> = ({ onOperationProg
                       loading={currentOperation !== null}
                       loadingText={`Creating certificate${(isBatchMode || certFields.length > 1) ? 's' : ''}`}
                     >
-                      {`Create Certificate${(isBatchMode || certFields.length > 1) ? 's' : ''}`}
+                      {createdCount ? (
+                        <span className="flex items-center gap-2">
+                          <Check className="mr-2 text-green-500" />
+                          {`Created ${createdCount} Certificate${createdCount > 1 ? 's' : ''}`}
+                        </span>
+                      ) : (
+                        `Create Certificate${(isBatchMode || certFields.length > 1) ? 's' : ''}`
+                      )}
                     </Button>
                   </div>
                 </TooltipTrigger>

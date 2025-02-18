@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, ReactNode } from 'react';
 import { Button } from "@/components/shared/ui/shadcn/button";
 import {
   Dialog,
@@ -8,7 +8,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/shared/ui/shadcn/dialog";
-import { CheckCircle, AlertCircle } from "lucide-react";
+import { CheckCircle, AlertCircle, CircleCheckBig, Pencil, RefreshCcw } from "lucide-react";
 import CodeMirror from '@uiw/react-codemirror';
 import { xml } from '@codemirror/lang-xml';
 import { oneDark } from '@codemirror/theme-one-dark';
@@ -26,7 +26,8 @@ interface DialogState {
   show: boolean;
   title: string;
   message: string;
-  type: 'save' | 'notification';
+  type: 'save' | 'notification' | 'success' | 'error';
+  icon?: ReactNode;
 }
 
 const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
@@ -37,19 +38,44 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
 }) => {
   const [xmlContent, setXmlContent] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isOperationInProgress, setIsOperationInProgress] = useState(false);
   const [dialog, setDialog] = useState<DialogState>({
     show: false,
     title: '',
     message: '',
     type: 'notification'
   });
+  const [successDialog, setSuccessDialog] = useState<DialogState>({
+    show: false,
+    title: '',
+    message: '',
+    type: 'success'
+  });
+  const [errorDialog, setErrorDialog] = useState<DialogState>({
+    show: false,
+    title: '',
+    message: '',
+    type: 'error'
+  });
 
-  const showNotification = (title: string, message: string) => {
-    setDialog({
+
+
+  const showSuccessNotification = (message: string, title: string, icon: ReactNode) => {
+    setSuccessDialog({
       show: true,
       title,
       message,
-      type: 'notification'
+      type: 'success',
+      icon
+    });
+  };
+
+  const showErrorNotification = (message: string) => {
+    setErrorDialog({
+      show: true,
+      title: 'Error',
+      message,
+      type: 'error'
     });
   };
 
@@ -66,7 +92,7 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
       }
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      showNotification('Error', `Failed to load configuration: ${errorMessage}`);
+      showErrorNotification(`Failed to load configuration: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }
@@ -95,7 +121,7 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
       return true;
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      showNotification('Validation Error', errorMessage);
+      showErrorNotification(`Validation Error: ${errorMessage}`);
       return false;
     }
   };
@@ -103,6 +129,7 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
   const handleSave = async () => {
     try {
       // Validate first
+      showSuccessNotification('Saving configuration...', 'Saving...', <RefreshCcw style={{ animation: 'spin 1s linear infinite', animationDirection: 'reverse' }} className="h-5 w-5 text-primary" />);
       const isValid = await validateConfig(xmlContent);
       if (!isValid) return;
 
@@ -117,15 +144,39 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
       
       const data = await response.json();
       if (response.ok) {
-        showNotification('Success', 'Certificate configuration saved successfully.');
+        showSuccessNotification('Certificate configuration saved successfully. Restart TAK Server to apply changes.', 'Success', <CircleCheckBig className="h-5 w-5 text-green-500 dark:text-green-600" />);
         onSave();
-        onClose();
       } else {
         throw new Error(data.error || data.detail || 'Failed to save configuration');
       }
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      showNotification('Error', `Failed to save configuration: ${errorMessage}`);
+      showErrorNotification(`Failed to save configuration: ${errorMessage}`);
+    }
+  };
+
+  const handleRestart = async () => {
+    try {
+      setIsLoading(true);
+      setIsOperationInProgress(true);
+      showSuccessNotification('TAK Server is restarting...', 'Restarting...', <RefreshCcw style={{ animation: 'spin 1s linear infinite', animationDirection: 'reverse' }} className="h-5 w-5 text-primary" />);
+      const response = await fetch(`/api/takserver/restart-takserver`, {
+        method: 'POST'
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || data.detail || 'Restart failed');
+      }
+
+      showSuccessNotification('TAK Server restarted successfully.', 'Success', <CircleCheckBig className="h-5 w-5 text-green-500 dark:text-green-600" />);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      showSuccessNotification(`Failed to restart TAK Server: ${errorMessage}`, 'Error', <AlertCircle className="h-5 w-5 text-destructive" />);
+    } finally {
+      setIsOperationInProgress(false);
+      setIsLoading(false);
+      onClose();
     }
   };
 
@@ -134,7 +185,10 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
-            <DialogTitle>Edit Certificate Configuration</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-5 w-5 text-primary" />
+              Edit Certificate Configuration
+            </DialogTitle>
             <DialogDescription>
               Edit the XML configuration for certificate: {identifier}
             </DialogDescription>
@@ -225,6 +279,58 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
               </Button>
             </DialogFooter>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={successDialog.show} onOpenChange={() => setSuccessDialog(prev => ({ ...prev, show: false }))}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {successDialog.icon}
+              {successDialog.title}
+            </DialogTitle>
+            <DialogDescription>{successDialog.message}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSuccessDialog(prev => ({ ...prev, show: false }));
+                onClose();
+              }}
+            >
+              Close
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleRestart}
+              disabled={isLoading}
+              loading={isOperationInProgress}
+              loadingText="Restarting..."
+            >
+              Restart
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={errorDialog.show} onOpenChange={() => setErrorDialog(prev => ({ ...prev, show: false }))}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-destructive" />
+              {errorDialog.title}
+            </DialogTitle>
+            <DialogDescription>{errorDialog.message}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setErrorDialog(prev => ({ ...prev, show: false }))}
+            >
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
