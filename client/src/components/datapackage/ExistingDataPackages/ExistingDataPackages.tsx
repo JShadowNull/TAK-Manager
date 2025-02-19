@@ -295,58 +295,63 @@ const ExistingDataPackages: React.FC<ExistingDataPackagesProps> = ({
       setIsOperationInProgress(true);
       
       // Set initial loading state
-      if (filename) {
-        setDownloadingPackages(new Set([filename]));
-      } else {
-        // For batch downloads, set all selected packages as downloading
-        setDownloadingPackages(new Set(selectedPackages));
-      }
-
-      // For batch downloads, we'll download each package individually
       const packagesToDownload = filename ? [filename] : Array.from(selectedPackages);
-      
+      setDownloadingPackages(new Set(packagesToDownload));
+
       for (const pkg of packagesToDownload) {
         try {
+          // Fetch package data first
           const response = await fetch(`/api/datapackage/download/${pkg}`);
 
           if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(errorData.detail || 'Failed to download package');
+            throw new Error(errorData.detail || 'Download failed');
           }
 
           const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = pkg;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          window.URL.revokeObjectURL(url);
-          
-          // Update loading state for this package
-          setDownloadingPackages(prev => {
-            const next = new Set(prev);
-            next.delete(pkg);
-            return next;
-          });
+          const buffer = await blob.arrayBuffer();
+
+          if (window.pywebview) {
+            // Pywebview path - show dialog AFTER fetching data
+            const filePath = await window.pywebview.api.save_file_dialog(
+              pkg,
+              [['Data Packages', 'zip'], ['All Files', '*']]
+            );
+
+            if (!filePath) {
+              setDownloadingPackages(prev => new Set([...prev].filter(f => f !== pkg)));
+              continue;
+            }
+
+            await window.pywebview.api.write_binary_file(filePath, new Uint8Array(buffer));
+          } else {
+            // Browser path - create download link
+            const url = window.URL.createObjectURL(new Blob([buffer]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = pkg;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+          }
+
+          // Update loading state after successful save/download
+          setDownloadingPackages(prev => new Set([...prev].filter(f => f !== pkg)));
+
         } catch (error) {
           console.error('Error downloading package:', pkg, error);
-          setDownloadingPackages(prev => {
-            const next = new Set(prev);
-            next.delete(pkg);
-            return next;
-          });
+          setDownloadingPackages(prev => new Set([...prev].filter(f => f !== pkg)));
         }
       }
-      
-      // Only clear operation state after all downloads are complete
+
+      // Final cleanup
       if (!filename) {
         setSelectedPackages(new Set());
       }
       setIsOperationInProgress(false);
       setCurrentOperation(null);
-      
+
     } catch (error) {
       console.error('Download operation failed:', error);
       setError(error instanceof Error ? error.message : 'Operation failed');

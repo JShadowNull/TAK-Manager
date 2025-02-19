@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional
 from backend.config.logging_config import configure_logging
 import tempfile
 from backend.services.helpers.directories import DirectoryHelper
+import shutil
 logger = configure_logging(__name__)
 # ============================================================================
 # CertManager Class
@@ -302,14 +303,21 @@ class CertManager:
                     'message': f"Failed to copy certificate for user {username}"
                 }
 
-            # Return file data instead of path
+            # Return file data as bytes
             with open(p12_path, 'rb') as f:
                 file_data = f.read()
+            
+            # Clean up temp file immediately
+            try:
+                os.remove(p12_path)
+                shutil.rmtree(temp_dir)
+            except Exception as e:
+                logger.warning(f"Temp file cleanup failed: {str(e)}")
             
             return {
                 'success': True,
                 'filename': f"{username}.p12",
-                'data': file_data
+                'data': file_data  # Keep as bytes
             }
 
         except Exception as e:

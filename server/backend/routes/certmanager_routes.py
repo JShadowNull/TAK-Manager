@@ -141,13 +141,11 @@ async def download_certificates(data: DownloadRequest):
             if not result.get('success'):
                 raise HTTPException(status_code=404, detail=result.get('message', "Certificate not found"))
             
-            # Return file data directly from memory
+            # Return as bytes directly
             return StreamingResponse(
-                iter([result['data']]),
+                iter([result['data']]),  # Keep as bytes iterator
                 media_type='application/octet-stream',
-                headers={
-                    'Content-Disposition': f'attachment; filename="{result["filename"]}"'
-                }
+                headers={'Content-Disposition': f'attachment; filename="{result["filename"]}"'}
             )
 
         # Handle batch downloads
