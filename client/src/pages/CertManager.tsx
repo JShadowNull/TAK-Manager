@@ -6,14 +6,8 @@ import ExistingCertificates from '../components/certmanager/ExistingCertificates
 import { useTakServerRequired } from '../components/shared/hooks/useTakServerRequired';
 import TakServerRequiredDialog from '../components/shared/TakServerRequiredDialog';
 
-interface OperationStatus {
-  status: string;
-  message: string;
-}
-
 const CertManager: React.FC = () => {
   const navigate = useNavigate();
-  const [operationStatus] = useState<OperationStatus | null>(null);
   const [currentTab, setCurrentTab] = useState(() => {
     return sessionStorage.getItem('certManagerTab') || 'create-certs';
   });
@@ -43,10 +37,6 @@ const CertManager: React.FC = () => {
     navigate('/data-package');
   };
 
-  const handleOperationProgress = () => {
-    return operationStatus;
-  };
-
   const renderContent = () => (
     <div className={`bg-background text-foreground pt-4 ${!isServerRunning ? 'pointer-events-none opacity-50' : ''}`}>
       <div className="mx-auto space-y-8">
@@ -70,15 +60,12 @@ const CertManager: React.FC = () => {
 
           <div className="w-full">
             <TabsContent value="create-certs" className="w-full">
-              <CreateCertificates 
-                onOperationProgress={handleOperationProgress}
-              />
+              <CreateCertificates />
             </TabsContent>
             <TabsContent value="existing-certs" className="w-full">
               <ExistingCertificates
                 certificates={certData.certificates}
                 onCreateDataPackage={handleBatchDataPackage}
-                onOperationProgress={handleOperationProgress}
                 isLoading={isLoading}
               />
             </TabsContent>
