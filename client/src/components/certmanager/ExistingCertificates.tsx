@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import CertificateOperationPopups from './CertificateOperationPopups';
 import { useNavigate } from 'react-router-dom';
 import CertificateConfigEditor from './CertificateConfigEditor';
+import { toast } from "../shared/ui/shadcn/toast/use-toast";
 
 interface Certificate {
   identifier: string;
@@ -34,7 +35,6 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
   const [selectedCerts, setSelectedCerts] = useState<Set<string>>(new Set());
   const [currentOperation, setCurrentOperation] = useState<Operation>(null);
   const [isOperationInProgress, setIsOperationInProgress] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [certificates, setCertificates] = useState<Certificate[]>(initialCertificates);
   const [isLoading, setIsLoading] = useState(initialLoading);
   const [showSingleDeleteConfirm, setShowSingleDeleteConfirm] = useState(false);
@@ -56,13 +56,19 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
       
       if (data.success && Array.isArray(data.certificates)) {
         setCertificates(data.certificates);
-        console.log('Certificates fetched successfully:', data.certificates);
       } else {
-        setError(data.detail || 'Invalid certificate data received');
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: data.detail || 'Invalid certificate data received',
+        });
       }
     } catch (error) {
-      console.error('Error fetching certificates:', error);
-      setError(error instanceof Error ? error.message : 'Failed to fetch certificates');
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error instanceof Error ? error.message : 'Failed to fetch certificates',
+      });
     } finally {
       setIsLoading(false);
     }
@@ -102,7 +108,13 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
 
   const handleOperation = async (operation: Operation, username?: string) => {
     try {
-      setError(null);
+      const firstCertId = filteredCertificates[0]?.identifier;
+      const certsToDelete = username ? [username] : Array.from(selectedCerts);
+
+      if (certsToDelete.includes(firstCertId)) {
+        throw new Error(`Failed to delete cert ${firstCertId}. It is primary admin.`);
+      }
+
       setCurrentOperation(operation);
       setIsOperationInProgress(true);
 
@@ -168,7 +180,11 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
       }, 1000);
 
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Operation failed');
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error instanceof Error ? error.message : 'Operation failed',
+      });
       setIsOperationInProgress(false);
       setCurrentOperation(null);
       setDeletingCerts(new Set());
@@ -204,7 +220,6 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
 
   const handleDownload = async (username?: string) => {
     try {
-      setError(null);
       setCurrentOperation(username ? 'download' : 'download_batch');
       setIsOperationInProgress(true);
       
@@ -301,8 +316,11 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
       setCurrentOperation(null);
       
     } catch (error) {
-      console.error('Download operation failed:', error);
-      setError(error instanceof Error ? error.message : 'Operation failed');
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error instanceof Error ? error.message : 'Download operation failed',
+      });
       setIsOperationInProgress(false);
       setCurrentOperation(null);
       setDownloadingCerts(new Set());
@@ -378,7 +396,7 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
                     <Button
                       variant="danger"
                       onClick={handleBatchDeleteClick}
-                      disabled={isOperationInProgress}
+                      disabled={isOperationInProgress || selectedCerts.size === 0}
                       loading={currentOperation === 'delete_certs_batch'}
                       loadingText={`Deleting ${selectedCerts.size} certificates...`}
                       className="whitespace-nowrap"
@@ -406,10 +424,6 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
                 )}
               </div>
             </div>
-
-            {error && (
-              <p className="text-sm text-destructive">{error}</p>
-            )}
 
             <div className="h-[400px] border rounded-lg">
               <ScrollArea className="h-full">
