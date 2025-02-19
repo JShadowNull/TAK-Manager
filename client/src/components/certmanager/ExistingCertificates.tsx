@@ -242,7 +242,11 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
               [['PKCS12 Files', 'p12'], ['All Files', '*']]
             );
 
-            if (!filePath) return; // User cancelled
+            if (!filePath) {
+              // User cancelled - clear loading state for this cert
+              setDownloadingCerts(prev => new Set([...prev].filter(c => c !== cert)));
+              continue;  // Add this to skip processing
+            }
             
             // Fetch certificate data
             const response = await fetch('/api/certmanager/certificates/download', {
@@ -258,6 +262,7 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
             setDownloadingCerts(prev => new Set([...prev].filter(c => c !== cert)));
           } catch (error) {
             console.error(`Download failed for ${cert}:`, error);
+            setDownloadingCerts(prev => new Set([...prev].filter(c => c !== cert)));
           }
         }
       } else {
@@ -511,16 +516,10 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
                             triggerMode="hover"
                             onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                               e.stopPropagation();
-                              // Create a direct link for download
-                              const link = document.createElement('a');
-                              link.href = `/api/certmanager/certificates/download?username=${cert.identifier}`;
-                              link.download = `${cert.identifier}.p12`;
-                              document.body.appendChild(link);
-                              link.click();
-                              document.body.removeChild(link);
+                              handleDownload(cert.identifier);
                             }}
                             disabled={isOperationInProgress}
-                            className="relative hover:text-green-500 dark:hover:text-green-600"
+                            className="relative hover:text-green-600 dark:hover:text-green-500 hover:bg-transparent"
                           >
                             {downloadingCerts.has(cert.identifier) ? (
                               <Loader2 className="h-5 w-5 animate-spin" />
@@ -538,7 +537,7 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
                             tooltip="Delete Certificate Files"
                             triggerMode="hover"
                             disabled={isOperationInProgress || cert.identifier === filteredCertificates[0]?.identifier}
-                            className="relative dark:hover:text-red-600 hover:text-red-500"
+                            className="relative dark:hover:text-red-500 hover:text-red-600 hover:bg-transparent"
                           >
                             {(isOperationInProgress && currentOperation === 'delete_certs' && certToDelete === cert.identifier) || 
                              (currentOperation === 'delete_certs_batch' && deletingCerts.has(cert.identifier)) ? (
