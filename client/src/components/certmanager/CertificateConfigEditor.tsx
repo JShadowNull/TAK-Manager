@@ -14,6 +14,7 @@ import { xml } from '@codemirror/lang-xml';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { EditorView } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
+import { useTakServer } from '../shared/ui/shadcn/sidebar/app-sidebar';
 
 interface CertificateConfigEditorProps {
   identifier: string;
@@ -58,6 +59,7 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
     message: '',
     type: 'error'
   });
+  const { setServerState } = useTakServer();
 
 
 
@@ -159,6 +161,7 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
 
   const handleRestart = async () => {
     try {
+      setServerState(prev => ({ ...prev, isRestarting: true }));
       setIsLoading(true);
       setIsOperationInProgress(true);
       showSuccessNotification('TAK Server is restarting...', 'Restarting...', <RefreshCcw style={{ animation: 'spin 1s linear infinite', animationDirection: 'reverse' }} className="h-5 w-5 text-primary" />);
@@ -171,8 +174,10 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
         throw new Error(data.error || data.detail || 'Restart failed');
       }
 
+      // Success notification but keep isRestarting true until status update
       showSuccessNotification('TAK Server restarted successfully.', 'Success', <CircleCheckBig className="h-5 w-5 text-green-500 dark:text-green-600" />, false);
     } catch (error: unknown) {
+      setServerState(prev => ({ ...prev, isRestarting: false }));
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       showSuccessNotification(`Failed to restart TAK Server: ${errorMessage}`, 'Error', <AlertCircle className="h-5 w-5 text-destructive" />);
     } finally {

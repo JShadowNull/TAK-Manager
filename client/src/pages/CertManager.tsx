@@ -16,6 +16,7 @@ const CertManager: React.FC = () => {
   const { showDialog, dialogProps, isServerRunning } = useTakServerRequired({
     title: "TAK Server Required for Certificate Management",
     description: "Certificate operations require TAK Server to be running. Would you like to start it now?",
+    suppressDuringRestart: true
   });
 
   // Show dialog immediately if server is not running

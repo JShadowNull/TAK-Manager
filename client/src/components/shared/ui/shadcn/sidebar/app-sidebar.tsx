@@ -26,12 +26,14 @@ import {
 interface ServerState {
   isInstalled: boolean;
   isRunning: boolean;
+  isRestarting: boolean;
   version: string;
   error?: string;
 }
 
 interface TakServerContextType {
   serverState: ServerState;
+  setServerState: React.Dispatch<React.SetStateAction<ServerState>>;
 }
 
 export const TakServerContext = createContext<TakServerContextType | undefined>(undefined);
@@ -59,6 +61,7 @@ export function TakServerProvider({ children }: { children: React.ReactNode }) {
     return {
       isInstalled: false,
       isRunning: false,
+      isRestarting: false,
       version: 'Not Installed'
     }
   });
@@ -112,7 +115,12 @@ export function TakServerProvider({ children }: { children: React.ReactNode }) {
         if (data.type === 'status') {
           const statusData = data.data;
           if (statusData && typeof statusData.isInstalled !== 'undefined') {
-            setServerState(statusData);
+            setServerState(prev => ({
+              ...prev,
+              ...statusData,
+              // Maintain restarting state until server is confirmed running
+              isRestarting: statusData.isRunning ? false : prev.isRestarting
+            }));
           }
         } else if (data.type === 'operation') {
           // Fetch latest status after operation completes
@@ -132,7 +140,7 @@ export function TakServerProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <TakServerContext.Provider value={{ serverState }}>
+    <TakServerContext.Provider value={{ serverState, setServerState }}>
       {children}
     </TakServerContext.Provider>
   );
