@@ -6,6 +6,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.1.3] - 2025-02-19
+
+## [1.1.3] - 2025-02-19
+
+
+### Added 🚀
+
+
+- Enhance certificate management with improved UX and error handling
+- Add optional up/down handler for input component
+- Improve certificate management UI with toast variant and delete button state
+- Enhance toast component with new color variants
+- Add pywebview support for certificate downloads
+- Add optional restart button control in certificate config dialog
+- Enhance file dialog and download handling in webview
+- Add server restart state management in TAK server context
+- Enhance certificate configuration editor with advanced user management
+
+
+### Changed 🔄
+
+
+- Remove unused imports and simplify TAK server status script
+- Improve certificate deletion process in CertManager
+- Remove unused operation status handling in CertManager
+- Remove unused onOperationProgress prop in ExistingCertificates
+- Replace error state with toast notifications in ExistingCertificates
+- Improve certificate download handling and UI interactions
+
+
+### Fixed 🔧
+
+
+- Improve version bump detection in release script
+
+
+### Other 📦
+
+
+- Bump version to v1.1.2
+- Bump project version to 1.1.2
+- Release tak-manager@1.1.3 [skip ci]
+
 ## [1.1.2] - 2025-02-17
 
 ## [1.1.2] - 2025-02-17
