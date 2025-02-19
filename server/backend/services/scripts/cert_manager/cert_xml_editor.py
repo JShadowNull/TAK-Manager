@@ -3,6 +3,7 @@ from lxml import etree
 from typing import Dict, Any, Optional, Tuple
 from backend.services.helpers.directories import DirectoryHelper
 from backend.config.logging_config import configure_logging
+import hashlib
 
 logger = configure_logging(__name__)
 
@@ -137,4 +138,19 @@ class CertConfigManager:
             return True
             
         except Exception as e:
-            raise Exception(f"Error updating certificate configuration: {str(e)}") 
+            raise Exception(f"Error updating certificate configuration: {str(e)}")
+
+    def generate_password_hash(self, password: str) -> str:
+        """Generate SHA-256 hash for password with salt"""
+        try:
+            if not password:
+                raise ValueError("Password cannot be empty")
+            
+            # Use a static salt (you could make this configurable)
+            salt = "STATIC_SALT"  # Consider storing this in config
+            combined = password + salt
+            return hashlib.sha256(combined.encode()).hexdigest()
+            
+        except Exception as e:
+            logger.error(f"Password hash generation failed: {str(e)}")
+            raise  # Re-raise to propagate error to route handler 

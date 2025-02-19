@@ -46,6 +46,9 @@ class DownloadRequest(BaseModel):
 class CertConfigRequest(BaseModel):
     content: str
 
+class PasswordHashRequest(BaseModel):
+    password: str
+
 # ============================================================================
 # Routes
 # ============================================================================
@@ -201,4 +204,14 @@ async def validate_cert_config(identifier: str, request: CertConfigRequest) -> D
         return {"valid": is_valid}
     except Exception as e:
         logger.error(f"Error validating certificate config: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+@certmanager.post("/certificates/generate-password-hash")
+async def generate_password_hash(request: PasswordHashRequest):
+    """Generate a password hash for XML configuration"""
+    try:
+        hashed = cert_config_manager.generate_password_hash(request.password)
+        return {"success": True, "hash": hashed}
+    except Exception as e:
+        logger.error(f"Password hash generation error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))

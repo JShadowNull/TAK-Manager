@@ -112,7 +112,7 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
       const certsToDelete = username ? [username] : Array.from(selectedCerts);
 
       if (certsToDelete.includes(firstCertId)) {
-        throw new Error(`Failed to delete cert ${firstCertId}. It is primary admin.`);
+        throw new Error(`Failed to delete primary admin user ${firstCertId}.`);
       }
 
       setCurrentOperation(operation);

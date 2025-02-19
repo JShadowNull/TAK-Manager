@@ -8,13 +8,17 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/shared/ui/shadcn/dialog";
-import { CheckCircle, AlertCircle, CircleCheckBig, Pencil, RefreshCcw } from "lucide-react";
+import { CheckCircle, AlertCircle, CircleCheckBig, Pencil, RefreshCcw, Wand2, Eye, EyeOff, Plus } from "lucide-react";
 import CodeMirror from '@uiw/react-codemirror';
 import { xml } from '@codemirror/lang-xml';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { EditorView } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import { useTakServer } from '../shared/ui/shadcn/sidebar/app-sidebar';
+import { Input } from "@/components/shared/ui/shadcn/input";
+import { toast } from "../shared/ui/shadcn/toast/use-toast";
+import { Label } from "@/components/shared/ui/shadcn/label";
+import { HelpIconTooltip } from "@/components/shared/ui/shadcn/tooltip/HelpIconTooltip";
 
 interface CertificateConfigEditorProps {
   identifier: string;
@@ -60,8 +64,48 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
     type: 'error'
   });
   const { setServerState } = useTakServer();
+  const [passwordValue, setPasswordValue] = useState('');
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [groupValue, setGroupValue] = useState('');
+  const [roleValue, setRoleValue] = useState('');
+  const [groupInValue, setGroupInValue] = useState('');
+  const [groupOutValue, setGroupOutValue] = useState('');
 
+  const generateSecurePassword = () => {
+    const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+    const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const numbers = '0123456789';
+    const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+    
+    // Ensure at least one of each required type
+    let password = [
+      lowercase[Math.floor(Math.random() * lowercase.length)],
+      uppercase[Math.floor(Math.random() * uppercase.length)],
+      numbers[Math.floor(Math.random() * numbers.length)],
+      symbols[Math.floor(Math.random() * symbols.length)]
+    ].join('');
 
+    // Fill remaining length with random characters
+    const allChars = lowercase + uppercase + numbers + symbols;
+    for (let i = password.length; i < 15; i++) {
+      password += allChars[Math.floor(Math.random() * allChars.length)];
+    }
+
+    // Shuffle the password to randomize character order
+    return password.split('').sort(() => 0.5 - Math.random()).join('');
+  };
+
+  const validatePassword = (password: string) => {
+    const minLength = 15;
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+    const hasSpecialChar = /[^a-zA-Z0-9]/.test(password);
+    
+    return password.length >= minLength && 
+           hasUpperCase && 
+           hasNumber && 
+           hasSpecialChar;
+  };
 
   const showSuccessNotification = (message: string, title: string, icon: ReactNode, showRestartButton: boolean = true) => {
     setSuccessDialog({
@@ -91,6 +135,23 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
       
       if (response.ok) {
         setXmlContent(data.content);
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(data.content, "text/xml");
+        const ns = "http://bbn.com/marti/xml/bindings";
+        
+        // Get role attribute
+        const role = xmlDoc.documentElement.getAttribute('role') || '';
+        setRoleValue(role);
+
+        // Get all group types
+        const getGroups = (type: string) => {
+          const elements = xmlDoc.getElementsByTagNameNS(ns, type);
+          return Array.from(elements).map(el => el.textContent).filter(Boolean) as string[];
+        };
+
+        setGroupValue(getGroups('groupList').join(', '));
+        setGroupInValue(getGroups('groupListIN').join(', '));
+        setGroupOutValue(getGroups('groupListOUT').join(', '));
       } else {
         throw new Error(data.error || data.detail || 'Failed to fetch configuration');
       }
@@ -183,13 +244,153 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
     } finally {
       setIsOperationInProgress(false);
       setIsLoading(false);
-      onClose();
+      handleClose();
     }
   };
 
+  const handleGenerateHash = async () => {
+    if (!validatePassword(passwordValue)) {
+      toast({
+        title: "Invalid Password",
+        description: "Password must meet all requirements: 15+ characters, 1 uppercase, 1 number, 1 special character",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/certmanager/certificates/generate-password-hash`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ password: passwordValue }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Failed to generate hash');
+
+      // Update XML content with new hash
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlContent, "text/xml");
+      const userElement = xmlDoc.documentElement;
+
+      // Set password attributes
+      userElement.setAttribute('passwordHashed', 'true');
+      userElement.setAttribute('password', data.hash);
+      
+      // Serialize back to XML string
+      const serializer = new XMLSerializer();
+      const newXml = serializer.serializeToString(xmlDoc);
+      
+      setXmlContent(newXml);
+      
+      toast({
+        title: "Success",
+        description: "Password hash generated and updated in XML!",
+        variant: "success"
+      });
+
+    } catch (error: unknown) {
+      const err = error instanceof Error ? error : new Error('Unknown error');
+      toast({
+        title: "Error",
+        description: `Hash generation failed: ${err.message}`,
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleAddGroups = (groupType: 'groupList' | 'groupListIN' | 'groupListOUT' = 'groupList', inputValue = groupValue) => {
+    const groups = inputValue.split(',')
+      .map(g => g.trim())
+      .filter(g => g.length > 0);
+
+    const invalidGroups = groups.filter(g => !/^[a-zA-Z0-9_-]+$/.test(g));
+    if (invalidGroups.length > 0) {
+      toast({
+        title: "Error",
+        description: `Invalid groups: ${invalidGroups.join(', ')}. Only letters, numbers, underscores, and hyphens allowed.`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlContent, "text/xml");
+      const ns = "http://bbn.com/marti/xml/bindings";
+      
+      // Remove ALL group elements first
+      ['groupList', 'groupListIN', 'groupListOUT'].forEach(type => {
+        const elements = xmlDoc.getElementsByTagNameNS(ns, type);
+        Array.from(elements).forEach(el => el.remove());
+      });
+
+      // Add elements in schema-defined order
+      const groupTypes = [
+        { type: 'groupList', value: groupValue },
+        { type: 'groupListIN', value: groupInValue },
+        { type: 'groupListOUT', value: groupOutValue }
+      ];
+
+      groupTypes.forEach(({ type, value }) => {
+        const groups = value.split(',')
+          .map(g => g.trim())
+          .filter(g => g.length > 0);
+
+        groups.forEach(group => {
+          const element = xmlDoc.createElementNS(ns, type);
+          element.textContent = group;
+          xmlDoc.documentElement.appendChild(xmlDoc.createTextNode('\n  '));
+          xmlDoc.documentElement.appendChild(element);
+        });
+      });
+
+      // Update XML content
+      const serializer = new XMLSerializer();
+      let newXml = serializer.serializeToString(xmlDoc)
+        .replace(/\n\s*\n/g, '\n')
+        .replace(/<\/User>/, '\n</User>');
+        
+      setXmlContent(newXml);
+      toast({ title: "Success", description: `${groupType} updated!`, variant: "success" });
+
+    } catch (error) {
+      toast({ title: "Error", description: `Failed to update ${groupType}`, variant: "destructive" });
+    }
+  };
+
+  const handleRoleChange = (newRole: string) => {
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xmlContent, "text/xml");
+    xmlDoc.documentElement.setAttribute('role', newRole);
+    const serializer = new XMLSerializer();
+    setXmlContent(serializer.serializeToString(xmlDoc));
+    setRoleValue(newRole);
+  };
+
+  const handleClose = () => {
+    setPasswordValue('');
+    setGroupValue('');
+    setGroupInValue('');
+    setGroupOutValue('');
+    setRoleValue('');
+    onClose();
+  };
+
+  // Add role options constant
+  const roleOptions = [
+    { value: 'ROLE_ADMIN', text: 'Admin' },
+    { value: 'ROLE_READONLY', text: 'Read Only' },
+    { value: 'ROLE_ANONYMOUS', text: 'Anonymous' },
+    { value: 'ROLE_NON_ADMIN_UI', text: 'Non-Admin UI' },
+    { value: 'ROLE_WEBTAK', text: 'WebTAK' }
+  ];
+
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={onClose}>
+      <Dialog open={isOpen} onOpenChange={handleClose}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -224,11 +425,158 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
               )}
             </div>
             
-            <DialogFooter>
+            {/* Password & Group Section */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Password Column */}
+              <div>
+                <Label>Add Password</Label>
+                <div className="flex items-center gap-2">
+                  <div className="relative w-full">
+                    <Input
+                      type={passwordVisible ? "text" : "password"}
+                      placeholder="Enter password"
+                      value={passwordValue}
+                      onChange={(e) => setPasswordValue(e.target.value)}
+                      className="w-full"
+                    />
+                    <div className="absolute inset-y-0 right-0 flex items-center">
+                      <Button
+                        type="button"
+                        onClick={() => setPasswordVisible(!passwordVisible)}
+                        className="h-8 w-8 p-0 hover:bg-transparent text-muted-foreground"
+                        variant="ghost"
+                        size="icon"
+                      >
+                        {passwordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setPasswordValue(generateSecurePassword())}
+                    className="flex-shrink-0 flex items-center gap-2 h-10 w-fit"
+                  >
+                    <Wand2 className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleGenerateHash}
+                    disabled={!passwordValue}
+                    className="flex-shrink-0 flex items-center gap-2 h-10"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add
+                  </Button>
+                </div>
+              </div>
+
+              {/* Role Selector */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Label>User Role</Label>
+                  <HelpIconTooltip 
+                    tooltip="Defines user access privileges. ROLE_ADMIN has full system access"
+                    side="top"
+                    triggerMode="hover"
+                  />
+                </div>
+                <Input
+                  type="select"
+                  options={roleOptions}
+                  value={roleValue}
+                  onChange={(e) => handleRoleChange(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+
+              {/* Existing Groups Field */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Label>Groups</Label>
+                  <HelpIconTooltip 
+                    tooltip="General access groups"
+                    side="top"
+                    triggerMode="hover"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={groupValue}
+                    onChange={(e) => setGroupValue(e.target.value)}
+                    placeholder="Groups (comma separated)"
+                    className="w-full"
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() => handleAddGroups()}
+                  >
+                    <Plus className="h-4 w-4" /> Modify
+                  </Button>
+                </div>
+              </div>
+
+              {/* GroupListIN Field */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Label>Inbound Groups</Label>
+                  <HelpIconTooltip 
+                    tooltip="Groups for incoming data connections."
+                    side="top"
+                    triggerMode="hover"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={groupInValue}
+                    onChange={(e) => setGroupInValue(e.target.value)}
+                    placeholder="Inbound groups (comma separated)"
+                    className="w-full"
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() => handleAddGroups('groupListIN', groupInValue)}
+                  >
+                    <Plus className="h-4 w-4" /> Modify
+                  </Button>
+                </div>
+              </div>
+
+              {/* GroupListOUT Field */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Label>Outbound Groups</Label>
+                  <HelpIconTooltip 
+                    tooltip="Groups for outgoing data connections."
+                    side="top"
+                    triggerMode="hover"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={groupOutValue}
+                    onChange={(e) => setGroupOutValue(e.target.value)}
+                    placeholder="Outbound groups (comma separated)"
+                    className="w-full"
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() => handleAddGroups('groupListOUT', groupOutValue)}
+                  >
+                    <Plus className="h-4 w-4" /> Modify
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <DialogFooter className="flex justify-end gap-2">
               <Button
                 variant="outline"
-                onClick={onClose}
+                onClick={handleClose}
                 disabled={isLoading}
+                className="h-10"
               >
                 Cancel
               </Button>
@@ -240,6 +588,7 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
                   type: 'save'
                 })}
                 disabled={isLoading}
+                className="h-10"
               >
                 Save Changes
               </Button>
@@ -303,7 +652,7 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
               variant="outline"
               onClick={() => {
                 setSuccessDialog(prev => ({ ...prev, show: false }));
-                onClose();
+                handleClose();
               }}
             >
               Close
