@@ -21,7 +21,6 @@ interface Certificate {
 interface ExistingCertificatesProps {
   onCreateDataPackage: () => void;
   certificates: Certificate[];
-  onOperationProgress?: (data: any) => void;
   isLoading?: boolean;
 }
 
