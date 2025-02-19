@@ -258,7 +258,7 @@ class CertManager:
 # ============================================================================
 # Download Functions
 # ============================================================================
-    async def download_single(self, username: str) -> bool:
+    async def download_single(self, username: str) -> dict:
         """Get certificate files for a user"""
         try:
             container_name = self.get_container_name()
@@ -266,7 +266,10 @@ class CertManager:
             # First verify the user exists
             certificates = await self.get_registered_certificates()
             if not any(cert['identifier'] == username for cert in certificates):
-                return False
+                return {
+                    'success': False,
+                    'message': f"User {username} not found"
+                }
 
             # Check if certificate exists in container
             verify_command = ["docker", "exec", container_name, "bash", "-c", f"find /opt/tak/certs/files/ -name '{username}.p12' -type f"]
@@ -277,7 +280,10 @@ class CertManager:
             )
 
             if not result.stdout:
-                return False
+                return {
+                    'success': False,
+                    'message': f"Certificate for user {username} not found"
+                }
 
             # Copy file from container to temp location
             temp_dir = tempfile.mkdtemp()
@@ -291,12 +297,26 @@ class CertManager:
             )
 
             if not result.success or not os.path.exists(p12_path):
-                return False
+                return {
+                    'success': False,
+                    'message': f"Failed to copy certificate for user {username}"
+                }
 
-            return True
+            # Return file data instead of path
+            with open(p12_path, 'rb') as f:
+                file_data = f.read()
+            
+            return {
+                'success': True,
+                'filename': f"{username}.p12",
+                'data': file_data
+            }
 
         except Exception as e:
-            raise Exception(f"Error getting certificate files for {username}: {str(e)}")
+            return {
+                'success': False,
+                'message': str(e)
+            }
 
     async def download_batch(self, usernames: list) -> bool:
         """Download multiple certificates in a batch."""
@@ -316,7 +336,7 @@ class CertManager:
                     # Download certificate
                     result = await self.download_single(username)
                     
-                    if result:
+                    if result['success']:
                         completed_certs += 1
 
                 except Exception:

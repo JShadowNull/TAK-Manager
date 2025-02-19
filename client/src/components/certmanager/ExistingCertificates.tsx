@@ -208,57 +208,88 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
       setCurrentOperation(username ? 'download' : 'download_batch');
       setIsOperationInProgress(true);
       
-      // Set initial loading state
+      // Set loading state
       if (username) {
         setDownloadingCerts(new Set([username]));
       } else {
-        // For batch downloads, set all selected certs as downloading
         setDownloadingCerts(new Set(selectedCerts));
       }
 
-      // For batch downloads, we'll download each certificate individually
-      const certsToDownload = username ? [username] : Array.from(selectedCerts);
-      
-      for (const cert of certsToDownload) {
-        try {
-          const response = await fetch('/api/certmanager/certificates/download', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              usernames: [cert]
-            })
-          });
+      // Pywebview download path
+      if (window.pywebview) {
+        const certsToDownload = username ? [username] : Array.from(selectedCerts);
+        for (const cert of certsToDownload) {
+          try {
+            // Get save path from native dialog
+            const filePath = await window.pywebview.api.save_file_dialog(
+              'Save Certificate',
+              `${cert}.p12`,
+              [['PKCS12 Files', 'p12'], ['All Files', '*']]
+            );
 
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.detail || 'Failed to download certificate');
+            if (!filePath) return; // User cancelled
+            
+            // Fetch certificate data
+            const response = await fetch('/api/certmanager/certificates/download', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({usernames: [cert]})
+            });
+
+            const blob = await response.blob();
+            const buffer = await blob.arrayBuffer();
+            await window.pywebview.api.write_binary_file(filePath, new Uint8Array(buffer));
+            
+            setDownloadingCerts(prev => new Set([...prev].filter(c => c !== cert)));
+          } catch (error) {
+            console.error(`Download failed for ${cert}:`, error);
           }
+        }
+      } else {
+        // Existing browser download logic
+        const certsToDownload = username ? [username] : Array.from(selectedCerts);
+        
+        for (const cert of certsToDownload) {
+          try {
+            const response = await fetch('/api/certmanager/certificates/download', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                usernames: [cert]
+              })
+            });
 
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = `${cert}.p12`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          window.URL.revokeObjectURL(url);
-          
-          // Update loading state for this certificate
-          setDownloadingCerts(prev => {
-            const next = new Set(prev);
-            next.delete(cert);
-            return next;
-          });
-        } catch (error) {
-          console.error('Error downloading certificate:', cert, error);
-          setDownloadingCerts(prev => {
-            const next = new Set(prev);
-            next.delete(cert);
-            return next;
-          });
+            if (!response.ok) {
+              const errorData = await response.json();
+              throw new Error(errorData.detail || 'Failed to download certificate');
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${cert}.p12`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            
+            // Update loading state for this certificate
+            setDownloadingCerts(prev => {
+              const next = new Set(prev);
+              next.delete(cert);
+              return next;
+            });
+          } catch (error) {
+            console.error('Error downloading certificate:', cert, error);
+            setDownloadingCerts(prev => {
+              const next = new Set(prev);
+              next.delete(cert);
+              return next;
+            });
+          }
         }
       }
       
