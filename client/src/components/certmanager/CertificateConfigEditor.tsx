@@ -28,6 +28,7 @@ interface DialogState {
   message: string;
   type: 'save' | 'notification' | 'success' | 'error';
   icon?: ReactNode;
+  showRestartButton?: boolean;
 }
 
 const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
@@ -60,13 +61,14 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
 
 
 
-  const showSuccessNotification = (message: string, title: string, icon: ReactNode) => {
+  const showSuccessNotification = (message: string, title: string, icon: ReactNode, showRestartButton: boolean = true) => {
     setSuccessDialog({
       show: true,
       title,
       message,
       type: 'success',
-      icon
+      icon,
+      showRestartButton
     });
   };
 
@@ -169,7 +171,7 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
         throw new Error(data.error || data.detail || 'Restart failed');
       }
 
-      showSuccessNotification('TAK Server restarted successfully.', 'Success', <CircleCheckBig className="h-5 w-5 text-green-500 dark:text-green-600" />);
+      showSuccessNotification('TAK Server restarted successfully.', 'Success', <CircleCheckBig className="h-5 w-5 text-green-500 dark:text-green-600" />, false);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       showSuccessNotification(`Failed to restart TAK Server: ${errorMessage}`, 'Error', <AlertCircle className="h-5 w-5 text-destructive" />);
@@ -301,15 +303,17 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
             >
               Close
             </Button>
-            <Button
-              variant="primary"
-              onClick={handleRestart}
-              disabled={isLoading}
-              loading={isOperationInProgress}
-              loadingText="Restarting..."
-            >
-              Restart
-            </Button>
+            {successDialog.showRestartButton !== false && (
+              <Button
+                variant="primary"
+                onClick={handleRestart}
+                disabled={isLoading}
+                loading={isOperationInProgress}
+                loadingText="Restarting..."
+              >
+                Restart
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
