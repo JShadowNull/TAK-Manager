@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Checkbox } from "@/components/shared/ui/shadcn/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/shared/ui/shadcn/tooltip/tooltip";
 import PackageOperationPopups from './PackageOperationPopups';
+import { toast } from "@/components/shared/ui/shadcn/toast/use-toast";
 
 interface DataPackage {
   fileName: string;
@@ -21,24 +22,21 @@ interface ExistingDataPackagesProps {
   isLoading?: boolean;
 }
 
-type Operation = 'delete_package' | 'delete_package_batch' | 'download' | 'download_batch' | null;
 
 const ExistingDataPackages: React.FC<ExistingDataPackagesProps> = ({
   packages: initialPackages = [],
-  onOperationProgress,
   isLoading: initialLoading = false
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPackages, setSelectedPackages] = useState<Set<string>>(new Set());
-  const [currentOperation, setCurrentOperation] = useState<Operation>(null);
-  const [isOperationInProgress, setIsOperationInProgress] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [packages, setPackages] = useState<DataPackage[]>(initialPackages);
   const [isLoading, setIsLoading] = useState(initialLoading);
   const [showSingleDeleteConfirm, setShowSingleDeleteConfirm] = useState(false);
   const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
   const [packageToDelete, setPackageToDelete] = useState<string>();
-  const [successfulDelete, setSuccessfulDelete] = useState<string | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState<{ [key: string]: boolean }>({});
+  const [deleteSelectedSuccess, setDeleteSelectedSuccess] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState<{ [key: string]: boolean }>({});
   const [deletingPackages, setDeletingPackages] = useState<Set<string>>(new Set());
   const [downloadingPackages, setDownloadingPackages] = useState<Set<string>>(new Set());
 
@@ -52,11 +50,18 @@ const ExistingDataPackages: React.FC<ExistingDataPackagesProps> = ({
       if (data.success && Array.isArray(data.packages)) {
         setPackages(data.packages);
       } else {
-        console.error('Invalid package data received:', data);
+        toast({
+          title: "Error",
+          description: 'Failed to load packages',
+          variant: "destructive"
+        });
       }
     } catch (error) {
-      console.error('Error fetching packages:', error);
-      setError('Failed to fetch packages');
+      toast({
+        title: "Error",
+        description: 'Failed to fetch packages',
+        variant: "destructive"
+      });
     } finally {
       setIsLoading(false);
     }
@@ -67,136 +72,156 @@ const ExistingDataPackages: React.FC<ExistingDataPackagesProps> = ({
     fetchPackages();
   }, []);
 
-  // Setup SSE for package status updates
-  useEffect(() => {
-    const eventSource = new EventSource('/api/datapackage/status-stream');
+  const handleDelete = async (filename?: string) => {
+    try {
+      const packagesToDelete = filename ? [filename] : Array.from(selectedPackages);
+      setDeletingPackages(new Set(packagesToDelete));
 
-    eventSource.addEventListener('package-status', async (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        
-        // Handle package updates
-        if (data.type === 'packages_update' && Array.isArray(data.packages)) {
-          setPackages(data.packages);
-        }
-        
-        // Handle operation status
-        if (data.type === 'status') {
-          // Handle operation start
-          if (data.status === 'in_progress') {
-            if (data.operation === 'delete_package_batch') {
-              setCurrentOperation('delete_package_batch');
-              setIsOperationInProgress(true);
-            } 
-            else if (data.operation === 'delete_package' && data.details?.filename) {
-              if (currentOperation === 'delete_package_batch') {
-                setDeletingPackages(prev => new Set([...prev, data.details.filename]));
-              } else {
-                setCurrentOperation('delete_package');
-                setIsOperationInProgress(true);
-                setDeletingPackages(new Set([data.details.filename]));
-              }
-            }
-            else if (data.operation === 'download_batch') {
-              setCurrentOperation('download_batch');
-              setIsOperationInProgress(true);
-            }
-            else if (data.operation === 'download' && data.details?.filename) {
-              if (currentOperation === 'download_batch') {
-                setDownloadingPackages(prev => new Set([...prev, data.details.filename]));
-              } else {
-                setCurrentOperation('download');
-                setIsOperationInProgress(true);
-                setDownloadingPackages(new Set([data.details.filename]));
-              }
-            }
-          }
-          
-          // Handle operation completion
-          if (data.status === 'complete') {
-            if (data.operation === 'download_batch') {
-              setDownloadingPackages(new Set());
-              setSelectedPackages(new Set());
-              setIsOperationInProgress(false);
-              setCurrentOperation(null);
-            }
-            else if (data.operation === 'delete_package' && data.details?.filename) {
-              setSuccessfulDelete(data.details.filename);
-              setDeletingPackages(prev => {
-                const next = new Set(prev);
-                next.delete(data.details.filename);
-                return next;
-              });
-              
-              if (currentOperation !== 'delete_package_batch') {
-                setIsOperationInProgress(false);
-                setCurrentOperation(null);
-                
-                setTimeout(() => {
-                  setSuccessfulDelete(null);
-                  fetchPackages();
-                }, 2000);
-              }
-            }
-            else if (data.operation === 'delete_package_batch') {
-              setDeletingPackages(new Set());
-              setSelectedPackages(new Set());
-              setIsOperationInProgress(false);
-              setCurrentOperation(null);
-              setSuccessfulDelete(null);
-              fetchPackages();
-            }
-          }
-          
-          // Handle operation errors
-          if (data.status === 'error') {
-            console.error('Operation error:', data.operation, data.message);
-            setError(data.message || 'Operation failed');
-            if (data.operation === 'download' || data.operation === 'download_batch') {
-              setDownloadingPackages(prev => {
-                const next = new Set(prev);
-                if (data.details?.filename) {
-                  next.delete(data.details.filename);
-                }
-                return next;
-              });
-              if (currentOperation !== 'download_batch') {
-                setIsOperationInProgress(false);
-                setCurrentOperation(null);
-              }
-            } else {
-              setSuccessfulDelete(null);
-              setDeletingPackages(new Set());
-              setDownloadingPackages(new Set());
-              setIsOperationInProgress(false);
-              setCurrentOperation(null);
-            }
-          }
-          
-          if (onOperationProgress) {
-            onOperationProgress(data);
-          }
-        }
-      } catch (error) {
-        console.error('Error processing SSE event:', error);
-        setIsOperationInProgress(false);
-        setCurrentOperation(null);
-        setSuccessfulDelete(null);
-        setDeletingPackages(new Set());
-        setDownloadingPackages(new Set());
+      let response;
+      if (packagesToDelete.length > 1) {
+        response = await fetch('/api/datapackage/delete', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filenames: packagesToDelete })
+        });
+      } else {
+        const targetFile = packagesToDelete[0];
+        response = await fetch(`/api/datapackage/delete/${targetFile}`, {
+          method: 'DELETE'
+        });
       }
-    });
 
-    eventSource.onerror = () => {
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Delete failed');
+      }
+
+      // Show success toast
+      toast({
+        title: "Deletion Successful",
+        description: packagesToDelete.length > 1 
+          ? `Deleted ${packagesToDelete.length} packages`
+          : `Deleted ${packagesToDelete[0]}`,
+        variant: "success"
+      });
+
+      // Update success states FIRST
+      packagesToDelete.forEach(pkg => {
+        setDeleteSuccess(prev => ({ ...prev, [pkg]: true }));
+        setTimeout(() => {
+          setDeleteSuccess(prev => ({ ...prev, [pkg]: false }));
+        }, 1000);
+      });
+
+      if (packagesToDelete.length > 1) {
+        setDeleteSelectedSuccess(true);
+        setTimeout(() => setDeleteSelectedSuccess(false), 1000);
+        
+        // Delay clearing selections until after animation
+        setTimeout(() => {
+          setSelectedPackages(new Set());
+        }, 1000);
+      }
+
+      // Delay refresh until after success indicators show
       setTimeout(() => {
-        eventSource.close();
-      }, 5000);
-    };
+        fetchPackages();
+      }, 1000);
 
-    return () => {
-      eventSource.close();
-    };
-  }, [currentOperation, onOperationProgress]);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Delete operation failed';
+      
+      // Show error toast
+      toast({
+        title: "Deletion Failed",
+        description: errorMessage,
+        variant: "destructive"
+      });
+    } finally {
+      setDeletingPackages(new Set());
+      setShowSingleDeleteConfirm(false);
+      setShowBatchDeleteConfirm(false);
+    }
+  };
+
+  const handleDownload = async (filename?: string) => {
+    try {
+      const packagesToDownload = filename ? [filename] : Array.from(selectedPackages);
+      setDownloadingPackages(new Set(packagesToDownload));
+
+      let successCount = 0;
+      for (const pkg of packagesToDownload) {
+        try {
+          const response = await fetch(`/api/datapackage/download/${pkg}`);
+          
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || 'Download failed');
+          }
+
+          const blob = await response.blob();
+          const buffer = await blob.arrayBuffer();
+
+          if (window.pywebview) {
+            const filePath = await window.pywebview.api.save_file_dialog(
+              pkg,
+              [['Data Packages', 'zip'], ['All Files', '*']]
+            );
+
+            if (filePath) {
+              await window.pywebview.api.write_binary_file(filePath, new Uint8Array(buffer));
+              successCount++;
+              setDownloadSuccess(prev => ({ ...prev, [pkg]: true }));
+              setTimeout(() => {
+                setDownloadSuccess(prev => ({ ...prev, [pkg]: false }));
+              }, 1000);
+            }
+          } else {
+            const url = window.URL.createObjectURL(new Blob([buffer]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = pkg;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            successCount++;
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : `Failed to download ${pkg}`;
+          toast({
+            title: "Download Error",
+            description: errorMessage,
+            variant: "destructive"
+          });
+        } finally {
+          setDownloadingPackages(prev => {
+            const next = new Set(prev);
+            next.delete(pkg);
+            return next;
+          });
+        }
+      }
+
+      // Show success toast if any downloads succeeded
+      if (successCount > 0) {
+        toast({
+          title: "Download Complete",
+          description: `Successfully downloaded ${successCount} package${successCount > 1 ? 's' : ''}`,
+          variant: "success"
+        });
+      }
+
+      setSelectedPackages(new Set());
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Download operation failed';
+      toast({
+        title: "Download Failed",
+        description: errorMessage,
+        variant: "destructive"
+      });
+    }
+  };
 
   // Filter packages based on search term
   const filteredPackages = useMemo(() => {
@@ -225,42 +250,6 @@ const ExistingDataPackages: React.FC<ExistingDataPackagesProps> = ({
     setSelectedPackages(newSelected);
   };
 
-  const handleOperation = async (operation: Operation, filename?: string) => {
-    try {
-      setError(null);
-      setCurrentOperation(operation);
-      setIsOperationInProgress(true);
-
-      if (operation === 'delete_package' || operation === 'delete_package_batch') {
-        const response = await fetch('/api/datapackage/delete', {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            filenames: filename ? [filename] : Array.from(selectedPackages)
-          })
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.detail || 'Failed to delete package(s)');
-        }
-
-        const result = await response.json();
-        if (!result.success) {
-          throw new Error(result.message || 'Failed to delete package(s)');
-        }
-      }
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'Operation failed');
-      setIsOperationInProgress(false);
-      setCurrentOperation(null);
-      setSuccessfulDelete(null);
-      setDeletingPackages(new Set());
-    }
-  };
-
   const handleDeleteClick = (filename: string) => {
     setPackageToDelete(filename);
     setShowSingleDeleteConfirm(true);
@@ -272,13 +261,13 @@ const ExistingDataPackages: React.FC<ExistingDataPackagesProps> = ({
 
   const handleSingleDeleteConfirm = () => {
     if (packageToDelete) {
-      handleOperation('delete_package', packageToDelete);
+      handleDelete(packageToDelete);
       setShowSingleDeleteConfirm(false);
     }
   };
 
   const handleBatchDeleteConfirm = () => {
-    handleOperation('delete_package_batch');
+    handleDelete();
     setShowBatchDeleteConfirm(false);
   };
 
@@ -286,79 +275,6 @@ const ExistingDataPackages: React.FC<ExistingDataPackagesProps> = ({
     setShowSingleDeleteConfirm(false);
     setShowBatchDeleteConfirm(false);
     setPackageToDelete(undefined);
-  };
-
-  const handleDownload = async (filename?: string) => {
-    try {
-      setError(null);
-      setCurrentOperation(filename ? 'download' : 'download_batch');
-      setIsOperationInProgress(true);
-      
-      // Set initial loading state
-      const packagesToDownload = filename ? [filename] : Array.from(selectedPackages);
-      setDownloadingPackages(new Set(packagesToDownload));
-
-      for (const pkg of packagesToDownload) {
-        try {
-          // Fetch package data first
-          const response = await fetch(`/api/datapackage/download/${pkg}`);
-
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.detail || 'Download failed');
-          }
-
-          const blob = await response.blob();
-          const buffer = await blob.arrayBuffer();
-
-          if (window.pywebview) {
-            // Pywebview path - show dialog AFTER fetching data
-            const filePath = await window.pywebview.api.save_file_dialog(
-              pkg,
-              [['Data Packages', 'zip'], ['All Files', '*']]
-            );
-
-            if (!filePath) {
-              setDownloadingPackages(prev => new Set([...prev].filter(f => f !== pkg)));
-              continue;
-            }
-
-            await window.pywebview.api.write_binary_file(filePath, new Uint8Array(buffer));
-          } else {
-            // Browser path - create download link
-            const url = window.URL.createObjectURL(new Blob([buffer]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = pkg;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(url);
-          }
-
-          // Update loading state after successful save/download
-          setDownloadingPackages(prev => new Set([...prev].filter(f => f !== pkg)));
-
-        } catch (error) {
-          console.error('Error downloading package:', pkg, error);
-          setDownloadingPackages(prev => new Set([...prev].filter(f => f !== pkg)));
-        }
-      }
-
-      // Final cleanup
-      if (!filename) {
-        setSelectedPackages(new Set());
-      }
-      setIsOperationInProgress(false);
-      setCurrentOperation(null);
-
-    } catch (error) {
-      console.error('Download operation failed:', error);
-      setError(error instanceof Error ? error.message : 'Operation failed');
-      setIsOperationInProgress(false);
-      setCurrentOperation(null);
-      setDownloadingPackages(new Set());
-    }
   };
 
   return (
@@ -386,7 +302,7 @@ const ExistingDataPackages: React.FC<ExistingDataPackagesProps> = ({
               <Button
                 variant="outline"
                 onClick={handleSelectAll}
-                disabled={isOperationInProgress}
+                disabled={isLoading}
                 className="whitespace-nowrap"
               >
                 {selectedPackages.size === filteredPackages.length && filteredPackages.length > 0 
@@ -399,14 +315,16 @@ const ExistingDataPackages: React.FC<ExistingDataPackagesProps> = ({
                   <Button
                     variant="danger"
                     onClick={handleBatchDeleteClick}
-                    disabled={isOperationInProgress}
+                    disabled={isLoading || selectedPackages.size === 0}
+                    loading={deletingPackages.size > 0}
+                    loadingText={`Deleting ${deletingPackages.size} packages...`}
                     className="whitespace-nowrap"
                   >
-                    {currentOperation === 'delete_package_batch' ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Deleting {selectedPackages.size} packages...
-                      </>
+                    {deleteSelectedSuccess ? (
+                      <span className="flex items-center gap-2">
+                        <Check className="h-5 w-5 text-primary"/> 
+                        {`Deleted ${selectedPackages.size} packages`}
+                      </span>
                     ) : (
                       `Delete Selected (${selectedPackages.size})`
                     )}
@@ -414,26 +332,17 @@ const ExistingDataPackages: React.FC<ExistingDataPackagesProps> = ({
                   <Button
                     variant="outline"
                     onClick={() => handleDownload()}
-                    disabled={isOperationInProgress}
+                    disabled={isLoading}
+                    loading={downloadingPackages.size > 0}
+                    loadingText={`Downloading ${downloadingPackages.size} packages...`}
                     className="whitespace-nowrap"
                   >
-                    {currentOperation === 'download_batch' ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Downloading {selectedPackages.size} packages...
-                      </>
-                    ) : (
-                      `Download Selected (${selectedPackages.size})`
-                    )}
+                    Download Selected ({selectedPackages.size})
                   </Button>
                 </>
               )}
             </div>
           </div>
-
-          {error && (
-            <p className="text-sm text-destructive">Error on Operation: {error}</p>
-          )}
 
           <div className="h-[400px] border rounded-lg">
             <ScrollArea className="h-full">
@@ -451,15 +360,16 @@ const ExistingDataPackages: React.FC<ExistingDataPackagesProps> = ({
                   filteredPackages.map((pkg) => (
                     <div 
                       key={pkg.fileName} 
-                      className="flex flex-col md:flex-row items-start md:items-center justify-between p-3 border rounded-lg bg-muted/50 hover:bg-muted/60 transition-all duration-200 gap-2"
+                      className="flex flex-col md:flex-row items-start md:items-center justify-between p-3 border rounded-lg bg-muted/50 hover:bg-muted/60 transition-all duration-200 gap-2 cursor-pointer"
                     >
                       <div className="flex items-center gap-4 flex-1 w-full md:w-auto">
                         <Checkbox
                           checked={selectedPackages.has(pkg.fileName)}
                           onCheckedChange={() => handleSelectPackage(pkg.fileName)}
-                          disabled={isOperationInProgress}
+                          disabled={isLoading}
+                          onClick={(e: React.MouseEvent) => e.stopPropagation()}
                         />
-                        <div className="flex flex-col">
+                        <div className="flex flex-col gap-1">
                           <span className="font-medium">{pkg.fileName}</span>
                           <span className="text-sm text-muted-foreground">
                             Created: {new Date(pkg.createdAt).toLocaleString()} • Size: {pkg.size}
@@ -474,10 +384,12 @@ const ExistingDataPackages: React.FC<ExistingDataPackagesProps> = ({
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleDownload(pkg.fileName)}
-                                disabled={isOperationInProgress}
-                                className="relative hover:text-green-500 dark:hover:text-green-600"
+                                disabled={isLoading}
+                                className="relative hover:text-green-600 dark:hover:text-green-500 hover:bg-transparent"
                               >
-                                {downloadingPackages.has(pkg.fileName) ? (
+                                {downloadSuccess[pkg.fileName] ? (
+                                  <Check className="h-5 w-5 text-green-500 dark:text-green-600" />
+                                ) : downloadingPackages.has(pkg.fileName) ? (
                                   <Loader2 className="h-5 w-5 animate-spin" />
                                 ) : (
                                   <ArrowDownToLine className="h-5 w-5" />
@@ -493,14 +405,13 @@ const ExistingDataPackages: React.FC<ExistingDataPackagesProps> = ({
                           variant="ghost"
                           size="icon"
                           onClick={() => handleDeleteClick(pkg.fileName)}
-                          disabled={isOperationInProgress}
-                          className="relative dark:hover:text-red-600 hover:text-red-500"
+                          disabled={isLoading}
+                          className="relative dark:hover:text-red-500 hover:text-red-600 hover:bg-transparent"
                         >
-                          {(isOperationInProgress && currentOperation === 'delete_package' && packageToDelete === pkg.fileName) || 
-                           (currentOperation === 'delete_package_batch' && deletingPackages.has(pkg.fileName)) ? (
+                          {(deletingPackages.has(pkg.fileName)) ? (
                             <Loader2 className="h-5 w-5 animate-spin" />
-                          ) : successfulDelete === pkg.fileName ? (
-                            <Check className="h-5 w-5 text-primary" />
+                          ) : deleteSuccess[pkg.fileName] ? (
+                            <Check className="h-5 w-5 text-green-500 dark:text-green-600" />
                           ) : (
                             <Trash2 className="h-5 w-5" />
                           )}
