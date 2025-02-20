@@ -5,12 +5,10 @@ from backend.config.logging_config import configure_logging
 import docker
 from backend.services.helpers.directories import DirectoryHelper
 from backend.services.scripts.docker.docker_manager import DockerManager
-import logging
 import asyncio
 import time
 
 logger = configure_logging(__name__)
-logger.setLevel(logging.ERROR)  # Using custom logger
 
 class TakServerStatus:
     def __init__(self, emit_event=None):
