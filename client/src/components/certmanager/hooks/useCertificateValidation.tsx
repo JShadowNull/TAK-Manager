@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { useCallback } from 'react';
 
-// Custom password validation
-const passwordSchema = z.string()
+// Updated password validation with excluded characters
+export const passwordSchema = z.string()
   .optional()
   .refine(
     (pass) => {
@@ -35,13 +35,26 @@ const passwordSchema = z.string()
   .refine(
     (pass) => {
       if (!pass) return true;
-      return /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>/?]+/.test(pass);
+      // Updated special characters with excluded list
+      return /[!$+\-:,.<>|]/.test(pass);
     },
-    { message: 'Must contain at least 1 special character' }
+    { 
+      message: 'Must contain at least 1 allowed special character (! $ + - : , . < > |)' 
+    }
+  )
+  .refine(
+    (pass) => {
+      if (!pass) return true;
+      // Validate against excluded characters
+      return !/[="'&%^*?¨´`/@[\]{}();_#]/.test(pass);
+    },
+    {
+      message: 'Contains invalid characters: = " \' & % ^ * ? ¨ ´ ` / \\ @ [ ] { } ( ) ; _ #'
+    }
   );
 
 // Group validation
-const groupSchema = z.string()
+export const groupSchema = z.string()
   .refine(
     (group) => {
       if (!group || group === '__ANON__') return true;

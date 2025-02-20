@@ -394,7 +394,7 @@ const CreateCertificates: React.FC = () => {
     const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const lowercase = 'abcdefghijklmnopqrstuvwxyz';
     const numbers = '0123456789';
-    const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+    const symbols = '!$+-:,.<>|';
     
     let password = '';
     

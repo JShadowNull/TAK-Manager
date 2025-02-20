@@ -19,6 +19,8 @@ import { Input } from "@/components/shared/ui/shadcn/input";
 import { toast } from "../shared/ui/shadcn/toast/use-toast";
 import { Label } from "@/components/shared/ui/shadcn/label";
 import { HelpIconTooltip } from "@/components/shared/ui/shadcn/tooltip/HelpIconTooltip";
+import { passwordSchema, groupSchema } from './hooks/useCertificateValidation';
+import { z } from 'zod';
 
 interface CertificateConfigEditorProps {
   identifier: string;
@@ -75,7 +77,7 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
     const lowercase = 'abcdefghijklmnopqrstuvwxyz';
     const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const numbers = '0123456789';
-    const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+    const symbols = '!$+-:,.<>|';
     
     // Ensure at least one of each required type
     let password = [
@@ -93,18 +95,6 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
 
     // Shuffle the password to randomize character order
     return password.split('').sort(() => 0.5 - Math.random()).join('');
-  };
-
-  const validatePassword = (password: string) => {
-    const minLength = 15;
-    const hasUpperCase = /[A-Z]/.test(password);
-    const hasNumber = /[0-9]/.test(password);
-    const hasSpecialChar = /[^a-zA-Z0-9]/.test(password);
-    
-    return password.length >= minLength && 
-           hasUpperCase && 
-           hasNumber && 
-           hasSpecialChar;
   };
 
   const showSuccessNotification = (message: string, title: string, icon: ReactNode, showRestartButton: boolean = true) => {
@@ -249,10 +239,17 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
   };
 
   const handleGenerateHash = async () => {
-    if (!validatePassword(passwordValue)) {
+    try {
+      // Validate password using shared schema
+      passwordSchema.parse(passwordValue);
+    } catch (error) {
+      const errorMessages = error instanceof z.ZodError 
+        ? error.errors.map(err => err.message).join(', ')
+        : 'Invalid password';
+        
       toast({
         title: "Invalid Password",
-        description: "Password must meet all requirements: 15+ characters, 1 uppercase, 1 number, 1 special character",
+        description: errorMessages,
         variant: "destructive",
       });
       return;
@@ -302,11 +299,9 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
   };
 
   const handleAddGroups = (groupType: 'groupList' | 'groupListIN' | 'groupListOUT' = 'groupList', inputValue = groupValue) => {
-    const groups = inputValue.split(',')
-      .map(g => g.trim())
-      .filter(g => g.length > 0);
-
-    const invalidGroups = groups.filter(g => !/^[a-zA-Z0-9_-]+$/.test(g));
+    const validatedGroups = groupSchema.parse(inputValue);
+    
+    const invalidGroups = validatedGroups.split(',').filter(g => !/^[a-zA-Z0-9_-]+$/.test(g));
     if (invalidGroups.length > 0) {
       toast({
         title: "Error",
@@ -357,7 +352,15 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
       toast({ title: "Success", description: `${groupType} updated!`, variant: "success" });
 
     } catch (error) {
-      toast({ title: "Error", description: `Failed to update ${groupType}`, variant: "destructive" });
+      const errorMessage = error instanceof z.ZodError
+        ? error.errors[0].message
+        : 'Invalid group format';
+
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive"
+      });
     }
   };
 

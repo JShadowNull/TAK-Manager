@@ -7,7 +7,6 @@ import { ScrollArea } from '../../../shared/ui/shadcn/scroll-area';
 interface TerminalLine {
   message: string;
   isError: boolean;
-  timestamp: number;
 }
 
 interface PopupsProps {
@@ -27,7 +26,7 @@ const Popups: React.FC<PopupsProps> = ({
   onInstallComplete,
   onUninstallComplete,
   showInstallProgress = false,
-  showUninstallProgress: externalShowUninstallProgress = false
+  showUninstallProgress = false
 }) => {
   // Installation state
   const [showInstallComplete, setShowInstallComplete] = useState(false);
@@ -64,17 +63,11 @@ const Popups: React.FC<PopupsProps> = ({
           setInstallTerminalOutput(prev => [...prev, {
             message: data.message,
             isError: data.isError,
-            timestamp: data.timestamp
           }]);
         } else if (data.type === 'status') {
           setInstallProgress(data.progress);
           if (data.error) {
             setInstallError(data.error);
-            setInstallTerminalOutput(prev => [...prev, {
-              message: data.error,
-              isError: true,
-              timestamp: data.timestamp || Date.now()
-            }]);
             setIsInstallationComplete(true);
           }
           if (data.status === 'complete' || data.status === 'error') {
@@ -93,7 +86,7 @@ const Popups: React.FC<PopupsProps> = ({
 
   // Uninstall status stream
   useEffect(() => {
-    if (!externalShowUninstallProgress) {
+    if (!showUninstallProgress) {
       return;
     }
 
@@ -112,20 +105,14 @@ const Popups: React.FC<PopupsProps> = ({
           setUninstallTerminalOutput(prev => [...prev, {
             message: data.message,
             isError: data.isError,
-            timestamp: data.timestamp
           }]);
         } else if (data.type === 'status') {
           setUninstallProgress(data.progress);
           if (data.error) {
             setUninstallError(data.error);
-            setUninstallTerminalOutput(prev => [...prev, {
-              message: data.error,
-              isError: true,
-              timestamp: data.timestamp || Date.now()
-            }]);
             setIsUninstallationComplete(true);
           }
-          if (data.status === 'complete') {
+          if (data.status === 'complete' || data.status === 'error') {
             setIsUninstallationComplete(true);
           }
         }
@@ -139,14 +126,11 @@ const Popups: React.FC<PopupsProps> = ({
         uninstallStatus.close();
       }
     };
-  }, [externalShowUninstallProgress]);
+  }, [showUninstallProgress]);
 
   const handleUninstall = async () => {
     try {
       onUninstallConfirm();
-      setUninstallProgress(0);
-      setUninstallError(undefined);
-      setUninstallTerminalOutput([]);
 
       const response = await fetch('/api/takserver/uninstall-takserver', {
         method: 'POST'
@@ -156,6 +140,7 @@ const Popups: React.FC<PopupsProps> = ({
         throw new Error(`Uninstallation failed: ${response.statusText}`);
       }
     } catch (error) {
+      console.error('Uninstallation error:', error);
       setUninstallError(error instanceof Error ? error.message : 'Uninstallation failed');
     }
   };
@@ -222,11 +207,6 @@ const Popups: React.FC<PopupsProps> = ({
                   {installTerminalOutput.map((line, index) => (
                     <div key={index}>
                       <div className={`font-mono text-sm whitespace-pre-wrap ${line.isError ? 'text-destructive' : 'text-foreground'}`}>
-                        {line.timestamp && (
-                          <span className="text-muted-foreground mr-2">
-                            {new Date(line.timestamp).toLocaleTimeString()}
-                          </span>
-                        )}
                         {line.message}
                       </div>
                     </div>
@@ -290,7 +270,7 @@ const Popups: React.FC<PopupsProps> = ({
 
       {/* Uninstall Progress Dialog */}
       <Dialog 
-        open={externalShowUninstallProgress && !showUninstallComplete} 
+        open={showUninstallProgress && !showUninstallComplete} 
         onOpenChange={(open) => {
           // Prevent dialog from being closed except through explicit user action
           if (!open) {
@@ -330,11 +310,6 @@ const Popups: React.FC<PopupsProps> = ({
                   {uninstallTerminalOutput.map((line, index) => (
                     <div key={index}>
                       <div className={`font-mono text-sm whitespace-pre-wrap ${line.isError ? 'text-destructive' : 'text-foreground'}`}>
-                        {line.timestamp && (
-                          <span className="text-muted-foreground mr-2">
-                            {new Date(line.timestamp).toLocaleTimeString()}
-                          </span>
-                        )}
                         {line.message}
                       </div>
                     </div>
