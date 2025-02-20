@@ -129,7 +129,7 @@ class TakServerStatus:
         """
         docker_compose_dir = self.directory_helper.get_docker_compose_directory()
         result = await self.run_command.run_command_async(
-            ["docker-compose", "up", "-d"],
+            ["docker", "compose", "up", "-d"],
             'operation',
             working_dir=docker_compose_dir,
             ignore_errors=True
@@ -150,7 +150,7 @@ class TakServerStatus:
         """
         docker_compose_dir = self.directory_helper.get_docker_compose_directory()
         result = await self.run_command.run_command_async(
-            ["docker-compose", "down"],
+            ["docker", "compose", "down"],
             'operation',
             working_dir=docker_compose_dir,
             ignore_errors=True
@@ -171,7 +171,7 @@ class TakServerStatus:
         """
         docker_compose_dir = self.directory_helper.get_docker_compose_directory()
         result = await self.run_command.run_command_async(
-            ["docker-compose", "restart"],
+            ["docker", "compose", "restart"],
             'operation',
             working_dir=docker_compose_dir,
             ignore_errors=False
@@ -185,9 +185,9 @@ class TakServerStatus:
         return {"status": "success", "message": "Containers restarted"}
 
     async def check_webui_availability(self) -> Dict[str, Any]:
-        """Check if TAK Server web UI becomes available within 30 seconds."""
+        """Check if TAK Server web UI becomes available within 60 seconds."""
         start_time = time.time()
-        timeout = 30  # seconds
+        timeout = 60  # Increased from 30 to 120 seconds
         last_error = None
         
         while (time.time() - start_time) < timeout:
@@ -201,10 +201,10 @@ class TakServerStatus:
             last_error = result.get('error')
             await asyncio.sleep(1)
 
-        logger.error(f'Timeout: {last_error}' if last_error else 'Web UI did not become reachable within 30 seconds')
+        logger.error(f'Timeout: {last_error}' if last_error else 'Web UI did not become reachable within 60 seconds')
         return {
             'status': 'unavailable',
-            'error': f'Timeout: {last_error}' if last_error else 'Web UI did not become reachable within 30 seconds'
+            'error': f'Timeout: {last_error}' if last_error else 'Web UI did not become reachable within 60 seconds'
         }
 
     async def _run_curl_check(self) -> Dict[str, Any]:
@@ -221,23 +221,22 @@ class TakServerStatus:
         ]
         
         try:
-            process = await asyncio.create_subprocess_exec(
-                *command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+            result = await self.run_command.run_command_async(
+                command,
+                'health_check',
+                ignore_errors=False
             )
-            stdout, stderr = await process.communicate()
-            exit_code = await process.wait()
-
-            # Interpret curl exit codes
-            if exit_code == 56:  # Certificate error but server is up
+            
+            # Interpret results
+            if result.returncode == 56:  # Certificate error but server is up
                 return {'status': 'up'}
-            elif exit_code == 35:  # Connection failed
-                logger.error(f'Web UI Connection failed: {stderr.decode().strip()}')
-                return {'status': 'down', 'error': stderr.decode().strip()}
-            elif exit_code == 1:  # Container not running
+            elif result.returncode == 35:  # Connection failed
+                logger.error(f'Web UI Connection failed: {result.stderr}')
+                return {'status': 'down', 'error': result.stderr}
+            elif result.returncode == 1:  # Container not running
                 return {'status': 'down', 'error': f'Container {container_name} not running'}
             else:
-                return {'status': 'error', 'error': stderr.decode().strip()}
+                return {'status': 'error', 'error': result.stderr}
+            
         except Exception as e:
             return {'status': 'error', 'error': str(e)}

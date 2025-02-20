@@ -72,10 +72,10 @@ class OTAUpdate:
         try:
             docker_compose_dir = self.directory_helper.get_docker_compose_directory()
             
-            # Build and start containers using docker-compose
+            # Build and start containers using docker compose
             logger.info("Building and starting Docker containers...")
             result = await self.run_command.run_command_async(
-                ["docker-compose", "up", "-d", "--build", "--force-recreate"],
+                ["docker", "compose", "up", "-d", "--build", "--force-recreate"],
                 'ota',
                 emit_event=self.emit_event,
                 working_dir=docker_compose_dir,
@@ -249,7 +249,7 @@ class OTAUpdate:
             # Define task weights
             weights = {
                 'setup': 2,          # Initial checks and setup
-                'config': 3,         # Dockerfile and docker-compose updates
+                'config': 3,         # Dockerfile and docker compose updates
                 'docker_build': 30,  # Docker rebuild weight
                 'plugins': 63,       # Plugin operations
                 'script': 2          # Generate inf script operations
