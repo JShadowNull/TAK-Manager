@@ -36,20 +36,20 @@ export const passwordSchema = z.string()
     (pass) => {
       if (!pass) return true;
       // Updated special characters with excluded list
-      return /[!$+\-:,.<>|]/.test(pass);
+      return /[!$+\-:,.|]/.test(pass);
     },
     { 
-      message: 'Must contain at least 1 allowed special character (! $ + - : , . < > |)' 
+      message: 'Must contain at least 1 allowed special character (! $ + - : , |)' 
     }
   )
   .refine(
     (pass) => {
       if (!pass) return true;
       // Validate against excluded characters
-      return !/[="'&%^*?¨´`/@[\]{}();_#]/.test(pass);
+      return !/[<>"='&%^*?¨´`/@[\]{}();_#]/.test(pass);
     },
     {
-      message: 'Contains invalid characters: = " \' & % ^ * ? ¨ ´ ` / \\ @ [ ] { } ( ) ; _ #'
+      message: 'Contains invalid characters: < = " \' & % ^ * ? ¨ ´ ` / \\ @ [ ] { } ( ) ; _ # >'
     }
   );
 
