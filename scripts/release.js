@@ -1,6 +1,7 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const prompt = require('prompt-sync')();
 
 // Load environment variables from .env file
 function loadEnv() {
@@ -29,48 +30,6 @@ function exec(command) {
         console.error(`Failed to execute: ${command}`);
         throw error;
     }
-}
-
-function bumpVersion(version, type) {
-    const [major, minor, patch] = version.split('.').map(Number);
-    switch (type) {
-        case 'major':
-            return `${major + 1}.0.0`;
-        case 'minor':
-            return `${major}.${minor + 1}.0`;
-        case 'patch':
-            return `${major}.${minor}.${patch + 1}`;
-        case 'prerelease':
-            return `${major}.${minor}.${patch}-beta.1`;
-        default:
-            return version;
-    }
-}
-
-function determineVersionBumpFromMessages(commitMessages) {
-    console.log('Analyzing commits:', commitMessages);
-    
-    // Split into individual commits and process each one
-    const commits = Array.isArray(commitMessages) ? commitMessages : commitMessages.split('\n\n');
-    
-    // Check each commit message
-    for (const commit of commits) {
-        const message = commit.trim();
-        if (!message) continue;
-        
-        // Check for breaking changes first
-        if (message.includes('BREAKING CHANGE') || message.startsWith('feat!:')) {
-            return 'major';
-        }
-        
-        // Check for features
-        if (message.startsWith('feat:') || message.startsWith('feat(')) {
-            return 'minor';
-        }
-    }
-    
-    // Default to patch if no major/minor changes found
-    return 'patch';
 }
 
 function runWithRetries(command, maxAttempts = 3) {
@@ -102,17 +61,16 @@ async function release() {
         const currentVersion = packageJson.version;
         console.log(`Current version: ${currentVersion}`);
         
-        // Capture commits from dev before merge
-        console.log('Analyzing commits from dev branch...');
-        const commitMessages = execSync('git log main..dev --pretty=format:"%B%n%n"').toString().trim();
-        console.log('Commits to be included:', commitMessages);
+        // Get version input from user
+        let newVersion;
+        while (true) {
+            newVersion = prompt(`Enter new version (current: ${currentVersion}): `).trim();
+            if (/^\d+\.\d+\.\d+(-beta\.\d+)?$/.test(newVersion)) {
+                break;
+            }
+            console.log('Invalid version format. Use semver format (e.g. 1.2.3 or 1.2.3-beta.1)');
+        }
         
-        // Determine version bump based on captured commits
-        const versionBump = determineVersionBumpFromMessages(commitMessages);
-        console.log(`Version bump type: ${versionBump}`);
-        
-        // Calculate new version before merge
-        const newVersion = bumpVersion(currentVersion, versionBump);
         console.log(`New version will be: ${newVersion}`);
         
         // Store the current dev commit hash for changelog generation
@@ -127,7 +85,6 @@ async function release() {
         fs.writeFileSync('package.json', JSON.stringify(packageJson, null, 2) + '\n');
         
         // Update version in all files
-        process.env.VERSION_BUMP = versionBump;
         process.env.NEW_VERSION = newVersion;
         runWithRetries('npm run update:version');
         
