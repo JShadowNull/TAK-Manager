@@ -8,6 +8,7 @@ import { generateCotStreamItems} from './cotStreamConfig';
 import PreferenceItem from '../shared/PreferenceItem';
 import { takServerSchema } from '../shared/validationSchemas';
 import { z } from 'zod';
+import { toast } from "@/components/shared/ui/shadcn/toast/use-toast";
 
 interface CertOption {
   label: string;
@@ -40,14 +41,11 @@ const CotStreamsSection: React.FC<CotStreamsSectionProps> = memo(({
 
   // Function to fetch certificates
   const fetchCertificates = useCallback(async () => {
-    const abortController = new AbortController();
-    
     try {
-      const response = await fetch('/api/datapackage/certificate-files', {
-        signal: abortController.signal
-      });
+      const response = await fetch('/api/datapackage/certificate-files');
       if (!response.ok) {
-        throw new Error(`Failed to fetch certificates: ${response.statusText}`);
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to fetch certificates');
       }
       const data = await response.json();
       if (data.success && data.files) {
@@ -59,31 +57,18 @@ const CotStreamsSection: React.FC<CotStreamsSectionProps> = memo(({
         setCertOptions(options);
       }
     } catch (error: unknown) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        return;
-      }
       setCertOptions([]);
+      toast({
+        variant: "destructive",
+        title: "Certificate Error",
+        description: error instanceof Error ? error.message : "Failed to load certificates"
+      });
     }
-
-    return () => {
-      abortController.abort();
-    };
   }, []);
 
   // Fetch certificates on component mount
   useEffect(() => {
-    let isSubscribed = true;
-
-    const fetchData = async () => {
-      if (!isSubscribed) return;
-      await fetchCertificates();
-    };
-
-    fetchData();
-
-    return () => {
-      isSubscribed = false;
-    };
+    fetchCertificates();
   }, [fetchCertificates]);
 
   // Initialize new preferences only when count changes

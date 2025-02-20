@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { ScrollArea } from "@/components/shared/ui/shadcn/scroll-area";
 import { Button } from "@/components/shared/ui/shadcn/button";
 import { Label } from "@/components/shared/ui/shadcn/label";
@@ -18,14 +18,9 @@ import { z } from 'zod';
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/shared/ui/shadcn/table";
 import axios from 'axios';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/shared/ui/shadcn/tooltip/tooltip";
-import Popups from './PackageGeneratorPopups';
 import { useLocation } from 'react-router-dom';
+import { toast } from "@/components/shared/ui/shadcn/toast/use-toast";
+import { HelpIconTooltip } from "@/components/shared/ui/shadcn/tooltip/HelpIconTooltip";
 
 interface CertOption {
   label: string;
@@ -66,7 +61,6 @@ const BulkGeneratorSection: React.FC<BulkGeneratorSectionProps> = ({
   preferences,
   onValidationChange,
   disabled = false,
-  validationErrors
 }) => {
   const location = useLocation();
   const navigationState = location.state as { selectedCertificates?: SelectedCertificate[], fromCertManager?: boolean } | null;
@@ -81,9 +75,7 @@ const BulkGeneratorSection: React.FC<BulkGeneratorSectionProps> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [fileNameErrors, setFileNameErrors] = useState<Record<string, string>>({});
   const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({});
-  const [showGenerateProgress, setShowGenerateProgress] = useState(false);
 
-  // Validate a single file name
   const validateFileName = useCallback((value: string, certValue: string): Record<string, string> => {
     try {
       bulkGenerationSchema.shape.fileNames.parse({ [certValue]: value });
@@ -97,83 +89,53 @@ const BulkGeneratorSection: React.FC<BulkGeneratorSectionProps> = ({
   }, []);
 
   const handleBlur = (certValue: string) => {
-    setTouchedFields(prev => ({
-      ...prev,
-      [certValue]: true
-    }));
-    
+    setTouchedFields(prev => ({ ...prev, [certValue]: true }));
     const errors = validateFileName(bulkFileNames[certValue] || '', certValue);
-    setFileNameErrors(prev => ({
-      ...prev,
-      ...errors
-    }));
+    setFileNameErrors(prev => ({ ...prev, ...errors }));
     onValidationChange(errors);
   };
 
-  // Modified certificate fetching to use certmanager API
   const fetchCertificates = useCallback(async () => {
-    const abortController = new AbortController();
-
     try {
-      const response = await fetch('/api/certmanager/certificates', {
-        signal: abortController.signal
-      });
+      const response = await fetch('/api/certmanager/certificates');
       if (!response.ok) {
-        throw new Error(`Failed to fetch certificates: ${response.statusText}`);
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to fetch certificates');
       }
-      const data = await response.json() as ApiResponse;
-      if (data.success && Array.isArray(data.certificates)) {
-        // Convert certificates to the format we need
+      const data: ApiResponse = await response.json();
+      
+      if (data.success) {
         const availableCertOptions = data.certificates.map(cert => ({
           label: cert.identifier,
           value: `cert/${cert.identifier}.p12`
         }));
         setAvailableCerts(availableCertOptions);
 
-        // Handle any pending selections from navigation
         if (pendingSelections.length > 0) {
           const certsToSelect = availableCertOptions.filter(cert => 
             pendingSelections.some(pending => pending.p12Path === cert.value)
           );
-          
           setSelectedCerts(certsToSelect);
-          
-          // Set initial file names
-          const initialFileNames: Record<string, string> = {};
-          certsToSelect.forEach(cert => {
-            initialFileNames[cert.value] = cert.label;
-          });
+          const initialFileNames = certsToSelect.reduce((acc, cert) => ({
+            ...acc,
+            [cert.value]: cert.label
+          }), {});
           setBulkFileNames(initialFileNames);
-          
-          // Clear pending selections after applying them
           setPendingSelections([]);
         }
       }
     } catch (error: unknown) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        return;
-      }
       setAvailableCerts([]);
+      toast({
+        variant: "destructive",
+        title: "Certificate Error",
+        description: error instanceof Error ? error.message : "Failed to load certificates"
+      });
     }
-
-    return () => {
-      abortController.abort();
-    };
   }, [pendingSelections]);
 
-  React.useEffect(() => {
-    let isSubscribed = true;
-
-    const fetchData = async () => {
-      if (!isSubscribed) return;
-      await fetchCertificates();
-    };
-
-    fetchData();
-
-    return () => {
-      isSubscribed = false;
-    };
+  useEffect(() => {
+    fetchCertificates();
   }, [fetchCertificates]);
 
   const toggleCertificate = (cert: CertOption) => {
@@ -184,12 +146,8 @@ const BulkGeneratorSection: React.FC<BulkGeneratorSectionProps> = ({
         : [...prev, cert];
       
       if (!isSelected) {
-        setBulkFileNames(prev => ({
-          ...prev,
-          [cert.value]: cert.label
-        }));
+        setBulkFileNames(prev => ({ ...prev, [cert.value]: cert.label }));
       } else {
-        // Remove validation state when removing a certificate
         setFileNameErrors(prev => {
           const { [cert.value]: _, ...rest } = prev;
           return rest;
@@ -199,73 +157,135 @@ const BulkGeneratorSection: React.FC<BulkGeneratorSectionProps> = ({
           return rest;
         });
       }
-      
       return newCerts;
     });
   };
 
   const handleFileNameChange = (certValue: string, newName: string) => {
-    setBulkFileNames(prev => ({
-      ...prev,
-      [certValue]: newName
-    }));
+    setBulkFileNames(prev => ({ ...prev, [certValue]: newName }));
   };
 
   const handleGenerate = async () => {
-    if (Object.keys(fileNameErrors).length > 0 || disabled) return;
+    // Get fresh errors from localStorage with correct key
+    const storedErrors = JSON.parse(localStorage.getItem('datapackage-validationErrors') || '{}');
+    const currentErrors = {
+      cotStreams: storedErrors.cotStreams || {},
+      atakPreferences: storedErrors.atakPreferences || {}
+    };
+
+    // Helper to format field names
+    const formatFieldName = (field: string) => {
+      const match = field.match(/([a-zA-Z]+)(\d+)/);
+      if (match) {
+        const [, name, index] = match;
+        const fieldMap: Record<string, string> = {
+          ipAddress: 'IP Address',
+          protocol: 'Protocol',
+          port: 'Port',
+          description: 'Description',
+          caLocation: 'CA Location',
+          certPassword: 'Certificate Password'
+        };
+        return `${fieldMap[name] || name} (Server ${parseInt(index) + 1})`;
+      }
+      return field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+    };
+
+    // Create error display structure
+    const errorSections = [
+      { 
+        name: 'TAK Server Configuration', 
+        errors: currentErrors.cotStreams,
+        hasErrors: Object.keys(currentErrors.cotStreams).length > 0 
+      },
+      { 
+        name: 'ATAK Settings', 
+        errors: currentErrors.atakPreferences,
+        hasErrors: Object.keys(currentErrors.atakPreferences).length > 0 
+      }
+    ];
+
+    if (errorSections.some(section => section.hasErrors) || disabled) {
+      toast({
+        variant: "destructive",
+        title: "Validation Errors",
+        description: (
+          <div className="space-y-2">
+            {errorSections.map((section) => section.hasErrors && (
+              <div key={section.name}>
+                <div className="font-medium">{section.name}:</div>
+                <div className="ml-4">
+                  {Object.entries(section.errors).map(([field, error], i) => (
+                    <div key={i}>• {formatFieldName(field)}: {error as string}</div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      });
+      return;
+    }
 
     setIsLoading(true);
-    setShowGenerateProgress(true);
 
     try {
-      // Create packages with the clean preferences and new client certs
+      let successCount = 0;
+      const totalCerts = selectedCerts.length;
+
       for (const cert of selectedCerts) {
-        // Build TAK server config for all streams
-        const streamCount = parseInt(preferences.count?.value || "1");
+        try {
+          const streamCount = parseInt(preferences.count?.value || "1");
+          const fullTakServerConfig: Record<string, string> = { count: streamCount.toString() };
 
-        // Clear previous config and rebuild for all streams
-        const fullTakServerConfig: Record<string, string> = {
-          count: streamCount.toString()
-        };
-
-        // Add config for each stream
-        for (let i = 0; i < streamCount; i++) {
-          fullTakServerConfig[`description${i}`] = preferences[`description${i}`]?.value || "";
-          fullTakServerConfig[`ipAddress${i}`] = preferences[`ipAddress${i}`]?.value || "";
-          fullTakServerConfig[`port${i}`] = preferences[`port${i}`]?.value || "";
-          fullTakServerConfig[`protocol${i}`] = preferences[`protocol${i}`]?.value || "";
-          fullTakServerConfig[`caLocation${i}`] = preferences[`caLocation${i}`]?.value || "";
-          fullTakServerConfig[`certPassword${i}`] = preferences[`certPassword${i}`]?.value || "";
-        }
-
-        const atakPreferences: Record<string, any> = {};
-        for (const [key, pref] of Object.entries(preferences)) {
-          if (pref.enabled && pref.value && 
-              !key.startsWith('description') && !key.startsWith('ipAddress') && 
-              !key.startsWith('port') && !key.startsWith('protocol') && 
-              !key.startsWith('caLocation') && !key.startsWith('certPassword') &&
-              !key.startsWith('count')) {
-            atakPreferences[key] = pref.value;
+          for (let i = 0; i < streamCount; i++) {
+            fullTakServerConfig[`description${i}`] = preferences[`description${i}`]?.value || "";
+            fullTakServerConfig[`ipAddress${i}`] = preferences[`ipAddress${i}`]?.value || "";
+            fullTakServerConfig[`port${i}`] = preferences[`port${i}`]?.value || "";
+            fullTakServerConfig[`protocol${i}`] = preferences[`protocol${i}`]?.value || "";
+            fullTakServerConfig[`caLocation${i}`] = preferences[`caLocation${i}`]?.value || "";
+            fullTakServerConfig[`certPassword${i}`] = preferences[`certPassword${i}`]?.value || "";
           }
+
+          const atakPreferences = Object.entries(preferences).reduce((acc, [key, pref]) => {
+            if (pref.enabled && pref.value && 
+                !key.startsWith('description') && !key.startsWith('ipAddress') && 
+                !key.startsWith('port') && !key.startsWith('protocol') && 
+                !key.startsWith('caLocation') && !key.startsWith('certPassword') &&
+                !key.startsWith('count')) {
+              acc[key] = pref.value;
+            }
+            return acc;
+          }, {} as Record<string, any>);
+
+          await axios.post('/api/datapackage/generate', {
+            takServerConfig: fullTakServerConfig,
+            atakPreferences,
+            clientCert: cert.value,
+            zipFileName: bulkFileNames[cert.value] || cert.label
+          });
+          successCount++;
+        } catch (error) {
+          toast({
+            variant: "destructive",
+            title: `Generation Failed for ${cert.label}`,
+            description: axios.isAxiosError(error) 
+              ? error.response?.data?.detail || error.message
+              : 'Failed to generate package'
+          });
         }
-
-        const requestData = {
-          takServerConfig: fullTakServerConfig,
-          atakPreferences,
-          clientCert: cert.value,
-          zipFileName: bulkFileNames[cert.value] || cert.label
-        };
-
-        await axios.post('/api/datapackage/generate', requestData);
       }
-    } catch (error) {
+
+      if (successCount > 0) {
+        toast({
+          variant: "success",
+          title: "Packages Generated",
+          description: `Successfully created ${successCount} of ${totalCerts} package${totalCerts > 1 ? 's' : ''}`
+        });
+      }
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleGenerateComplete = () => {
-    setShowGenerateProgress(false);
   };
 
   const filteredCerts = availableCerts.filter(cert => 
@@ -273,158 +293,110 @@ const BulkGeneratorSection: React.FC<BulkGeneratorSectionProps> = ({
   );
 
   return (
-    <>
-      <Card className="w-full break-normal">
-        <CardHeader>
-          <CardTitle>Data Package Generator</CardTitle>
-          <CardDescription>By default this will use current TAK server settings and ATAK settings so ensure you have configured these before generating packages.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-4">
-            <Label className="text-lg font-medium">Select Client Certificates</Label>
-            <p className="text-sm text-muted-foreground">Select one or more client certificates to generate data packages for.</p>
-            <ScrollArea className="w-1/3 min-w-fit rounded-md border">
-              <Command>
-                <CommandInput 
-                  placeholder="Search client certificates..." 
-                  onValueChange={setSearchQuery}
-                />
-                <CommandList>
-                  <CommandEmpty>No client certificates found.</CommandEmpty>
-                  <CommandGroup>
-                    {filteredCerts.map((cert) => (
+    <Card className="w-full break-normal">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          Data Package Generator
+          <HelpIconTooltip
+            tooltip="This will create a zip file for each certificate selected. Ensure you configure the TAK server and ATAK settings before generating packages."
+            triggerMode="hover"
+            side="right"
+          />
+        </CardTitle>
+        <CardDescription>
+        Select one or more client certificates to generate data packages for.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="space-y-4">
+          <ScrollArea className="w-1/3 min-w-fit rounded-md border">
+            <Command>
+              <CommandInput 
+                placeholder="Search client certificates..." 
+                onValueChange={setSearchQuery}
+              />
+              <CommandList>
+                <CommandEmpty>No certificates found.</CommandEmpty>
+                <CommandGroup>
+                  {filteredCerts.map((cert) => {
+                    const isSelected = selectedCerts.some(selected => selected.value === cert.value);
+                    return (
                       <CommandItem
                         key={cert.value}
                         onSelect={() => toggleCertificate(cert)}
-                        className="flex items-center gap-2 cursor-pointer"
+                        className="cursor-pointer"
                       >
-                        <div className="flex items-center justify-center w-4 h-4">
-                          {selectedCerts.some(selected => selected.value === cert.value) && (
-                            <Check className="h-4 w-4" />
-                          )}
+                        <div className={cn(
+                          "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
+                          isSelected ? "bg-primary text-primary-foreground" : "opacity-50"
+                        )}>
+                          {isSelected && <Check className="h-4 w-4" />}
                         </div>
                         <span>{cert.label}</span>
                       </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </ScrollArea>
+                    );
+                  })}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </ScrollArea>
+        </div>
+
+        {selectedCerts.length > 0 && (
+          <div>
+            <Label className="text-lg font-medium flex items-center gap-2">
+              Package Names
+              <HelpIconTooltip
+                tooltip="By default, the file name will be the same as the certificate name. You can customize the file name for each certificate."
+                triggerMode="hover"
+                side="right"
+              />
+            </Label>
+            <p className="text-sm text-muted-foreground">Customize file names for generated packages.</p>
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Certificate</TableHead>
+                  <TableHead>File Name</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {selectedCerts.map((cert) => (
+                  <TableRow key={cert.value}>
+                    <TableCell className="font-medium">{cert.label}</TableCell>
+                    <TableCell>
+                      <Input
+                        value={bulkFileNames[cert.value] || ''}
+                        onChange={(e) => handleFileNameChange(cert.value, e.target.value)}
+                        onBlur={() => handleBlur(cert.value)}
+                        className={cn(
+                          "w-64",
+                          fileNameErrors[cert.value] && "border-destructive focus-visible:ring-destructive"
+                        )}
+                      />
+                      {touchedFields[cert.value] && fileNameErrors[cert.value] && (
+                        <p className="text-sm text-destructive mt-1">{fileNameErrors[cert.value]}</p>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
+        )}
 
-          {selectedCerts.length > 0 && (
-            <div className="space-y-4">
-              <Label className="text-lg font-medium">Customize File Names</Label>
-              <p className="text-sm text-muted-foreground">Optionally customize the file names for the selected client certificates. By default the file name will be the client certificate name.</p>
-              <ScrollArea className="h-72 w-1/3 min-w-fit rounded-lg border p-4">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Certificate</TableHead>
-                      <TableHead>File Name</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {selectedCerts.map((cert) => (
-                      <TableRow key={cert.value}>
-                        <TableCell>
-                          <Label htmlFor={`file-name-${cert.value}`} className="text-sm font-medium">
-                            {cert.label}
-                          </Label>
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            id={`file-name-${cert.value}`}
-                            type="text"
-                            value={bulkFileNames[cert.value] || cert.label}
-                            onChange={(e) => handleFileNameChange(cert.value, e.target.value)}
-                            onBlur={() => handleBlur(cert.value)}
-                            placeholder={cert.label}
-                            className={cn(
-                              "w-full",
-                              touchedFields[cert.value] && fileNameErrors[cert.value] && "border-red-500"
-                            )}
-                          />
-                          {touchedFields[cert.value] && fileNameErrors[cert.value] && (
-                            <p className="text-sm text-red-500">{fileNameErrors[cert.value]}</p>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
-            </div>
-          )}
-
-          <div className="flex justify-end">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div>
-                    <Button
-                      onClick={handleGenerate}
-                      disabled={disabled || selectedCerts.length === 0 || isLoading || Object.keys(fileNameErrors).length > 0}
-                      variant="primary"
-                      className="w-full sm:w-auto"
-                    >
-                      Generate {selectedCerts.length} Data Package{selectedCerts.length !== 1 ? 's' : ''}
-                    </Button>
-                  </div>
-                </TooltipTrigger>
-                {(disabled || selectedCerts.length === 0 || Object.keys(fileNameErrors).length > 0) && (
-                  <TooltipContent className="max-w-[300px]">
-                    <div className="space-y-2">
-                      {validationErrors && Object.keys(validationErrors.cotStreams).length > 0 && (
-                        <div>
-                          <p className="font-semibold">TAK Server Configuration Errors:</p>
-                          <ul className="list-disc pl-4">
-                            {Object.entries(validationErrors.cotStreams).map(([field, error]) => (
-                              <li key={field} className="text-sm">{error}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {validationErrors && Object.keys(validationErrors.atakPreferences).length > 0 && (
-                        <div>
-                          <p className="font-semibold">ATAK Settings Errors:</p>
-                          <ul className="list-disc pl-4">
-                            {Object.entries(validationErrors.atakPreferences).map(([field, error]) => (
-                              <li key={field} className="text-sm">{error}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {Object.keys(fileNameErrors).length > 0 && (
-                        <div>
-                          <p className="font-semibold">File Name Errors:</p>
-                          <ul className="list-disc pl-4">
-                            {Object.entries(fileNameErrors).map(([field, error]) => (
-                              <li key={field} className="text-sm">{error}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {selectedCerts.length === 0 && (
-                        <div>
-                          <p className="font-semibold">Certificate Selection:</p>
-                          <p className="text-sm">Please select at least one certificate.</p>
-                        </div>
-                      )}
-                    </div>
-                  </TooltipContent>
-                )}
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Popups
-        onGenerateComplete={handleGenerateComplete}
-        showGenerateProgress={showGenerateProgress}
-      />
-    </>
+        <div className="flex justify-end">
+          <Button
+            onClick={handleGenerate}
+            disabled={selectedCerts.length === 0 || isLoading}
+            loading={isLoading}
+            loadingText="Generating..."
+          >
+            Generate {selectedCerts.length} Package{selectedCerts.length !== 1 ? 's' : ''}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 

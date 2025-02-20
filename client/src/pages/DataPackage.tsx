@@ -41,10 +41,18 @@ const DataPackage: React.FC = () => {
     return sessionStorage.getItem('currentTab') || 'cot-streams';
   });
 
-  const [validationErrors, setValidationErrors] = useState<ValidationErrors>({
-    cotStreams: {},
-    atakPreferences: {}
+  const [validationErrors, setValidationErrors] = useState<ValidationErrors>(() => {
+    const savedErrors = localStorage.getItem('datapackage-validationErrors');
+    return savedErrors ? JSON.parse(savedErrors) as ValidationErrors : { 
+      cotStreams: {}, 
+      atakPreferences: {} 
+    };
   });
+
+  // Persist validation errors to localStorage
+  useEffect(() => {
+    localStorage.setItem('datapackage-validationErrors', JSON.stringify(validationErrors));
+  }, [validationErrors]);
 
   // Effect to store current tab in sessionStorage
   useEffect(() => {
@@ -167,6 +175,7 @@ const DataPackage: React.FC = () => {
     });
   }, []);
 
+  // Update validation status calculation
   const validationStatus = useMemo(() => {
     const cotErrors = validationErrors.cotStreams;
     const atakErrors = Object.entries(validationErrors.atakPreferences)
@@ -217,7 +226,7 @@ const DataPackage: React.FC = () => {
 
           <div className="w-full">
             <TabsContent value="cot-streams" className="w-full">
-              <div className="bg-card rounded-lg">
+              <div className="bg-card rounded-lg max-w-6xl mx-auto">
                 <CotStreamsSection
                   preferences={preferences}
                   onPreferenceChange={handlePreferenceChange}
@@ -226,7 +235,7 @@ const DataPackage: React.FC = () => {
               </div>
             </TabsContent>
             <TabsContent value="atak-preferences" className="w-full">
-              <div className="bg-card rounded-lg">
+              <div className="bg-card rounded-lg max-w-6xl mx-auto">
                 <AtakPreferencesSection
                   preferences={preferences}
                   onPreferenceChange={handlePreferenceChange}
@@ -236,7 +245,7 @@ const DataPackage: React.FC = () => {
               </div>
             </TabsContent>
             <TabsContent value="bulk-generator" className="w-full">
-              <div className="bg-card rounded-lg">
+              <div className="bg-card rounded-lg max-w-6xl mx-auto">
                 <BulkGeneratorSection
                   preferences={preferences}
                   onValidationChange={() => {}}
@@ -246,7 +255,7 @@ const DataPackage: React.FC = () => {
               </div>
             </TabsContent>
             <TabsContent value="existing-packages" className="w-full">
-              <div className="bg-card rounded-lg">
+              <div className="bg-card rounded-lg max-w-6xl mx-auto">
                 <ExistingDataPackages />
               </div>
             </TabsContent>
