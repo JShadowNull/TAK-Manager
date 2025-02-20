@@ -10,7 +10,7 @@ import asyncio
 import time
 
 logger = configure_logging(__name__)
-logger.setLevel(logging.INFO)  # Using custom logger
+logger.setLevel(logging.ERROR)  # Using custom logger
 
 class TakServerStatus:
     def __init__(self, emit_event=None):
@@ -202,7 +202,8 @@ class TakServerStatus:
                 }
             last_error = result.get('error')
             await asyncio.sleep(1)
-        
+
+        logger.error(f'Timeout: {last_error}' if last_error else 'Web UI did not become reachable within 30 seconds')
         return {
             'status': 'unavailable',
             'error': f'Timeout: {last_error}' if last_error else 'Web UI did not become reachable within 30 seconds'
@@ -212,6 +213,7 @@ class TakServerStatus:
         """Run curl command inside takserver container to check web UI availability."""
         version = self.directory_helper.get_takserver_version()
         if not version:
+            logger.error('TAK Server version not found for web UI check')
             return {'status': 'error', 'error': 'TAK Server version not found'}
         
         container_name = f"takserver-{version}"
@@ -233,6 +235,7 @@ class TakServerStatus:
             if exit_code == 56:  # Certificate error but server is up
                 return {'status': 'up'}
             elif exit_code == 35:  # Connection failed
+                logger.error(f'Web UI Connection failed: {stderr.decode().strip()}')
                 return {'status': 'down', 'error': stderr.decode().strip()}
             elif exit_code == 1:  # Container not running
                 return {'status': 'down', 'error': f'Container {container_name} not running'}
