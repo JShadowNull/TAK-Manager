@@ -34,6 +34,7 @@ interface ServerState {
 interface TakServerContextType {
   serverState: ServerState;
   setServerState: React.Dispatch<React.SetStateAction<ServerState>>;
+  refreshServerStatus: () => Promise<void>;
 }
 
 export const TakServerContext = createContext<TakServerContextType | undefined>(undefined);
@@ -65,6 +66,21 @@ export function TakServerProvider({ children }: { children: React.ReactNode }) {
       version: 'Not Installed'
     }
   });
+
+  // Create reusable refresh function
+  const refreshServerStatus = async () => {
+    try {
+      const response = await fetch('/api/takserver/takserver-status');
+      if (!response.ok) throw new Error(`Status check failed: ${response.statusText}`);
+      const data = await response.json();
+      setServerState(data);
+    } catch (error) {
+      setServerState(prev => ({
+        ...prev,
+        error: error instanceof Error ? error.message : 'Failed to refresh status'
+      }));
+    }
+  };
 
   // Update localStorage whenever serverState changes
   useEffect(() => {
@@ -140,7 +156,11 @@ export function TakServerProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <TakServerContext.Provider value={{ serverState, setServerState }}>
+    <TakServerContext.Provider value={{ 
+      serverState, 
+      setServerState,
+      refreshServerStatus
+    }}>
       {children}
     </TakServerContext.Provider>
   );

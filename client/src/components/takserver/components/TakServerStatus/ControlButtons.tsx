@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '../../../shared/ui/shadcn/button';
 import Popups from './TakOperationPopups';
+import { useToast } from '@/components/shared/ui/shadcn/toast/use-toast';
+import { useTakServer } from '../../../shared/ui/shadcn/sidebar/app-sidebar';
 
 interface TakServerState {
   isInstalled: boolean;
@@ -20,47 +22,60 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
   takState,
   onInstall
 }) => {
+  const { toast } = useToast();
+  const { refreshServerStatus } = useTakServer();
   const [currentOperation, setCurrentOperation] = useState<Operation>(null);
   const [isOperationInProgress, setIsOperationInProgress] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [showUninstallConfirm, setShowUninstallConfirm] = useState(false);
   const [showUninstallProgress, setShowUninstallProgress] = useState(false);
+  const [isCheckingWebUI, setIsCheckingWebUI] = useState(false);
+  const [webUIAvailable, setWebUIAvailable] = useState(false);
 
   useEffect(() => {
-    const eventSource = new EventSource('/api/takserver/operation-status-stream');
+    if (takState.isRunning && !webUIAvailable) {
+      checkWebUIStatus();
+    }
+  }, [takState.isRunning]);
 
-    eventSource.addEventListener('operation-status', (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        
-        // Only handle operation type events for operation state
-        if (data.type === 'operation') {
-          if (data.status === 'complete' || data.status === 'error') {
-            setIsOperationInProgress(false);
-            setCurrentOperation(null);
-            if (data.error) {
-              setError(data.error);
-            } else {
-              setError(null);
-            }
-          } else if (data.status === 'in_progress') {
-            setIsOperationInProgress(true);
-          }
-        }
-      } catch (error) {
-        setIsOperationInProgress(false);
-        setCurrentOperation(null);
+  const checkWebUIStatus = async () => {
+    setIsCheckingWebUI(true);
+    try {
+      const response = await fetch('/api/takserver/webui-status');
+      
+      if (!response.ok) {
+        throw new Error('Failed to check Web UI status');
       }
-    });
-
-    return () => {
-      eventSource.close();
-    };
-  }, []); // Empty dependency array to prevent reconnection
+      
+      const result = await response.json();
+      
+      if (takState.isRunning) {
+        setWebUIAvailable(result.status === 'available');
+        
+        if (result.status !== 'available') {
+          toast({
+            title: "Web UI Unavailable",
+            description: result.error || 'The Web UI is not reachable',
+            variant: "destructive"
+          });
+        }
+      }
+    } catch (error) {
+      if (takState.isRunning) {
+        setWebUIAvailable(false);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to check Web UI status';
+        toast({
+          title: "Web UI Check Failed",
+          description: errorMessage,
+          variant: "destructive"
+        });
+      }
+    } finally {
+      setIsCheckingWebUI(false);
+    }
+  };
 
   const handleOperation = async (operation: Operation, endpoint: string) => {
     try {
-      setError(null);
       setCurrentOperation(operation);
       setIsOperationInProgress(true);
       
@@ -69,10 +84,35 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
       });
 
       if (!response.ok) {
-        throw new Error(`Operation failed: ${response.statusText}`);
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `Operation failed: ${response.statusText}`);
       }
+
+      await refreshServerStatus();
+
+      toast({
+        title: "Operation Successful",
+        description: `${operation?.charAt(0)?.toUpperCase() ?? ''}${operation?.slice(1) ?? ''} completed successfully!`,
+        variant: "success"
+      });
+      
+      if (operation === 'start' || operation === 'restart') {
+        setIsOperationInProgress(false);
+        setCurrentOperation(null);
+        await checkWebUIStatus();
+      }
+
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Operation failed');
+      const errorMessage = error instanceof Error ? error.message : 'Operation failed';
+      
+      await refreshServerStatus();
+
+      toast({
+        title: "Operation Failed",
+        description: errorMessage,
+        variant: "destructive"
+      });
+    } finally {
       setIsOperationInProgress(false);
       setCurrentOperation(null);
     }
@@ -97,9 +137,6 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
   return (
     <>
       <div className="flex gap-4">
-        {error && (
-          <p className="text-sm text-destructive mb-2">{error}</p>
-        )}
         
         {takState.isInstalled ? (
           <>
@@ -123,12 +160,15 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
                 </Button>
                 <Button
                   variant="primary"
-                  href="https://127.0.0.1:8443"
+                  href={webUIAvailable ? "https://127.0.0.1:8443" : undefined}
                   target="_blank"
                   rel="noopener noreferrer"
-                  disabled={isOperationInProgress}
+                  disabled={isOperationInProgress || isCheckingWebUI}
+                  loading={isCheckingWebUI}
+                  loadingText="Verifying Web UI..."
+                  onClick={!webUIAvailable ? checkWebUIStatus : undefined}
                 >
-                  Launch TAK Web UI
+                  {webUIAvailable ? "Launch TAK Web UI" : "Retry Web UI Check"}
                 </Button>
               </>
             ) : (

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/shadcn/dialog';
 import { Button } from './ui/shadcn/button';
 import { useTakServer } from './ui/shadcn/sidebar/app-sidebar';
+import { useToast } from '@/components/shared/ui/shadcn/toast/use-toast';
 
 interface TakServerRequiredDialogProps {
   isOpen: boolean;
@@ -16,17 +17,16 @@ const TakServerRequiredDialog: React.FC<TakServerRequiredDialogProps> = ({
   title = "TAK Server Required",
   description = "This feature requires TAK Server to be running. Would you like to start it now?"
 }) => {
-  const { serverState } = useTakServer();
+  const { serverState, refreshServerStatus } = useTakServer();
+  const { toast } = useToast();
   const [currentOperation, setCurrentOperation] = useState<'start' | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [operationMessage, setOperationMessage] = useState<string | null>(null);
 
   // Reset state when dialog opens/closes
   useEffect(() => {
     if (!isOpen) {
       setCurrentOperation(null);
       setError(null);
-      setOperationMessage(null);
     }
   }, [isOpen]);
 
@@ -37,42 +37,9 @@ const TakServerRequiredDialog: React.FC<TakServerRequiredDialogProps> = ({
     }
   }, [serverState?.isRunning, onOpenChange]);
 
-  // Handle operation status stream
-  useEffect(() => {
-    if (!currentOperation) return;
-
-    const eventSource = new EventSource('/api/takserver/operation-status-stream');
-
-    eventSource.addEventListener('operation-status', (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        
-        // Only handle events for our current operation
-        if (data.operation === 'start') {
-          setOperationMessage(data.message);
-
-          if (data.status === 'complete' || data.status === 'error') {
-            setCurrentOperation(null);
-            if (data.error) {
-              setError(data.error);
-            }
-          }
-        }
-      } catch (error) {
-        setCurrentOperation(null);
-        setError('Failed to parse operation status');
-      }
-    });
-
-    return () => {
-      eventSource.close();
-    };
-  }, [currentOperation]);
-
   const handleStart = async () => {
     try {
       setError(null);
-      setOperationMessage(null);
       setCurrentOperation('start');
       
       const response = await fetch('/api/takserver/start-takserver', {
@@ -80,10 +47,30 @@ const TakServerRequiredDialog: React.FC<TakServerRequiredDialogProps> = ({
       });
 
       if (!response.ok) {
-        throw new Error(`Operation failed: ${response.statusText}`);
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `Operation failed: ${response.statusText}`);
       }
+
+      // Force immediate status refresh
+      await refreshServerStatus();
+
+      toast({
+        title: "Server Starting",
+        description: "TAK Server Started Successfully",
+        variant: "success"
+      });
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Operation failed');
+      const errorMessage = error instanceof Error ? error.message : 'Operation failed';
+      setError(errorMessage);
+      toast({
+        title: "Start Failed",
+        description: errorMessage,
+        variant: "destructive"
+      });
+      
+      // Refresh status even on error to ensure UI consistency
+      await refreshServerStatus();
+    } finally {
       setCurrentOperation(null);
     }
   };
@@ -98,10 +85,6 @@ const TakServerRequiredDialog: React.FC<TakServerRequiredDialogProps> = ({
         
         {error && (
           <p className="text-sm text-destructive">{error}</p>
-        )}
-        
-        {operationMessage && (
-          <p className="text-sm text-muted-foreground">{operationMessage}</p>
         )}
 
         <DialogFooter>

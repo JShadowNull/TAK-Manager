@@ -40,28 +40,6 @@ const CoreConfigEditor: React.FC = () => {
     fetchConfig();
   }, []);
 
-  useEffect(() => {
-    const eventSource = new EventSource('/api/takserver/operation-status-stream');
-
-    eventSource.addEventListener('operation-status', (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.status === 'complete' || data.status === 'error') {
-          setIsRestarting(false);
-          if (data.error) {
-            showNotification('Error', data.error, 'error');
-          }
-        }
-      } catch (error) {
-        setIsRestarting(false);
-      }
-    });
-
-    return () => {
-      eventSource.close();
-    };
-  }, []);
-
   const handleRestart = async () => {
     try {
       setIsRestarting(true);
@@ -70,11 +48,16 @@ const CoreConfigEditor: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error(`Operation failed: ${response.statusText}`);
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `Operation failed: ${response.statusText}`);
       }
+      
+      showNotification('Success', 'Server restarted successfully', 'success');
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Operation failed';
+      showNotification('Error', errorMessage, 'error');
+    } finally {
       setIsRestarting(false);
-      showNotification('Error', error instanceof Error ? error.message : 'Operation failed', 'error');
     }
   };
 
