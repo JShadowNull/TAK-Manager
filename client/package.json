@@ -1,7 +1,7 @@
 {
   "name": "tak-manager-app",
   "productName": "Tak Manager",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "This is a modular Flask-based application that monitors CPU, RAM usage, and running services. It provides a simple interface for viewing system metrics using a Flask backend and a PyWebview frontend.",
   "type": "module",
   "main": "src/index.tsx",
