@@ -1,11 +1,10 @@
 import os
-import shutil
 from backend.services.helpers.run_command import RunCommand
 import time
 from typing import Dict, Any, Optional, Callable
 import docker
-import asyncio
 from backend.services.helpers.directories import DirectoryHelper
+import asyncio
 
 class TakServerUninstaller:
     def __init__(self, emit_event: Optional[Callable[[Dict[str, Any]], None]] = None):
@@ -15,14 +14,22 @@ class TakServerUninstaller:
         self.emit_event = emit_event
         self.docker_client = docker.from_env()
 
-    async def update_status(self, status: str, progress: float, message: str, error: Optional[str] = None) -> None:
-        """Update uninstallation status."""
+    async def update_status(self, status: str, progress: float, message: Optional[str] = None, error: Optional[str] = None) -> None:
+        """Update installation status."""
         if self.emit_event:
+            # Send terminal message
+            await self.emit_event({
+                "type": "terminal",
+                "message": message,
+                "isError": error is not None,
+                "timestamp": int(time.time() * 1000)
+            })
+            
+            # Send progress update
             await self.emit_event({
                 "type": "status",
                 "status": status,
                 "progress": progress,
-                "message": message,
                 "error": error,
                 "isError": error is not None,
                 "timestamp": int(time.time() * 1000)
@@ -30,11 +37,17 @@ class TakServerUninstaller:
 
     async def stop_and_remove_containers(self):
         """Stop and remove all TAK Server containers."""
+        if self.emit_event:
+            await self.emit_event({
+                "type": "terminal",
+                "message": "🛑 Stopping TAK Server containers...",
+                "isError": False
+            })
         try:
             docker_compose_dir = self.directory_helper.get_docker_compose_directory()
             
             result = await self.run_command.run_command_async(
-                ["docker-compose", "down", "--rmi", "all", "--volumes", "--remove-orphans"],
+                ["docker", "compose", "down", "--rmi", "all", "--volumes", "--remove-orphans"],
                 'uninstall',
                 emit_event=self.emit_event,
                 working_dir=docker_compose_dir,
@@ -46,10 +59,22 @@ class TakServerUninstaller:
             return True
 
         except Exception as e:
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": f"❌ Error stopping containers: {str(e)}",
+                    "isError": True
+                })
             raise Exception(f"Error stopping containers: {str(e)}")
 
     async def clean_docker_build_cache(self):
         """Clean Docker build cache."""
+        if self.emit_event:
+            await self.emit_event({
+                "type": "terminal",
+                "message": "🧹 Cleaning Docker build cache...",
+                "isError": False
+            })
         try:
             await self.run_command.run_command_async(
                 ["docker", "system", "prune", "-f"],
@@ -60,10 +85,22 @@ class TakServerUninstaller:
             return True
 
         except Exception as e:
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": f"❌ Error cleaning Docker cache: {str(e)}",
+                    "isError": True
+                })
             raise Exception(f"Error cleaning Docker cache: {str(e)}")
 
     async def remove_installation_directory(self):
         """Remove TAK Server directories."""
+        if self.emit_event:
+            await self.emit_event({
+                "type": "terminal",
+                "message": "🗑️ Removing TAK Server directories...",
+                "isError": False
+            })
         try:
             if os.path.exists(self.working_dir):
                 result = await self.run_command.run_command_async(
@@ -87,51 +124,64 @@ class TakServerUninstaller:
             return True
 
         except Exception as e:
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": f"❌ Error removing directories: {str(e)}",
+                    "isError": True
+                })
             raise Exception(f"Error removing directories: {str(e)}")
 
     async def uninstall(self) -> bool:
         """Main uninstallation method."""
         try:
-            # Define task weights and initial progress
-            weights = {
-                'containers': 40,  # Stop and remove containers
-                'cache': 30,      # Clean Docker cache
-                'directories': 25, # Remove directories
-                'cleanup': 5      # Final cleanup
-            }
+            weights = {'containers': 40, 'cache': 30, 'directories': 25, 'cleanup': 5}
             progress = 0
+            increment_delay = 1.0  # Update every 100ms
             
-            # Initial status (0%)
-            await self.update_status("in_progress", progress, "Starting TAK Server uninstallation...")
+            async def smooth_progress(target: int, duration: float):
+                nonlocal progress
+                steps = int(duration / increment_delay)
+                increment = (target - progress) / steps
+                for _ in range(steps):
+                    await asyncio.sleep(increment_delay)
+                    progress = min(progress + increment, 100)
+                    await self.update_status("in_progress", round(progress, 2))
 
             # Stop and remove containers (0-40%)
-            progress += weights['containers'] * 0.3
-            await self.update_status("in_progress", progress, "Stopping TAK Server containers...")
+            containers_task = asyncio.create_task(smooth_progress(40, 5.0))
             await self.stop_and_remove_containers()
-            progress += weights['containers'] * 0.7
-            await self.update_status("in_progress", progress, "Containers removed")
+            containers_task.cancel()
+            progress = 40
+            await self.update_status("in_progress", progress)
 
             # Clean Docker cache (40-70%)
-            progress += weights['cache'] * 0.3
-            await self.update_status("in_progress", progress, "Cleaning Docker build cache...")
+            cache_task = asyncio.create_task(smooth_progress(70, 3.0))
             await self.clean_docker_build_cache()
-            progress += weights['cache'] * 0.7
-            await self.update_status("in_progress", progress, "Docker cache cleaned")
+            cache_task.cancel()
+            progress = 70
+            await self.update_status("in_progress", progress)
 
             # Remove directories (70-95%)
-            progress += weights['directories'] * 0.3
-            await self.update_status("in_progress", progress, "Removing TAK Server directories...")
+            dirs_task = asyncio.create_task(smooth_progress(95, 2.0))
             await self.remove_installation_directory()
-            progress += weights['directories'] * 0.7
-            await self.update_status("in_progress", progress, "Directories removed")
+            dirs_task.cancel()
+            progress = 95
+            await self.update_status("in_progress", progress)
 
             # Final cleanup (95-100%)
-            progress += weights['cleanup'] * 0.5
-            await self.update_status("in_progress", progress, "Performing final cleanup...")
-            progress += weights['cleanup'] * 0.5
-            await self.update_status("complete", 100, "Uninstallation complete")
+            cleanup_task = asyncio.create_task(smooth_progress(100, 1.0))
+            await asyncio.sleep(1)  # Simulate final cleanup
+            cleanup_task.cancel()
+            await self.update_status("complete", 100)
+            self.emit_event({
+                "type": "terminal",
+                "message": "🎉 Uninstallation complete",
+                "isError": False
+            })
+            
             return True
 
         except Exception as e:
-            await self.update_status("error", 100, "Uninstallation failed", str(e))
+            await self.update_status("error", 100, str(e))
             return False 

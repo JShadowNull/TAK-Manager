@@ -6,15 +6,15 @@ from backend.services.helpers.run_command import RunCommand
 import re
 from backend.services.scripts.docker.docker_manager import DockerManager
 from backend.services.scripts.takserver.certconfig import CertConfig
-from pathlib import Path
 import time
-import threading
 from typing import Dict, Any, Optional, Callable
 import asyncio
 import docker
 import xml.etree.ElementTree as ET
 from dotenv import load_dotenv
 from backend.services.helpers.directories import DirectoryHelper
+from backend.services.scripts.takserver.check_status import TakServerStatus
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -48,8 +48,8 @@ class TakServerInstaller:
         self.extracted_folder_name = None
         self.takserver_version = None
         self.emit_event = emit_event
-        self._last_status = None
-        
+        self.tak_server_status = TakServerStatus()
+
         self.cert_config = CertConfig(
             certificate_password=self.certificate_password,
             organization=self.organization,
@@ -61,7 +61,7 @@ class TakServerInstaller:
             emit_event=self.emit_event
         )
 
-    async def update_status(self, status: str, progress: float, message: str, error: Optional[str] = None) -> None:
+    async def update_status(self, status: str, progress: float, message: Optional[str] = None, error: Optional[str] = None) -> None:
         """Update installation status."""
         if self.emit_event:
             # Send terminal message
@@ -84,17 +84,48 @@ class TakServerInstaller:
 
     async def create_working_directory(self) -> None:
         """Create the working directory."""
+        if self.emit_event:
+            await self.emit_event({
+                "type": "terminal",
+                "message": "📂 Creating working directory...",
+                "isError": False
+            })
         try:
             self.directory_helper.ensure_clean_directory(self.working_dir)
             self.cert_config.update_working_dir(self.working_dir)
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": f"✅ Working directory created at {self.working_dir}",
+                    "isError": False
+                })
         except Exception as e:
-            raise Exception(f"Error creating working directory: {str(e)}")
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": f"❌ Error creating working directory: {str(e)}",
+                    "isError": True
+                })
+            raise
 
     async def unzip_docker_release(self) -> None:
         """Extract the TAK Server Docker release."""
+        if self.emit_event:
+            await self.emit_event({
+                "type": "terminal",
+                "message": "\n📦 Extracting TAK Server package...",
+                "isError": False
+            })
         try:
             if not os.path.exists(self.docker_zip_path):
-                raise FileNotFoundError(f"ZIP file not found at {self.docker_zip_path}")
+                error_msg = f"ZIP file not found at {self.docker_zip_path}"
+                if self.emit_event:
+                    await self.emit_event({
+                        "type": "terminal",
+                        "message": f"\n❌ {error_msg}",
+                        "isError": True
+                    })
+                raise FileNotFoundError(error_msg)
 
             # Prepare temp directory
             temp_extract_dir = self.directory_helper.get_temp_extract_directory()
@@ -168,14 +199,47 @@ class TakServerInstaller:
             self.tak_dir = os.path.join(final_path, "tak")
             self.cert_config.update_tak_dir(self.tak_dir)
             
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": "🔍 Verifying extracted contents...",
+                    "isError": False
+                })
+            
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": f"🚚 Moving files to final location: {final_path}",
+                    "isError": False
+                })
+
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": f"✅ Successfully extracted TAK Server {self.takserver_version}",
+                    "isError": False
+                })
+                
         except Exception as e:
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": f"❌ Extraction failed: {str(e)}",
+                    "isError": True
+                })
             self.directory_helper.cleanup_temp_directory()
-            raise Exception(f"Error during ZIP extraction: {str(e)}")
+            raise
         finally:
             self.directory_helper.cleanup_temp_directory()
 
     async def copy_coreconfig(self) -> None:
         """Copy CoreConfig.xml from example."""
+        if self.emit_event:
+            await self.emit_event({
+                "type": "terminal",
+                "message": "\n🛠️ Copying Coreconfig.example to CoreConfig.xml...",
+                "isError": False
+            })
         try:
             core_config_path, example_core_config = self.directory_helper.get_core_config_paths(self.tak_dir)
 
@@ -185,11 +249,29 @@ class TakServerInstaller:
                 else:
                     raise FileNotFoundError(f"Example CoreConfig file not found at {example_core_config}")
                 
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": "✅ CoreConfig.xml copied from Coreconfig.example",
+                    "isError": False
+                })
         except Exception as e:
-            raise Exception(f"Error setting up CoreConfig.xml: {str(e)}")
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": f"❌ CoreConfig copy failed: {str(e)}",
+                    "isError": True
+                })
+            raise
 
     async def update_coreconfig_password(self) -> None:
         """Update database password in CoreConfig.xml."""
+        if self.emit_event:
+            await self.emit_event({
+                "type": "terminal",
+                "message": "\n🔑 Updating database credentials...",
+                "isError": False
+            })
         try:
             core_config_path = os.path.join(self.tak_dir, "CoreConfig.xml")
 
@@ -229,11 +311,29 @@ class TakServerInstaller:
             else:
                 raise FileNotFoundError(f"CoreConfig.xml not found at {core_config_path}")
                 
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": "✅ Database password updated successfully",
+                    "isError": False
+                })
         except Exception as e:
-            raise Exception(f"Error updating CoreConfig password: {str(e)}")
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": f"❌ Password update failed: {str(e)}",
+                    "isError": True
+                })
+            raise
 
     async def modify_coreconfig_with_sed_on_host(self) -> None:
         """Update database host and certificate config in CoreConfig.xml."""
+        if self.emit_event:
+            await self.emit_event({
+                "type": "terminal",
+                "message": "\n⚙️ Configuring database and certificates...",
+                "isError": False
+            })
         try:
             core_config_path = os.path.join(self.tak_dir, "CoreConfig.xml")
             if not os.path.exists(core_config_path):
@@ -305,11 +405,29 @@ class TakServerInstaller:
             if not format_result.success:
                 raise Exception(format_result.stderr)
             
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": "✅ CoreConfig modifications complete",
+                    "isError": False
+                })
         except Exception as e:
-            raise Exception(f"Error modifying CoreConfig.xml: {str(e)}")
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": f"❌ CoreConfig modification failed: {str(e)}",
+                    "isError": True
+                })
+            raise
 
     async def create_env_file(self) -> None:
         """Create Docker Compose .env file."""
+        if self.emit_event:
+            await self.emit_event({
+                "type": "terminal",
+                "message": "📄 Generating environment configuration...",
+                "isError": False
+            })
         try:
             env_path = os.path.join(self.working_dir, self.extracted_folder_name, ".env")
             
@@ -327,12 +445,30 @@ PLUGINS_DIR={host_plugins_dir}
             with open(env_path, "w") as file:
                 file.write(env_content)
                 
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": "✅ Environment file setup complete",
+                    "isError": False
+                })
         except Exception as e:
-            raise Exception(f"Error creating .env file: {str(e)}")
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": f"❌ Env file creation failed: {str(e)}",
+                    "isError": True
+                })
+            raise
 
     async def create_docker_compose_file(self) -> None:
         """Create Docker Compose file."""
         try:
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": "\n📄 Creating Docker Compose file...",
+                    "isError": False
+                })
             docker_compose_path = os.path.join(self.working_dir, self.extracted_folder_name, "docker-compose.yml")
             
             host_base_dir = os.getenv('TAK_SERVER_INSTALL_DIR')
@@ -354,8 +490,7 @@ PLUGINS_DIR={host_plugins_dir}
             host_tak_dir = convert_path_for_docker(host_tak_dir)
             host_plugins_dir = convert_path_for_docker(host_plugins_dir)
             
-            docker_compose_content = f"""version: '3.8'
-
+            docker_compose_content = f"""
 services:
   takserver-db:
     build:
@@ -413,27 +548,36 @@ volumes:
 """
             with open(docker_compose_path, "w") as file:
                 file.write(docker_compose_content)
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": "✅ Docker Compose file created successfully",
+                    "isError": False
+                })
             
         except Exception as e:
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": f"❌ Error creating docker-compose.yml: {str(e)}",
+                    "isError": True
+                })
             raise Exception(f"Error creating docker-compose.yml: {str(e)}")
 
     async def start_docker_compose(self) -> None:
         """Start Docker Compose services."""
         try:
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": "\n🚀 Starting Docker Compose services...",
+                    "isError": False
+                })
             docker_compose_dir = self.directory_helper.get_docker_compose_directory()
             await self.create_env_file()
 
-            # Clean up existing containers and images
-            result = await self.run_command.run_command_async(
-                ["docker-compose", "down", "--rmi", "all", "--volumes", "--remove-orphans"],
-                'install',
-                emit_event=self.emit_event,
-                working_dir=docker_compose_dir,
-                ignore_errors=True
-            )
-            
-            result = await self.run_command.run_command_async(
-                ["docker", "system", "prune", "-f"],
+            _ = await self.run_command.run_command_async(
+                ["docker", "compose", "down", "--rmi", "all", "--volumes", "--remove-orphans"],
                 'install',
                 emit_event=self.emit_event,
                 working_dir=docker_compose_dir,
@@ -441,8 +585,14 @@ volumes:
             )
 
             # Build images
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": "👷🏼‍♂️ Building TAK Server containers... This may take a few minutes",
+                    "isError": False
+                })
             build_result = await self.run_command.run_command_async(
-                ["docker-compose", "build"],
+                ["docker", "compose", "build"],
                 'install',
                 emit_event=self.emit_event,
                 working_dir=docker_compose_dir,
@@ -453,12 +603,18 @@ volumes:
 
             # Start containers
             up_result = await self.run_command.run_command_async(
-                ["docker-compose", "up", "-d"],
+                ["docker", "compose", "up", "-d"],
                 'install',
                 emit_event=self.emit_event,
                 working_dir=docker_compose_dir,
                 ignore_errors=True
             )
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": "✅ Docker Compose services started successfully",
+                    "isError": False
+                })
             if not up_result.success:
                 raise Exception(up_result.stderr)
 
@@ -492,42 +648,81 @@ volumes:
                 await asyncio.sleep(1)
             
             if not containers_ready:
+                if self.emit_event:
+                    await self.emit_event({
+                        "type": "terminal",
+                        "message": "❌ Timeout waiting for containers to be ready",
+                        "isError": True
+                    })
                 raise Exception("Timeout waiting for containers to be ready")
 
         except Exception as e:
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": f"❌ Error starting Docker containers: {str(e)}",
+                    "isError": True
+                })
             raise Exception(f"Error starting Docker containers: {str(e)}")
 
     async def verify_containers(self) -> None:
         """Verify containers are running."""
         try:
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": "\n🔍 Verifying container status...",
+                    "isError": False
+                })
             docker_compose_dir = self.directory_helper.get_docker_compose_directory()
             result = await self.run_command.run_command_async(
-                ["docker-compose", "ps"],
+                ["docker", "compose", "ps"],
                 'install',
                 emit_event=self.emit_event,
                 working_dir=docker_compose_dir
             )
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": "✅ Containers verified successfully",
+                    "isError": False
+                })
             if not result.success:
+                if self.emit_event:
+                    await self.emit_event({
+                        "type": "terminal",
+                        "message": f"❌ Error verifying containers: {result.stderr}",
+                        "isError": True
+                    })
                 raise Exception(result)
             
         except Exception as e:
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": f"❌ Error verifying containers: {str(e)}",
+                    "isError": True
+                })
             raise Exception(f"Error verifying containers: {str(e)}")
 
-    async def restart_takserver(self) -> None:
+
+    async def restart_takserver(self, container_name: str = None) -> None:
         """Restart TAK Server containers."""
         try:
-            docker_compose_dir = self.directory_helper.get_docker_compose_directory()
-            result = await self.run_command.run_command_async(
-                ["docker-compose", "restart"],
-                'install',
-                emit_event=self.emit_event,
-                working_dir=docker_compose_dir,
-                ignore_errors=True
-            )
-            if not result.success:
-                raise Exception(result.error_message)
-            
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": "\n🔄 Restarting TAK Server containers...",
+                    "isError": False
+                })
+            await self.tak_server_status.restart_containers()
         except Exception as e:
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": f"❌ Error restarting TAK Server: {str(e)}",
+                    "isError": True
+                })
             raise Exception(f"Error restarting TAK Server: {str(e)}")
 
     async def main(self) -> bool:
@@ -544,97 +739,71 @@ volumes:
             progress = 0
             
             # Initial setup (0-5%)
-            await self.update_status("in_progress", progress, "Preparing TAK Server installation environment...")
+            await self.update_status("in_progress", progress)
             await self.create_working_directory()
             progress += weights['setup'] * 0.3
-            await self.update_status("in_progress", progress, "Working directory created successfully")
+            await self.update_status("in_progress", progress)
             await self.unzip_docker_release()
             progress += weights['setup'] * 0.7
-            await self.update_status("in_progress", progress, "TAK Server files extracted and validated")
+            await self.update_status("in_progress", progress)
 
             # Configuration (5-15%)
-            await self.copy_coreconfig()
-            progress += weights['config'] * 0.25
-            await self.update_status("in_progress", progress, "Core configuration files initialized")
-            await self.update_coreconfig_password()
-            progress += weights['config'] * 0.25
-            await self.update_status("in_progress", progress, "Database credentials configured")
-            await self.modify_coreconfig_with_sed_on_host()
-            progress += weights['config'] * 0.25
-            await self.update_status("in_progress", progress, "Server configuration updated with database settings")
-            await self.create_docker_compose_file()
-            progress += weights['config'] * 0.25
-            await self.update_status("in_progress", progress, "Docker environment configured successfully")
+            config_steps = [
+                self.copy_coreconfig,
+                self.update_coreconfig_password,
+                self.modify_coreconfig_with_sed_on_host,
+                self.create_docker_compose_file
+            ]
+            for step in config_steps:
+                await step()
+                progress += weights['config'] / len(config_steps)
+                await self.update_status("in_progress", progress)
 
             # Docker build and deployment (15-80%)
-            await self.update_status("in_progress", progress, "Initializing Docker container setup...")
-            
             build_start_progress = progress
-            build_weight = weights['docker_build']
+            build_weight = weights['docker_build'] + weights['docker_start']
             
-            # Send build message once before starting docker compose
-            await self.emit_event({
-                "type": "terminal",
-                "message": "Building TAK Server containers... This may take a few minutes",
-                "isError": False,
-                "timestamp": int(time.time() * 1000)
-            })
-
-            async def update_build_progress():
-                build_progress = 0
-                while build_progress < build_weight:
+            async def simulate_progress():
+                nonlocal progress
+                while progress < build_start_progress + build_weight:
+                    progress = min(progress + 1, build_start_progress + build_weight)
+                    await self.update_status("in_progress", progress)
                     await asyncio.sleep(2)
-                    build_progress = min(build_progress + 1, build_weight * 0.95)
-                    total_progress = build_start_progress + build_progress
-                    
-                    # Only send status update without terminal message
-                    await self.emit_event({
-                        "type": "status",
-                        "status": "in_progress",
-                        "progress": total_progress,
-                        "error": None,
-                        "isError": False,
-                        "timestamp": int(time.time() * 1000)
-                    })
             
-            progress_task = asyncio.create_task(update_build_progress())
-            
+            # Start progress simulation and docker operations concurrently
+            progress_task = asyncio.create_task(simulate_progress())
             await self.start_docker_compose()
-            
             progress_task.cancel()
-            try:
-                await progress_task
-            except asyncio.CancelledError:
-                pass
             
-            progress = build_start_progress + weights['docker_build']
-            await self.update_status("in_progress", progress, "Docker containers deployed successfully")
-            
-            await self.verify_containers()
-            progress += weights['docker_start']
-            await self.update_status("in_progress", progress, "Container health check passed")
+            # Finalize docker progress
+            progress = build_start_progress + build_weight
+            await self.update_status("in_progress", progress)
 
             # Certificate configuration (80-100%)
-            await self.update_status("in_progress", progress, "Setting up secure communication certificates...")
-            takserver_name = f"takserver-{self.takserver_version}"
-            await self.cert_config.configure_cert_metadata(takserver_name)
-            progress += weights['cert_config'] * 0.25
-            await self.update_status("in_progress", progress, "Certificate metadata configured successfully")
-            await self.cert_config.certificate_generation(takserver_name)
-            progress += weights['cert_config'] * 0.25
-            await self.update_status("in_progress", progress, "Security certificates generated")
-            await self.restart_takserver()
-            progress += weights['cert_config'] * 0.25
-            await self.update_status("in_progress", progress, "TAK Server restarted with new certificates")
-            await self.cert_config.run_certmod(takserver_name)
-            await self.cert_config.copy_client_cert_to_webaccess(takserver_name)
-            progress = 100
-            await self.update_status("complete", progress, "TAK Server installation completed successfully")
+            cert_steps = [
+                (self.cert_config.configure_cert_metadata, 0.25),
+                (self.cert_config.certificate_generation, 0.25),
+                (lambda _: self.restart_takserver(), 0.25),
+                (self.cert_config.run_certmod, 0.15),
+                (self.cert_config.copy_client_cert_to_webaccess, 0.10)
+            ]
+            for step, weight in cert_steps:
+                await step(f"takserver-{self.takserver_version}")
+                progress += weights['cert_config'] * weight
+                await self.update_status("in_progress", progress)
+
+            await self.update_status("complete", 100)
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": "\n🎉 Installation complete",
+                    "isError": False
+                })
             return True
 
         except Exception as e:
             error_message = f"Installation failed: {str(e)}"
-            await self.update_status("error", 100, "Installation encountered an error", error_message)
+            await self.update_status("error", 100, error=error_message)
             return False
 
 
