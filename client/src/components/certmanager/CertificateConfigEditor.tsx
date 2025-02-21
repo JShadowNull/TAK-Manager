@@ -77,7 +77,7 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
     const lowercase = 'abcdefghijklmnopqrstuvwxyz';
     const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const numbers = '0123456789';
-    const symbols = '!$+-:,.|';
+    const symbols = '!+-:,.';
     
     // Ensure at least one of each required type
     let password = [

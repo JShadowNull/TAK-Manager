@@ -18,15 +18,15 @@ const formSchema = z.object({
     .min(8, "Password must be at least 8 characters")
     .max(100, "Password must be less than 100 characters")
     .regex(
-      /^[a-zA-Z0-9!$+\-:,.|]+$/,
-      "Password cannot contain =, \", ', &, %, ^, *, ?, ¨, ´, `, /, \\, @, [], {}, (), ;, _, <, >, or #"
+      /^[a-zA-Z0-9!+\-:,.]+$/,
+      "Password cannot contain =, \", ', &, %, ^, *, ?, ¨, ´, `, /, \\, @, [], {}, (), ;, _, <, >, #, $, or |"
     ),
   certificate_password: z.string()
     .min(8, "Password must be at least 8 characters")
     .max(100, "Password must be less than 100 characters")
     .regex(
-      /^[a-zA-Z0-9!$+\-:,.|]+$/,
-      "Password cannot contain =, \", ', &, %, ^, *, ?, ¨, ´, `, /, \\, @, [], {}, (), ;, _, <, >, or #"
+      /^[a-zA-Z0-9!+\-:,.]+$/,
+      "Password cannot contain =, \", ', &, %, ^, *, ?, ¨, ´, `, /, \\, @, [], {}, (), ;, _, <, >, $, or #"
     ),
   organization: z.string()
     .min(2, "Organization name must be at least 2 characters")
@@ -207,7 +207,7 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
     const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const lowercase = 'abcdefghijklmnopqrstuvwxyz';
     const numbers = '0123456789';
-    const symbols = '!$+-:,.|';
+    const symbols = '!+-:,.';
     
     let password = '';
     
