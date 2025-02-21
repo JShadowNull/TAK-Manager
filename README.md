@@ -34,7 +34,7 @@ A comprehensive TAK Server management solution that provides a modern web interf
 - Vite for build tooling
 
 ### Backend
-- Python 3.11
+- Python 3.13.2
 - FastAPI
 - Docker support
 - SSE (Server-Sent Events) for real-time updates
@@ -44,7 +44,8 @@ A comprehensive TAK Server management solution that provides a modern web interf
 - Node.js >= 20.0.0
 - npm >= 10.0.0
 - Docker and Docker Compose (for containerized deployment)
-- Python 3.11 or higher (for local development)
+- Python 3.13.2 or higher (for local development)
+
 ## Getting Started
 
 ### Development Setup

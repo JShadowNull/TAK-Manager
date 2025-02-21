@@ -8,8 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.0] - 2025-02-21
 
-## [2.0.0] - 2025-02-21
-
 
 ### Added 🚀
 
@@ -63,8 +61,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.1.3] - 2025-02-19
 
-## [1.1.3] - 2025-02-19
-
 
 ### Added 🚀
 
@@ -103,8 +99,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bump version to v1.1.2
 - Bump project version to 1.1.2
 - Release tak-manager@1.1.3 [skip ci]
-
-## [1.1.2] - 2025-02-17
 
 ## [1.1.2] - 2025-02-17
 
@@ -161,8 +155,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.1.1] - 2025-02-14
 
-## [1.1.1] - 2025-02-14
-
 
 ### Other 📦
 
@@ -198,8 +190,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Simplify Windows docker image build script
 - Remove unneeded requirements file
 - Release tak-manager@1.1.1 [skip ci]
-
-## [1.1.0] - 2025-02-14
 
 ## [1.1.0] - 2025-02-14
 
