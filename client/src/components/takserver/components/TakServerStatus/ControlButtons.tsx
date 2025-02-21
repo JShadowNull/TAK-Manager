@@ -122,16 +122,34 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
   const handleStop = () => handleOperation('stop', 'stop');
   const handleRestart = () => handleOperation('restart', 'restart');
   
-  const handleUninstallClick = () => setShowUninstallConfirm(true);
+  const handleUninstallClick = () => {
+    setShowUninstallConfirm(true);
+  };
   
-  const handleUninstallConfirm = () => {
-    setShowUninstallConfirm(false);
-    setShowUninstallProgress(true);
-    handleOperation('uninstall', 'uninstall');
+  const handleUninstallConfirm = async () => {
+    try {
+      // Clear any previous errors and show progress popup before making API call
+      setShowUninstallConfirm(false);
+      setShowUninstallProgress(true);
+      
+      const response = await fetch('/api/takserver/uninstall-takserver', {
+        method: 'POST'
+      });
+
+      if (!response.ok) {
+        throw new Error(`Uninstallation failed: ${response.statusText}`);
+      }
+
+      await refreshServerStatus();
+    } catch (error) {
+      console.error('Uninstallation error:', error);
+      // Error handling will be shown in the progress dialog
+    }
   };
 
   const handleUninstallComplete = () => {
     setShowUninstallProgress(false);
+    onInstall(); // Reset to install view
   };
 
   return (

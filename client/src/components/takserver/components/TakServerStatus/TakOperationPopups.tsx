@@ -98,7 +98,8 @@ const Popups: React.FC<PopupsProps> = ({
     setIsUninstallationComplete(false);
 
     const uninstallStatus = new EventSource('/api/takserver/uninstall-status-stream');
-    uninstallStatus.addEventListener('uninstall-status', (event) => {
+    
+    const handleUninstallStatus = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'terminal') {
@@ -119,30 +120,18 @@ const Popups: React.FC<PopupsProps> = ({
       } catch (error) {
         // Error handling remains but without logging
       }
-    });
+    };
+
+    uninstallStatus.addEventListener('uninstall-status', handleUninstallStatus);
 
     return () => {
-      if (isUninstallationComplete && showUninstallComplete) {
-        uninstallStatus.close();
-      }
+      uninstallStatus.removeEventListener('uninstall-status', handleUninstallStatus);
+      uninstallStatus.close();
     };
   }, [showUninstallProgress]);
 
-  const handleUninstall = async () => {
-    try {
-      onUninstallConfirm();
-
-      const response = await fetch('/api/takserver/uninstall-takserver', {
-        method: 'POST'
-      });
-
-      if (!response.ok) {
-        throw new Error(`Uninstallation failed: ${response.statusText}`);
-      }
-    } catch (error) {
-      console.error('Uninstallation error:', error);
-      setUninstallError(error instanceof Error ? error.message : 'Uninstallation failed');
-    }
+  const handleUninstall = () => {
+    onUninstallConfirm();
   };
 
   const resetInstallState = () => {
@@ -159,7 +148,7 @@ const Popups: React.FC<PopupsProps> = ({
     setUninstallProgress(0);
     setUninstallError(undefined);
     setUninstallTerminalOutput([]);
-    setIsUninstallationComplete(true);
+    setIsUninstallationComplete(false);
     onUninstallComplete();
   };
 
