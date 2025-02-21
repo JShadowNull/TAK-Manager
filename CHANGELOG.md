@@ -6,6 +6,61 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [2.0.0] - 2025-02-21
+
+## [2.0.0] - 2025-02-21
+
+
+### Added 🚀
+
+
+- Add database password reset utility for TAK server
+
+
+### Changed 🔄
+
+
+- Improve download handling for certificates and data packages
+- Simplify window management and navigation
+- Modernize data package generation and preferences management
+- Reorganize project structure with API handlers
+- Modernize data package management with improved error handling and UI interactions
+- Clean up imports in data package manager
+- Improve release script with interactive version input
+- Enhance TAK server status and operation handling
+- Improve TAK server status logging and error handling
+- Simplify logging configuration in TAK server status script
+- Update Docker Compose commands and improve TAK server status checks
+- Enhance certificate and password validation with Zod schemas
+- Update password validation symbol set
+- Standardize password symbol set across components
+- Improve TAK server uninstallation process and error handling
+- Enhance certificate configuration with robust logging and error handling
+- Enhance TAK server installer with improved logging and progress tracking
+
+
+### Documentation 📦
+
+
+- Add comprehensive TAK Server Management API documentation
+
+
+### Fixed 🔧
+
+
+- Improve Docker repository key and dependency installation in DockerfileProd
+
+
+### Other 📦
+
+
+- Upgrade pywebview to version 5.4
+- Bump version to 1.1.3 in package-lock.json
+- Update Docker base image and Docker installation in Dockerfiles
+- Update tak-manager-wrapper submodule to latest commit
+- Add prompt-sync package for interactive CLI input
+- Release tak-manager@2.0.0 [skip ci]
+
 ## [1.1.3] - 2025-02-19
 
 ## [1.1.3] - 2025-02-19
