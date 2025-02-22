@@ -244,19 +244,20 @@ class CertConfig:
 
     async def run_certmod(self, container_name: str) -> None:
         """Configure user certificates by executing certmod command with retry logic."""
-        # Web service health check
+        # Database health check
         if self.emit_event:
             await self.emit_event({
                 "type": "terminal",
-                "message": "\n🔍 Checking TAK Server web interface availability...",
+                "message": "\n🔍 Checking database authentication status (waiting 15s for container startup)...",
                 "isError": False
             })
-            
-        tak_status = TakServerStatus(emit_event=self.emit_event)
-        webui_status = await tak_status.check_webui_availability()
         
-        if webui_status['status'] != 'available':
-            error_msg = f"Web UI precondition failed: {webui_status.get('error', 'Unknown error')}"
+        await asyncio.sleep(15)  # Container startup buffer
+        tak_status = TakServerStatus(emit_event=self.emit_event)
+        db_error_detected = await tak_status._check_database_logs()
+        
+        if db_error_detected:
+            error_msg = "Database authentication error detected (password mismatch)"
             
             # Database repair attempt logic
             if not hasattr(self, 'db_repair_attempted'):
@@ -272,10 +273,11 @@ class CertConfig:
                     await fix_db.fix_database_password()
                     self.db_repair_attempted = True
                     
-                    # Re-check web UI after repair
-                    webui_status = await tak_status.check_webui_availability()
-                    if webui_status['status'] != 'available':
-                        raise Exception(f"Web UI still unavailable after repair: {webui_status.get('error', 'Unknown error')}")
+                    # Re-check database after repair
+                    await asyncio.sleep(15)  # Wait for post-repair startup
+                    db_error_still_detected = await tak_status._check_database_logs()
+                    if db_error_still_detected:
+                        raise Exception("Database authentication error persists after repair")
                     
                     if self.emit_event:
                         await self.emit_event({
@@ -310,11 +312,11 @@ class CertConfig:
         if self.emit_event:
             await self.emit_event({
                 "type": "terminal",
-                "message": "✅ Web interface available. Starting certificate configuration...",
+                "message": "✅ Database authentication valid. Starting certificate configuration...",
                 "isError": False
             })
 
-        retries = 5
+        retries = 2  # Reduced from 5 to 2 attempts
         for attempt in range(1, retries + 1):
             status_msg = f"\n🔄 Attempt {attempt}/{retries}: Adding user {self.name} as admin..."
             if self.emit_event:
@@ -348,7 +350,7 @@ class CertConfig:
 
             # Handle retry logic
             if attempt < retries:
-                retry_msg = f"⚠️  Configuration attempt {attempt} failed. Retrying in 10 seconds..."
+                retry_msg = f"⚠️  Configuration attempt {attempt} failed. Retrying in 5 seconds..."
                 if self.emit_event:
                     await self.emit_event({
                         "type": "terminal",
@@ -356,7 +358,7 @@ class CertConfig:
                         "isError": True
                     })
                 logger.warning(retry_msg.strip())
-                await asyncio.sleep(10)
+                await asyncio.sleep(5)  # Reduced from 10 to 5 seconds
             else:
                 error_message = (f"❌ Critical error: Failed to add user {self.name} as admin after {retries} attempts. "
                                f"Final error: {result.stderr or 'Unknown error'}")

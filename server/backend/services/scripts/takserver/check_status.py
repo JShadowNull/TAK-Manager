@@ -184,59 +184,70 @@ class TakServerStatus:
         logger.info("Containers restarted")
         return {"status": "success", "message": "Containers restarted"}
 
+    async def _run_curl_check(self) -> Dict[str, Any]:
+        """Check tak-database container logs for successful startup."""
+        version = self.directory_helper.get_takserver_version()
+        if not version:
+            return {'status': 'error', 'error': 'TAK Server version not found'}
+        
+        container_name = f"tak-database-{version}"
+        try:
+            # Get minimal logs needed for check
+            result = await self.run_command.run_command_async(
+                ['docker', 'logs', '--tail', '1', container_name],
+                'health_check',
+                ignore_errors=True
+            )
+            
+            # Fast single-line pattern match
+            if "server started" in result.stdout.lower():
+                return {'status': 'up'}
+                
+            if "no such container" in result.stderr.lower():
+                return {'status': 'down', 'error': f'Container {container_name} not found'}
+                
+            return {'status': 'down', 'error': 'Server start not detected'}
+            
+        except Exception as e:
+            return {'status': 'error', 'error': str(e)}
+
     async def check_webui_availability(self) -> Dict[str, Any]:
-        """Check if TAK Server web UI becomes available within 60 seconds."""
+        """Check if database server starts within 60 seconds."""
         start_time = time.time()
-        timeout = 60  # Increased from 30 to 120 seconds
-        last_error = None
+        timeout = 60
         
         while (time.time() - start_time) < timeout:
             result = await self._run_curl_check()
             if result['status'] == 'up':
                 return {
                     'status': 'available',
-                    'message': 'Web UI is reachable',
-                    'error': result.get('error')
+                    'message': 'Database startup complete',
+                    'error': None
                 }
-            last_error = result.get('error')
-            await asyncio.sleep(1)
+            await asyncio.sleep(1)  # Check every second
 
-        logger.error(f'Timeout: {last_error}' if last_error else 'Web UI did not become reachable within 60 seconds')
+        logger.error('Database startup timeout')
         return {
             'status': 'unavailable',
-            'error': f'Timeout: {last_error}' if last_error else 'Web UI did not become reachable within 60 seconds'
+            'error': 'Timeout: Server did not complete startup within 60 seconds'
         }
 
-    async def _run_curl_check(self) -> Dict[str, Any]:
-        """Run curl command inside takserver container to check web UI availability."""
+    async def _check_database_logs(self) -> bool:
+        """Check tak-database container logs for authentication errors."""
         version = self.directory_helper.get_takserver_version()
         if not version:
-            logger.error('TAK Server version not found for web UI check')
-            return {'status': 'error', 'error': 'TAK Server version not found'}
-        
-        container_name = f"takserver-{version}"
-        command = [
-            'docker', 'exec', container_name,
-            'curl', '-k', '--head', 'https://localhost:8443'
-        ]
-        
+            return False
+
+        container_name = f"tak-database-{version}"
         try:
             result = await self.run_command.run_command_async(
-                command,
+                ['docker', 'logs', '--tail', '50', container_name],
                 'health_check',
-                ignore_errors=False
+                ignore_errors=True
             )
             
-            # Interpret results
-            if result.returncode == 56:  # Certificate error but server is up
-                return {'status': 'up'}
-            elif result.returncode == 35:  # Connection failed
-                logger.error(f'Web UI Connection failed: {result.stderr}')
-                return {'status': 'down', 'error': result.stderr}
-            elif result.returncode == 1:  # Container not running
-                return {'status': 'down', 'error': f'Container {container_name} not running'}
-            else:
-                return {'status': 'error', 'error': result.stderr}
-            
+            # Look for the specific authentication error
+            return "FATAL: password authentication failed for user \"martiuser\"" in result.stdout
         except Exception as e:
-            return {'status': 'error', 'error': str(e)}
+            logger.error(f"Error checking database logs: {str(e)}")
+            return False
