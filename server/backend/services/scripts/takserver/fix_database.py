@@ -85,6 +85,7 @@ class FixDatabase:
             result = await self.run_command.run_command_async(
                 command=command,
                 event_type="database_password_reset",
+                ignore_errors=False
             )
 
             if not result.success:
