@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '../../../shared/ui/shadcn/button';
-import { Input } from '../../../shared/ui/shadcn/input';
 import { HelpIconTooltip } from '../../../shared/ui/shadcn/tooltip/HelpIconTooltip';
 import { z } from 'zod';
+import { useDropzone } from 'react-dropzone';
+import { UploadCloud } from 'lucide-react';
 
 interface UpdatePluginsFormProps {
   onClose: () => void;
@@ -40,13 +41,32 @@ const UpdatePluginsForm: React.FC<UpdatePluginsFormProps> = ({ onClose, onUpdate
     }
   };
 
-  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    setFormData(prev => ({ ...prev, ota_zip_file: file || null }));
+  const onDrop = (acceptedFiles: File[]) => {
+    const file = acceptedFiles[0];
     if (file) {
+      setFormData(prev => ({ ...prev, ota_zip_file: file }));
       validateField('ota_zip_file', file);
     }
   };
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'application/zip': ['.zip']
+    },
+    maxSize: 8000000000, // 8GB
+    multiple: false
+  });
+
+  useEffect(() => {
+    window.handleNativeFileDrop = (fullPath: string) => {
+      const file = new File([fullPath], fullPath.split('/').pop() || 'file.zip', {
+        type: 'application/zip',
+        lastModified: Date.now()
+      });
+      setFormData(prev => ({ ...prev, ota_zip_file: file }));
+    };
+  }, []);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -84,11 +104,6 @@ const UpdatePluginsForm: React.FC<UpdatePluginsFormProps> = ({ onClose, onUpdate
         setErrors(newErrors);
       }
     }
-  };
-
-  const handleClearFile = () => {
-    setFormData(prev => ({ ...prev, ota_zip_file: null }));
-    setErrors({});
   };
 
   return (
@@ -129,17 +144,28 @@ const UpdatePluginsForm: React.FC<UpdatePluginsFormProps> = ({ onClose, onUpdate
             </label>
             <p className="text-sm text-muted-foreground">Example: ATAK-MIL_5.2.0_loadout.zip</p>
             
-            <Input
-              type="file"
-              id="plugin_zip_file"
-              name="plugin_zip_file"
-              accept=".zip"
-              onChange={handleInputChange}
-              onClearFile={handleClearFile}
-              error={errors.ota_zip_file}
-              placeholder="Click to select or drag and drop your ZIP file"
-              required
-            />
+            <div {...getRootProps()} className="flex flex-col gap-2 cursor-pointer">
+              <input {...getInputProps()} />
+              <div className={`border-2 border-dashed rounded-lg p-6 text-center 
+                ${isDragActive ? 'border-primary bg-primary/10' : 'border-border'}
+                ${errors.ota_zip_file ? 'border-red-500' : ''}`}>
+                <div className="flex flex-col items-center gap-2">
+                  <UploadCloud className="h-8 w-8 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    {isDragActive ? (
+                      "Drop the ZIP file here"
+                    ) : formData.ota_zip_file ? (
+                      <span className="text-primary">{formData.ota_zip_file.name}</span>
+                    ) : (
+                      "Drag and drop your plugins ZIP file here, or click to select"
+                    )}
+                  </p>
+                  {errors.ota_zip_file && (
+                    <p className="text-sm text-red-500">{errors.ota_zip_file}</p>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="flex justify-end gap-4 mt-4">

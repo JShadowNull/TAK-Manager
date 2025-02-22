@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '../../../shared/ui/shadcn/button';
-import { Input } from '../../../shared/ui/shadcn/input';
 import { HelpIconTooltip } from '../../../shared/ui/shadcn/tooltip/HelpIconTooltip';
 import OtaPopups from './OtaPopups';
+import { useDropzone } from 'react-dropzone';
+import { UploadCloud } from 'lucide-react';
 
 interface OtaConfigurationFormProps {
   onClose: () => void;
@@ -40,20 +41,36 @@ const OtaConfigurationForm: React.FC<OtaConfigurationFormProps> = ({ onClose }) 
     return '';
   };
 
-  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    setOtaFormData(prev => ({ ...prev, ota_zip_file: file || null }));
-    
-    // Only validate and update errors if form has been submitted once
-    if (hasAttemptedSubmit && file) {
-      const fieldError = validateField('ota_zip_file', file);
-      setErrors(prev => ({
-        ...prev,
-        ota_zip_file: fieldError,
-        submit: '' // Clear any submit-level errors
-      }));
+  const onDrop = (acceptedFiles: File[]) => {
+    const file = acceptedFiles[0];
+    if (file) {
+      setOtaFormData(prev => ({ ...prev, ota_zip_file: file }));
+      // Validate immediately if submission was attempted
+      if (hasAttemptedSubmit) {
+        const fieldError = validateField('ota_zip_file', file);
+        setErrors(prev => ({ ...prev, ota_zip_file: fieldError }));
+      }
     }
   };
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'application/zip': ['.zip']
+    },
+    maxSize: 8000000000, // 8GB
+    multiple: false
+  });
+
+  useEffect(() => {
+    window.handleNativeFileDrop = (fullPath: string) => {
+      const file = new File([fullPath], fullPath.split('/').pop() || 'file.zip', {
+        type: 'application/zip',
+        lastModified: Date.now()
+      });
+      setOtaFormData(prev => ({ ...prev, ota_zip_file: file }));
+    };
+  }, []);
 
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {};
@@ -103,11 +120,6 @@ const OtaConfigurationForm: React.FC<OtaConfigurationFormProps> = ({ onClose }) 
     onClose();
   };
 
-  const handleClearFile = () => {
-    setOtaFormData(prev => ({ ...prev, ota_zip_file: null }));
-    setErrors({});
-  };
-
   return (
     <>
       <div className="w-full border border-border bg-card p-6 rounded-lg break-normal">
@@ -148,17 +160,28 @@ const OtaConfigurationForm: React.FC<OtaConfigurationFormProps> = ({ onClose }) 
               </label>
               <p className="text-sm text-muted-foreground">Example: ATAK-MIL_5.2.0_loadout.zip</p>
               
-              <Input
-                type="file"
-                id="ota_zip_file"
-                name="ota_zip_file"
-                accept=".zip"
-                onChange={handleInputChange}
-                onClearFile={handleClearFile}
-                error={errors.ota_zip_file}
-                placeholder="Click to select or drag and drop your ZIP file"
-                required
-              />
+              <div {...getRootProps()} className="flex flex-col gap-2 cursor-pointer">
+                <input {...getInputProps()} />
+                <div className={`border-2 border-dashed rounded-lg p-6 text-center 
+                  ${isDragActive ? 'border-primary bg-primary/10' : 'border-border'}
+                  ${errors.ota_zip_file ? 'border-red-500' : ''}`}>
+                  <div className="flex flex-col items-center gap-2">
+                    <UploadCloud className="h-8 w-8 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">
+                      {isDragActive ? (
+                        "Drop the ZIP file here"
+                      ) : otaFormData.ota_zip_file ? (
+                        <span className="text-primary">{otaFormData.ota_zip_file.name}</span>
+                      ) : (
+                        "Drag and drop your OTA ZIP file here, or click to select"
+                      )}
+                    </p>
+                    {errors.ota_zip_file && (
+                      <p className="text-sm text-red-500">{errors.ota_zip_file}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="flex justify-end gap-4 mt-4">

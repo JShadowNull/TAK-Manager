@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Input } from '../../../shared/ui/shadcn/input';
 import { Button } from '../../../shared/ui/shadcn/button';
 import { HelpIconTooltip } from '../../../shared/ui/shadcn/tooltip/HelpIconTooltip';
-import { Eye, EyeOff, Wand2 } from 'lucide-react';
+import { Eye, EyeOff, Wand2, UploadCloud } from 'lucide-react';
 import { z } from 'zod';
 import Popups from './TakOperationPopups';
+import { useDropzone } from 'react-dropzone';
 
 // Form validation schema
 const formSchema = z.object({
@@ -227,6 +228,37 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
     return password.split('').sort(() => Math.random() - 0.5).join('');
   };
 
+  const onDrop = (acceptedFiles: File[]) => {
+    const file = acceptedFiles[0];
+    if (file) {
+      setFormData(prev => ({ ...prev, docker_zip_file: file }));
+      // Validate immediately if submission was attempted
+      if (hasAttemptedSubmit) {
+        const fieldError = validateField('docker_zip_file', file);
+        setErrors(prev => ({ ...prev, docker_zip_file: fieldError }));
+      }
+    }
+  };
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'application/zip': ['.zip']
+    },
+    maxSize: 5000000000, // 5GB
+    multiple: false
+  });
+
+  useEffect(() => {
+    window.handleNativeFileDrop = (fullPath: string) => {
+      const file = new File([fullPath], fullPath.split('/').pop() || 'file.zip', {
+        type: 'application/zip',
+        lastModified: Date.now()
+      });
+      setFormData(prev => ({ ...prev, docker_zip_file: file }));
+    };
+  }, []);
+
   return (
     <>
       <div className="w-full border border-border bg-card p-6 rounded-lg break-normal">
@@ -261,25 +293,28 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* File Upload Section */}
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-semibold text-primary">
-                Docker ZIP File <span className="text-red-500">*</span>
-              </label>
-              <p className="text-sm text-muted-foreground">Example: takserver-docker-5.2-RELEASE-43.zip</p>
-              <Input
-                type="file"
-                id="docker_zip_file"
-                onChange={handleInputChange}
-                onClearFile={() => {
-                  setFormData(prev => ({ ...prev, docker_zip_file: null }));
-                  setErrors({});
-                }}
-                error={errors.docker_zip_file}
-                placeholder="Click to select or drag and drop your ZIP file"
-                accept=".zip"
-                required
-              />
+            {/* File Upload Section - Modified for drag and drop */}
+            <div {...getRootProps()} className="flex flex-col gap-2 cursor-pointer">
+              <input {...getInputProps()} />
+              <div className={`border-2 border-dashed rounded-lg p-6 text-center 
+                ${isDragActive ? 'border-primary bg-primary/10' : 'border-border'}
+                ${errors.docker_zip_file ? 'border-red-500' : ''}`}>
+                <div className="flex flex-col items-center gap-2">
+                  <UploadCloud className="h-8 w-8 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    {isDragActive ? (
+                      "Drop the ZIP file here"
+                    ) : formData.docker_zip_file ? (
+                      <span className="text-primary">{formData.docker_zip_file.name}</span>
+                    ) : (
+                      "Drag and drop your Docker ZIP file here, or click to select"
+                    )}
+                  </p>
+                  {errors.docker_zip_file && (
+                    <p className="text-sm text-red-500">{errors.docker_zip_file}</p>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Form Fields */}
