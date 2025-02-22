@@ -9,10 +9,9 @@ interface TakServerState {
 
 interface StatusDisplayProps {
   takState: TakServerState;
-  error?: string;
 }
 
-const StatusDisplay: React.FC<StatusDisplayProps> = ({ takState, error }) => (
+const StatusDisplay: React.FC<StatusDisplayProps> = ({ takState}) => (
   <div className="mb-4">
     <div className="flex flex-col gap-1">
       <p className="text-sm flex items-center gap-2">
@@ -41,11 +40,6 @@ const StatusDisplay: React.FC<StatusDisplayProps> = ({ takState, error }) => (
         </p>
       )}
     </div>
-    {error && (
-      <p className="text-sm text-destructive mt-2">
-        Error: {error}
-      </p>
-    )}
   </div>
 );
 
