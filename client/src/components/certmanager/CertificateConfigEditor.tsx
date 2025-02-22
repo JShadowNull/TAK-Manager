@@ -499,7 +499,7 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
                 <div className="flex items-center gap-2">
                   <Label>Groups</Label>
                   <HelpIconTooltip 
-                    tooltip="General access groups"
+                    tooltip="You will receive and send data to these groups."
                     side="top"
                     triggerMode="hover"
                   />
@@ -525,7 +525,7 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
                 <div className="flex items-center gap-2">
                   <Label>Inbound Groups</Label>
                   <HelpIconTooltip 
-                    tooltip="Groups for incoming data connections."
+                    tooltip="You will send data to these groups. You will not receive data from these groups."
                     side="top"
                     triggerMode="hover"
                   />
@@ -551,7 +551,7 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
                 <div className="flex items-center gap-2">
                   <Label>Outbound Groups</Label>
                   <HelpIconTooltip 
-                    tooltip="Groups for outgoing data connections."
+                    tooltip="You will receive all data from these groups. These groups will not see your data."
                     side="top"
                     triggerMode="hover"
                   />
