@@ -1,10 +1,7 @@
 import os
 import sys
 import uvicorn
-from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
 
 # Add the server directory to Python path
 server_dir = os.path.dirname(os.path.abspath(__file__))
@@ -21,13 +18,13 @@ def start_server():
     """Start the FastAPI server."""
     try:
         # Get configuration
-        port = os.environ.get('BACKEND_PORT')
+        port = os.getenv('BACKEND_PORT')
         if port is None:
             logger.error("BACKEND_PORT environment variable is not set.")
             raise ValueError("BACKEND_PORT must be set.")
         port = int(port)
         
-        is_dev = os.environ.get('MODE', 'development') == 'development'
+        is_dev = os.getenv('MODE', 'development') == 'development'
         
         # Create and configure FastAPI app
         app = create_app()

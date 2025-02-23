@@ -1,14 +1,10 @@
 import os
 import sys
 import logging
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
 
 def get_default_level():
     """Get the default log level based on mode"""
-    return logging.DEBUG if os.environ.get('MODE') == 'development' else logging.INFO
+    return logging.DEBUG if os.getenv('MODE') == 'development' else logging.INFO
 
 def configure_logging(name, level=None):
     """Simple logging configuration that outputs to both file and console.

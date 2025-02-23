@@ -11,13 +11,11 @@ from typing import Dict, Any, Optional, Callable
 import asyncio
 import docker
 import xml.etree.ElementTree as ET
-from dotenv import load_dotenv
 from backend.services.helpers.directories import DirectoryHelper
 from backend.services.scripts.takserver.check_status import TakServerStatus
 
 
 # Load environment variables from .env file
-load_dotenv()
 
 class TakServerInstaller:
     def __init__(
