@@ -7,10 +7,8 @@ services:
     container_name: tak-manager-development
     restart: ${RESTART_POLICY}
     privileged: true
-    env_file: .env.dev
-    environment:
-      - TAK_SERVER_INSTALL_DIR=${TAK_SERVER_INSTALL_DIR}
-      - FRONTEND_PORT=${FRONTEND_PORT}
+    env_file: 
+      - .env.dev
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./logs:/app/logs:rw
