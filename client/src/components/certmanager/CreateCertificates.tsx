@@ -513,9 +513,9 @@ const CreateCertificates: React.FC = () => {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor={`password-${index}`} className="flex items-center gap-2 break-normal">
-                        Password (Optional)
+                         Password for Enrollment (Optional)
                         <HelpIconTooltip 
-                          tooltip="Optional password for the certificate. If not provided no password will be set."
+                          tooltip="Optional password for certificate enrollment. Enter if you prefer to use a password over uploading the certificate manually to ATAK. This is not the same as the certificate password."
                           triggerMode="hover"
                           iconSize={14}
                         />
