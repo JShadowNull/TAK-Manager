@@ -1,4 +1,4 @@
-import React, { useEffect, memo, useCallback, useState } from 'react';
+import React, { useEffect, memo, useCallback, useState, useMemo } from 'react';
 import PreferenceItem from '../shared/PreferenceItem';
 import { ATAK_PREFERENCES, PREFERENCE_CATEGORIES, PreferenceState, addCustomPreference, loadCustomPreferences, saveCustomPreferences, AtakPreference} from './atakPreferencesConfig';
 import { ScrollArea } from "@/components/shared/ui/shadcn/scroll-area";
@@ -9,6 +9,10 @@ import { Label } from "@/components/shared/ui/shadcn/label";
 import { AtakConfirmDefaults } from './atakConfirmDefaults';
 import { AtakPreferencesNav } from './AtakPreferencesNav';
 import AtakCustomSettings from './AtakCustomSettings';
+import { Input } from "@/components/shared/ui/shadcn/input";
+import { Search } from 'lucide-react';
+import { Separator } from "@/components/shared/ui/shadcn/separator";
+
 
 interface AtakPreferencesSectionProps {
   preferences: Record<string, PreferenceState>;
@@ -45,6 +49,7 @@ const AtakPreferencesSection: React.FC<AtakPreferencesSectionProps> = memo(({
     Object.keys(PREFERENCE_CATEGORIES)[0]
   );
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Initialize new preferences only when they don't exist
   useEffect(() => {
@@ -65,6 +70,16 @@ const AtakPreferencesSection: React.FC<AtakPreferencesSectionProps> = memo(({
 
   // Add custom preferences to ATAK_PREFERENCES
   const allPreferences = [...ATAK_PREFERENCES, ...customPreferences];
+
+  // Combined search filtering logic
+  const filteredPreferences = useMemo(() => {
+    if (!searchTerm) return allPreferences;
+    const lowerSearch = searchTerm.toLowerCase();
+    return allPreferences.filter(pref =>
+      pref.name.toLowerCase().includes(lowerSearch) ||
+      pref.label.toLowerCase().includes(lowerSearch)
+    );
+  }, [allPreferences, searchTerm]);
 
   // Validate a single field
   const validateField = useCallback((label: string): Record<string, string> => {
@@ -328,8 +343,8 @@ const AtakPreferencesSection: React.FC<AtakPreferencesSectionProps> = memo(({
   }, []);
 
   return (
-    <div className="h-[calc(100vh-200px)]">
-      <div className="bg-background p-4 mb-2">
+    <div className="h-screen overflow-auto">
+      <div className="bg-background p-4">
         <div className="flex items-center justify-between bg-card p-4 rounded-lg shadow-md border border-border">
           <Label className="text-lg font-medium">ATAK Settings</Label>
           <div className="flex gap-2">
@@ -337,6 +352,19 @@ const AtakPreferencesSection: React.FC<AtakPreferencesSectionProps> = memo(({
               handleReset={handleReset}
               showDefaultDialog={resetDialogOpen}
               onDefaultDialogChange={setResetDialogOpen}
+            />
+          </div>
+        </div>
+        <div className="mt-4 bg-card p-4 rounded-lg shadow-md border border-border">
+          <Label className="text-lg font-medium mb-4 block">Locate</Label>
+          <div className="relative">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Search settings..."
+              className="w-full pl-8"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
         </div>
@@ -348,87 +376,146 @@ const AtakPreferencesSection: React.FC<AtakPreferencesSectionProps> = memo(({
         categories={PREFERENCE_CATEGORIES}
       />
 
-      <ScrollArea className="h-[calc(100%-140px)]">
+      <ScrollArea className="h-full border border-border rounded-lg">
         <div className="space-y-6 px-4">
-          {/* Render active category - now includes custom settings */}
-          {Object.entries(PREFERENCE_CATEGORIES)
-            .filter(([key]) => key === activeCategory)
-            .map(([categoryKey, categoryName]) => {
-              if (categoryKey === 'CUSTOM') {
-                return (
-                  <div key="custom" className="bg-card p-4 rounded-lg shadow-lg border border-border break-normal">
-                    <AtakCustomSettings
-                      customPreferences={customPreferences}
-                      preferences={preferences}
-                      touchedFields={touchedFields}
-                      displayErrors={displayErrors}
-                      deleteMode={deleteMode}
-                      selectedSettings={selectedSettings}
-                      showAddDialog={showAddDialog}
-                      editingPreference={editingPreference}
-                      newPreference={newPreference}
-                      onPreferenceChange={handlePreferenceChange}
-                      onEnableChange={handleEnableChange}
-                      onBlur={handleBlur}
-                      onToggleSelection={handleToggleSelection}
-                      onSelectAll={handleSelectAll}
-                      onEditPreference={handleEditPreference}
-                      onSavePreference={handleSavePreference}
-                      onShowAddDialogChange={setShowAddDialog}
-                      onRemoveSelectedCustomPreferences={handleRemoveSelectedCustomPreferences}
-                      onDeleteModeChange={setDeleteMode}
-                      onNewPreferenceChange={handleNewPreferenceChange}
-                    />
+          {searchTerm ? (
+            <div className="bg-card p-4 rounded-lg break-normal">
+              <div className="sticky top-0 bg-card z-10 pt-5">
+                <h3 className="text-xl font-semibold text-primary">
+                  Search Results ({filteredPreferences.length})
+                </h3>
+                <Separator className="my-5"/>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {filteredPreferences.length === 0 ? (
+                  <div className="text-muted-foreground col-span-full py-2 text-center">
+                    No settings found matching "{searchTerm}"
                   </div>
-                );
-              }
-
-              const categoryPreferences = allPreferences.filter(item => item.category === categoryKey);
-              if (categoryPreferences.length === 0) return null;
-
-              return (
-                <div key={categoryKey} className="bg-card p-4 rounded-lg shadow-lg border border-border break-normal">
-                  <h3 className="text-xl font-semibold text-primary mb-4">{categoryName}</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {categoryPreferences.map((item) => {
-                      const pref = preferences[item.label] || {};
-                      const isPreferenceEnabled = pref.enabled !== undefined ? pref.enabled : false;
-                      const fieldValue = pref.value !== undefined ? pref.value : '';
-
-                      return (
-                        <div key={item.label} className="relative">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="font-medium">{item.name}</span>
-                            <Switch
-                              checked={isPreferenceEnabled}
-                              onCheckedChange={(enabled) => handleEnableChange(item.label, enabled)}
-                            />
-                          </div>
-                          <PreferenceItem
-                            name={item.name}
-                            label={item.label}
-                            input_type={item.input_type}
-                            value={fieldValue}
-                            options={item.options || []}
-                            isPreferenceEnabled={isPreferenceEnabled}
-                            required={true}
-                            placeholder={item.placeholder}
-                            onChange={(e) => handlePreferenceChange(item.label, e.target.value)}
-                            onPreferenceEnableChange={(enabled) => handleEnableChange(item.label, enabled)}
-                            onBlur={() => handleBlur(item.label)}
-                            min={item.min}
-                            max={item.max}
-                            showLabel={false}
-                            showEnableToggle={false}
-                            error={touchedFields[item.label] ? displayErrors[item.label] : undefined}
+                ) : (
+                  filteredPreferences.map((item) => {
+                    const pref = preferences[item.label] || {};
+                    const isPreferenceEnabled = pref.enabled !== undefined ? pref.enabled : false;
+                    const fieldValue = pref.value !== undefined ? pref.value : '';
+                    
+                    return (
+                      <div key={item.label} className="relative">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-medium">{item.name}</span>
+                          <Switch
+                            checked={isPreferenceEnabled}
+                            onCheckedChange={(enabled) => handleEnableChange(item.label, enabled)}
                           />
                         </div>
-                      );
-                    })}
+                        <PreferenceItem
+                          name={item.name}
+                          label={item.label}
+                          input_type={item.input_type}
+                          value={fieldValue}
+                          options={item.options || []}
+                          isPreferenceEnabled={isPreferenceEnabled}
+                          required={true}
+                          placeholder={item.placeholder}
+                          onChange={(e) => handlePreferenceChange(item.label, e.target.value)}
+                          onPreferenceEnableChange={(enabled) => handleEnableChange(item.label, enabled)}
+                          onBlur={() => handleBlur(item.label)}
+                          min={item.min}
+                          max={item.max}
+                          showLabel={false}
+                          showEnableToggle={false}
+                          error={touchedFields[item.label] ? displayErrors[item.label] : undefined}
+                        />
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          ) : (
+            // Existing category view
+            Object.entries(PREFERENCE_CATEGORIES)
+              .filter(([key]) => key === activeCategory)
+              .map(([categoryKey, categoryName]) => {
+                if (categoryKey === 'CUSTOM') {
+                  return (
+                    <div key="custom" className="bg-card p-4 rounded-lg shadow-lg border border-border break-normal">
+                      <AtakCustomSettings
+                        customPreferences={customPreferences}
+                        preferences={preferences}
+                        touchedFields={touchedFields}
+                        displayErrors={displayErrors}
+                        deleteMode={deleteMode}
+                        selectedSettings={selectedSettings}
+                        showAddDialog={showAddDialog}
+                        editingPreference={editingPreference}
+                        newPreference={newPreference}
+                        onPreferenceChange={handlePreferenceChange}
+                        onEnableChange={handleEnableChange}
+                        onBlur={handleBlur}
+                        onToggleSelection={handleToggleSelection}
+                        onSelectAll={handleSelectAll}
+                        onEditPreference={handleEditPreference}
+                        onSavePreference={handleSavePreference}
+                        onShowAddDialogChange={setShowAddDialog}
+                        onRemoveSelectedCustomPreferences={handleRemoveSelectedCustomPreferences}
+                        onDeleteModeChange={setDeleteMode}
+                        onNewPreferenceChange={handleNewPreferenceChange}
+                      />
+                    </div>
+                  );
+                }
+
+                const categoryPreferences = allPreferences.filter(item => item.category === categoryKey);
+                if (categoryPreferences.length === 0) return null;
+
+                return (
+                  <div key={categoryKey} className="bg-card p-4 rounded-lg shadow-lg break-normal">
+                    <div className="sticky top-0 bg-card z-10 pt-5">
+                      <h3 className="text-xl font-semibold text-primary">
+                        {categoryName}
+                      </h3>
+                      <Separator className="my-5"/>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {categoryPreferences.map((item) => {
+                        const pref = preferences[item.label] || {};
+                        const isPreferenceEnabled = pref.enabled !== undefined ? pref.enabled : false;
+                        const fieldValue = pref.value !== undefined ? pref.value : '';
+
+                        return (
+                          <div key={item.label} className="relative">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-medium">{item.name}</span>
+                              <Switch
+                                checked={isPreferenceEnabled}
+                                onCheckedChange={(enabled) => handleEnableChange(item.label, enabled)}
+                              />
+                            </div>
+                            <PreferenceItem
+                              name={item.name}
+                              label={item.label}
+                              input_type={item.input_type}
+                              value={fieldValue}
+                              options={item.options || []}
+                              isPreferenceEnabled={isPreferenceEnabled}
+                              required={true}
+                              placeholder={item.placeholder}
+                              onChange={(e) => handlePreferenceChange(item.label, e.target.value)}
+                              onPreferenceEnableChange={(enabled) => handleEnableChange(item.label, enabled)}
+                              onBlur={() => handleBlur(item.label)}
+                              min={item.min}
+                              max={item.max}
+                              showLabel={false}
+                              showEnableToggle={false}
+                              error={touchedFields[item.label] ? displayErrors[item.label] : undefined}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+          )}
         </div>
       </ScrollArea>
     </div>
