@@ -8,6 +8,10 @@ import uuid
 from backend.config.logging_config import configure_logging
 from backend.services.helpers.directories import DirectoryHelper
 import shutil
+import aiofiles
+from fastapi import UploadFile
+import mimetypes
+import datetime
 
 logger = configure_logging(__name__)
 
@@ -152,8 +156,8 @@ class DataPackage:
             logger.error(f"Config generation failed: {str(e)}")
             raise Exception(f"Configuration file creation error: {str(e)}")
 
-    def create_manifest_file(self, temp_dir, zip_name, ca_certs, client_certs):
-        """Creates a clean manifest file in the temporary directory"""
+    def create_manifest_file(self, temp_dir, zip_name, ca_certs, client_certs, custom_files):
+        """Updated manifest creation with custom files at root level"""
         try:
             manifest_dir = os.path.join(temp_dir, 'MANIFEST')
             os.makedirs(manifest_dir, exist_ok=True)
@@ -180,6 +184,11 @@ class DataPackage:
             if client_certs:
                 for client_cert in client_certs:
                     manifest_content += f'\n        <Content ignore="false" zipEntry="cert/{client_cert}"/>'
+            
+            # Add custom files at root level
+            if custom_files:
+                for custom_file in custom_files:
+                    manifest_content += f'\n        <Content ignore="false" zipEntry="{os.path.basename(custom_file)}"/>'
             
             # Always add the initial.pref entry last
             manifest_content += f'\n        <Content ignore="false" zipEntry="initial.pref"/>'
@@ -267,29 +276,65 @@ class DataPackage:
             logger.error(f"Zip creation failed: {str(e)}")
             raise Exception(f"Package creation error: {str(e)}")
 
+    async def copy_custom_files(self, temp_dir, custom_files):
+        """Copy custom files to temp directory at root level"""
+        try:
+            logger.debug(f"[copy_custom_files] Starting to copy files: {custom_files}")
+            custom_dir = self.get_custom_files_directory()
+            logger.debug(f"[copy_custom_files] Custom files directory: {custom_dir}")
+            
+            for filename in custom_files:
+                src = os.path.join(custom_dir, filename)
+                dest = os.path.join(temp_dir, os.path.basename(filename))
+                logger.debug(f"[copy_custom_files] Copying {src} -> {dest}")
+                
+                if os.path.exists(src):
+                    shutil.copy2(src, dest)
+                    logger.debug(f"[copy_custom_files] Successfully copied {filename}")
+                else:
+                    logger.warning(f"[copy_custom_files] File not found: {src}")
+        except Exception as e:
+            logger.error(f"[copy_custom_files] Failed to copy files: {str(e)}")
+            raise
+
     async def main(self, preferences_data) -> Dict[str, Any]:
-        """Main configuration handler"""
+        """Updated main method with custom files handling"""
         try:
             with tempfile.TemporaryDirectory() as temp_dir:
                 zip_name = preferences_data.get('#zip_file_name', 'data_package')
+                custom_files = preferences_data.get('customFiles', [])
+                logger.debug(f"[main] Processing custom files: {custom_files}")
                 
                 # Extract certificate names
                 stream_count = int(preferences_data.get('count', 1))
                 ca_certs, client_certs = self._extract_certificates(preferences_data, stream_count)
                 
-                # Generate configuration
+                # Generate configuration (without custom files in preferences)
                 clean_preferences = self._clean_preferences_data(preferences_data)
+                if 'customFiles' in clean_preferences:
+                    logger.debug("[main] Removing customFiles from preferences")
+                    del clean_preferences['customFiles']  # Remove custom files from preferences
                 self.generate_config_pref(clean_preferences, temp_dir)
-                self.create_manifest_file(temp_dir, zip_name, ca_certs, client_certs)
                 
+                # Create manifest with custom files
+                manifest_path = self.create_manifest_file(temp_dir, zip_name, ca_certs, client_certs, custom_files)
+                logger.debug(f"[main] Created manifest at: {manifest_path}")
+                
+                # Copy certificates if needed
                 if ca_certs or client_certs:
                     await self.copy_certificates_from_container(temp_dir, ca_certs, client_certs)
+                
+                # Copy custom files to root of temp directory
+                await self.copy_custom_files(temp_dir, custom_files)
+                
+                # Log directory contents before zipping
+                logger.debug(f"[main] Temp directory contents: {os.listdir(temp_dir)}")
                 
                 zip_path = await self.create_zip_file(temp_dir, zip_name)
                 return {'status': 'success', 'path': zip_path}
 
         except Exception as e:
-            logger.error(f"Data package creation failed: {str(e)}")
+            logger.error(f"[main] Data package creation failed: {str(e)}")
             return {'error': str(e)}
 
     def _extract_certificates(self, preferences_data, stream_count):
@@ -347,3 +392,57 @@ class DataPackage:
         except Exception as e:
             logger.error(f"Certificate listing error: {str(e)}")
             raise Exception(f"Failed to list certificates: {str(e)}")
+
+    def get_custom_files_directory(self):
+        """Get the directory for storing custom files"""
+        custom_dir = os.path.join(self.directory_helper.get_data_packages_directory(), 'customfiles')
+        os.makedirs(custom_dir, exist_ok=True)
+        return custom_dir
+
+    async def list_custom_files(self) -> list:
+        """List all uploaded custom files"""
+        custom_dir = self.get_custom_files_directory()
+        return [f for f in os.listdir(custom_dir) if os.path.isfile(os.path.join(custom_dir, f))]
+
+    async def list_custom_files_with_metadata(self) -> list:
+        """List all uploaded custom files with metadata"""
+        custom_dir = self.get_custom_files_directory()
+        files = []
+        
+        for filename in os.listdir(custom_dir):
+            file_path = os.path.join(custom_dir, filename)
+            if os.path.isfile(file_path):
+                try:
+                    stat = os.stat(file_path)
+                    mime_type, _ = mimetypes.guess_type(filename)
+                    
+                    files.append({
+                        'name': filename,
+                        'size': stat.st_size,
+                        'type': mime_type or 'application/octet-stream',
+                        'lastModified': datetime.datetime.fromtimestamp(stat.st_mtime).isoformat()
+                    })
+                except Exception as e:
+                    logger.error(f"Error getting metadata for {filename}: {str(e)}")
+                    continue
+                
+        return files
+
+    async def save_custom_file(self, file: UploadFile):
+        """Save an uploaded custom file"""
+        custom_dir = self.get_custom_files_directory()
+        file_path = os.path.join(custom_dir, file.filename)
+        
+        async with aiofiles.open(file_path, 'wb') as f:
+            while content := await file.read(1024):
+                await f.write(content)
+
+    async def delete_custom_file(self, filename: str):
+        """Delete a custom file from the server"""
+        custom_dir = self.get_custom_files_directory()
+        file_path = os.path.join(custom_dir, filename)
+        
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        else:
+            raise FileNotFoundError(f"File {filename} not found")

@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 class TakServerConfig(BaseModel):
     count: str
@@ -14,4 +14,5 @@ class DataPackageRequest(BaseModel):
     takServerConfig: TakServerConfig
     atakPreferences: Dict[str, Any]
     clientCert: str
-    zipFileName: str 
+    zipFileName: str
+    customFiles: List[str]  # List of filenames to include 

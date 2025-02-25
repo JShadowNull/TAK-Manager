@@ -7,6 +7,7 @@ import { PreferenceState } from '../components/datapackage/AtakPreferencesSectio
 import { useTakServerRequired } from '../components/shared/hooks/useTakServerRequired';
 import TakServerRequiredDialog from '../components/shared/TakServerRequiredDialog';
 import ExistingDataPackages from '../components/datapackage/ExistingDataPackages/ExistingDataPackages';
+import UploadCustomFilesSection from '../components/datapackage/UploadCustomFilesSection/UploadCustomFilesSection';
 
 interface ValidationErrors {
   cotStreams: Record<string, string>;
@@ -31,9 +32,16 @@ const DataPackage: React.FC = () => {
   const [preferences, setPreferences] = useState<Record<string, PreferenceState>>(() => {
     const cotStreams = localStorage.getItem('cotStreamsPreferences');
     const atak = localStorage.getItem('atakPreferences');
+    const customFiles = localStorage.getItem('customFilesPreferences');
+    
+    console.log('[DataPackage] Initializing preferences:', {
+      customFiles: customFiles ? JSON.parse(customFiles) : null
+    });
+
     return {
       ...(cotStreams ? JSON.parse(cotStreams) : {}),
-      ...(atak ? JSON.parse(atak) : {})
+      ...(atak ? JSON.parse(atak) : {}),
+      ...(customFiles ? { customFiles: JSON.parse(customFiles) } : {})
     };
   });
 
@@ -191,6 +199,24 @@ const DataPackage: React.FC = () => {
     };
   }, [validationErrors, preferences]);
 
+  // Update files handling to send only enabled files
+  const handleFilesChange = useCallback((files: { customFiles: PreferenceState }) => {
+    console.log('[DataPackage] Handling files change:', files);
+    
+    setPreferences(prev => {
+      const newPrefs = {
+        ...prev,
+        customFiles: files.customFiles
+      };
+      
+      // Save custom files preferences to localStorage
+      localStorage.setItem('customFilesPreferences', JSON.stringify(files.customFiles));
+      
+      console.log('[DataPackage] Updated preferences:', newPrefs);
+      return newPrefs;
+    });
+  }, []);
+
   const renderContent = () => (
     <div className={`bg-background text-foreground pt-4 ${!isServerRunning ? 'pointer-events-none opacity-50' : ''}`}>
       <div className="mx-auto space-y-8">
@@ -208,6 +234,12 @@ const DataPackage: React.FC = () => {
                 className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:rounded-lg"
               >
                 ATAK Settings
+              </TabsTrigger>
+              <TabsTrigger 
+                value="upload-custom-files" 
+                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:rounded-lg"
+              >
+                Custom Files
               </TabsTrigger>
               <TabsTrigger 
                 value="bulk-generator" 
@@ -257,6 +289,13 @@ const DataPackage: React.FC = () => {
             <TabsContent value="existing-packages" className="w-full">
               <div className="bg-card rounded-lg max-w-6xl mx-auto">
                 <ExistingDataPackages />
+              </div>
+            </TabsContent>
+            <TabsContent value="upload-custom-files" className="w-full">
+              <div className="bg-card rounded-lg max-w-6xl mx-auto">
+                <UploadCustomFilesSection 
+                  onFilesChange={handleFilesChange}
+                />
               </div>
             </TabsContent>
           </div>

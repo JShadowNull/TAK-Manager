@@ -1,8 +1,8 @@
 # backend/routes/data_package_route.py
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, File, UploadFile
 from pydantic import BaseModel, ValidationError
-from typing import Dict, Any
+from typing import Dict, Any, List
 from backend.services.scripts.data_package_config.data_package import DataPackage
 from backend.config.logging_config import configure_logging
 import json
@@ -27,6 +27,7 @@ class DataPackageRequest(BaseModel):
     atakPreferences: Dict[str, Any]
     clientCert: str
     zipFileName: str
+    customFiles: List[str]  # List of filenames to include
 
 @datapackage.post('/generate')
 async def generate_package(request: Request, data: DataPackageRequest):
@@ -64,6 +65,9 @@ async def generate_package(request: Request, data: DataPackageRequest):
         # Add ATAK preferences
         preferences.update(data.atakPreferences)
 
+        # Add custom files list
+        preferences['customFiles'] = data.customFiles
+
         # Execute package generation
         result = await data_package.main(preferences)
         
@@ -97,5 +101,38 @@ async def get_certificate_files():
         }
     except Exception as e:
         logger.error(f"[get_certificate_files] Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@datapackage.get('/custom-files')
+async def get_custom_files():
+    """Get list of uploaded custom files with metadata"""
+    try:
+        data_package = DataPackage()
+        custom_files = await data_package.list_custom_files_with_metadata()
+        return {'success': True, 'files': custom_files}
+    except Exception as e:
+        logger.error(f"[get_custom_files] Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@datapackage.post('/custom-files')
+async def upload_custom_file(file: UploadFile = File(...)):
+    """Upload a custom file to be included in packages"""
+    try:
+        data_package = DataPackage()
+        await data_package.save_custom_file(file)
+        return {'success': True, 'filename': file.filename}
+    except Exception as e:
+        logger.error(f"[upload_custom_file] Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@datapackage.delete('/custom-files/{filename}')
+async def delete_custom_file(filename: str):
+    """Delete a custom file from the server"""
+    try:
+        data_package = DataPackage()
+        await data_package.delete_custom_file(filename)
+        return {'success': True}
+    except Exception as e:
+        logger.error(f"[delete_custom_file] Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 

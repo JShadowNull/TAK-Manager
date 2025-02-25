@@ -17,7 +17,6 @@ import { bulkGenerationSchema } from '../shared/validationSchemas';
 import { z } from 'zod';
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/shared/ui/shadcn/table";
-import axios from 'axios';
 import { useLocation } from 'react-router-dom';
 import { toast } from "@/components/shared/ui/shadcn/toast/use-toast";
 import { HelpIconTooltip } from "@/components/shared/ui/shadcn/tooltip/HelpIconTooltip";
@@ -211,12 +210,12 @@ const BulkGeneratorSection: React.FC<BulkGeneratorSectionProps> = ({
         title: "Validation Errors",
         description: (
           <div className="space-y-2">
-            {errorSections.map((section) => section.hasErrors && (
-              <div key={section.name}>
+            {errorSections.map((section, idx) => section.hasErrors && (
+              <div key={idx}>
                 <div className="font-medium">{section.name}:</div>
                 <div className="ml-4">
                   {Object.entries(section.errors).map(([field, error], i) => (
-                    <div key={i}>• {formatFieldName(field)}: {error as string}</div>
+                    <div key={i}>• {formatFieldName(field)}: {String(error)}</div>
                   ))}
                 </div>
               </div>
@@ -252,26 +251,66 @@ const BulkGeneratorSection: React.FC<BulkGeneratorSectionProps> = ({
                 !key.startsWith('description') && !key.startsWith('ipAddress') && 
                 !key.startsWith('port') && !key.startsWith('protocol') && 
                 !key.startsWith('caLocation') && !key.startsWith('certPassword') &&
-                !key.startsWith('count')) {
+                !key.startsWith('count') && key !== 'customFiles') {
               acc[key] = pref.value;
             }
             return acc;
           }, {} as Record<string, any>);
 
-          await axios.post('/api/datapackage/generate', {
+          // Get the list of enabled custom files
+          let customFiles: string[] = [];
+          if (preferences.customFiles?.enabled && preferences.customFiles?.value) {
+            try {
+              console.log('[PackageGenerator] Raw custom files value:', preferences.customFiles.value);
+              customFiles = JSON.parse(preferences.customFiles.value);
+              if (!Array.isArray(customFiles)) {
+                console.warn('[PackageGenerator] Custom files not an array, resetting to empty array');
+                customFiles = [];
+              }
+              console.log('[PackageGenerator] Parsed custom files:', customFiles);
+            } catch (e) {
+              console.error('[PackageGenerator] Failed to parse custom files:', e);
+            }
+          } else {
+            console.log('[PackageGenerator] No custom files to process:', {
+              enabled: preferences.customFiles?.enabled,
+              hasValue: !!preferences.customFiles?.value
+            });
+          }
+
+          const requestBody = {
             takServerConfig: fullTakServerConfig,
             atakPreferences,
             clientCert: cert.value,
-            zipFileName: bulkFileNames[cert.value] || cert.label
+            zipFileName: bulkFileNames[cert.value] || cert.label,
+            customFiles
+          };
+          console.log('[PackageGenerator] Sending request:', requestBody);
+
+          const response = await fetch('/api/datapackage/generate', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody)
           });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || 'Failed to generate package');
+          }
+
+          const data = await response.json();
+          if (!data.success) {
+            throw new Error(data.message || 'Failed to generate package');
+          }
+
           successCount++;
         } catch (error) {
           toast({
             variant: "destructive",
             title: `Generation Failed for ${cert.label}`,
-            description: axios.isAxiosError(error) 
-              ? error.response?.data?.detail || error.message
-              : 'Failed to generate package'
+            description: error instanceof Error ? error.message : 'Failed to generate package'
           });
         }
       }
