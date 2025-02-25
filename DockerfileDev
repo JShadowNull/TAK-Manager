@@ -28,15 +28,19 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y nodejs=22.13.1-1nodesource1 && \
     rm -rf /var/lib/apt/lists/*
 
+# Client dependencies setup with cache
+WORKDIR /app/client
+COPY client/package.json ./
+COPY package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm \
+    npm install --prefer-offline
+
 # Python dependencies with cache mount
 COPY server/requirements.txt .
 RUN --mount=type=cache,target=/root/.cache \
     pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Install Node dependencies
-COPY client/package*.json ./client/
-RUN cd client && npm install
 
 # Application setup
 RUN mkdir -p /app/logs && chmod -R 755 /app/logs
