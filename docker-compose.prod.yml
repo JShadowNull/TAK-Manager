@@ -3,8 +3,12 @@ services:
     image: tak-manager:2.0.1
     container_name: tak-manager-production
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       - PYTHONUNBUFFERED=1
+      - BACKEND_PORT=${BACKEND_PORT}
+      - TAK_SERVER_INSTALL_DIR=${TAK_SERVER_INSTALL_DIR}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${TAK_SERVER_INSTALL_DIR}/tak-manager/data:/home/tak-manager:rw
