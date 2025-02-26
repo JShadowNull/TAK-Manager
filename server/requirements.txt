@@ -3,7 +3,6 @@ uvicorn==0.34.0
 requests==2.32.3
 psutil==6.1.1
 docker==7.1.0
-python-dotenv==1.0.1
 pexpect==4.9.0
 watchdog==6.0.0
 sse-starlette==1.8.2
