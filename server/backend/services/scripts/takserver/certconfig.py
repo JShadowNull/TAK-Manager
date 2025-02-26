@@ -327,11 +327,13 @@ class CertConfig:
                 })
             logger.info(status_msg.strip())
 
-            # Construct and execute certmod command with full path to UserManager.jar
+            # Modified certmod command with server connection and readiness check
             certmod_cmd = (
                 f"cd /opt/tak/certs/files && "
-                f"java -jar /opt/tak/utils/UserManager.jar certmod -A "  # Full path to JAR
-                f"\"{self.name}.pem\""  # Keep quotes for filename
+                f"java -jar /opt/tak/utils/UserManager.jar certmod -A "
+                f"\"{self.name}.pem\" --connect takserver:8089 --password {self.certificate_password} && "
+                f"echo 'Waiting for Ignite services...'; "
+                f"timeout 30s grep -q 'distributed-user-file-manager' <(docker logs {container_name} -f)"
             )
             result = await self.run_command.run_command_async(
                 ["docker", "exec", container_name, "bash", "-c", certmod_cmd],
