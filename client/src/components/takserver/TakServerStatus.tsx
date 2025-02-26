@@ -23,7 +23,7 @@ const TakServerStatus: React.FC<TakServerStatusProps> = ({ serverState }) => {
         <div className="flex flex-col h-full justify-between">
           <div>
             <h3 className="text-base font-bold mb-4 text-primary">TAK Server Status</h3>
-            <StatusDisplay takState={serverState} error={serverState.error} />
+            <StatusDisplay takState={serverState} />
           </div>
           <ControlButtons
             takState={serverState}
