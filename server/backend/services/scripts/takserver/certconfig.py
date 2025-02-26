@@ -9,6 +9,7 @@ from backend.services.helpers.directories import DirectoryHelper
 from backend.services.scripts.takserver.check_status import TakServerStatus
 from backend.config.logging_config import configure_logging
 from backend.services.scripts.takserver.fix_database import FixDatabase
+from backend.services.scripts.cert_manager.certmanager import CertManager
 
 logger = configure_logging(__name__)
 
@@ -22,7 +23,7 @@ class CertConfig:
         organizational_unit: str,
         name: str,
         tak_dir: Optional[str] = None,
-        emit_event: Optional[Callable[[Dict[str, Any]], None]] = None
+        emit_event: Optional[Callable[[Dict[str, Any]], None]] = None,
     ):
         """Initialize CertConfig with security parameters and system dependencies.
         
@@ -38,6 +39,7 @@ class CertConfig:
         """
         self.run_command = RunCommand()
         self.directory_helper = DirectoryHelper()
+        self.cert_manager = CertManager()
         self.certificate_password = certificate_password
         self.organization = organization
         self.state = state
@@ -248,11 +250,11 @@ class CertConfig:
         if self.emit_event:
             await self.emit_event({
                 "type": "terminal",
-                "message": "\n🔍 Checking database authentication status (waiting 30s for container startup)...",
+                "message": "\n🔍 Checking database authentication status (waiting 15s for container startup)...",
                 "isError": False
             })
         
-        await asyncio.sleep(30)  # Container startup buffer
+        await asyncio.sleep(15)  # Container startup buffer
         tak_status = TakServerStatus(emit_event=self.emit_event)
         db_error_detected = await tak_status._check_database_logs()
         
@@ -316,7 +318,7 @@ class CertConfig:
                 "isError": False
             })
 
-        retries = 2  # Reduced from 5 to 2 attempts
+        retries = 2
         for attempt in range(1, retries + 1):
             status_msg = f"\n🔄 Attempt {attempt}/{retries}: Adding user {self.name} as admin..."
             if self.emit_event:
@@ -327,50 +329,38 @@ class CertConfig:
                 })
             logger.info(status_msg.strip())
 
-            # Construct and execute certmod command with full path to UserManager.jar
-            certmod_cmd = (
-                f"cd /opt/tak/certs/files && "
-                f"java -jar /opt/tak/utils/UserManager.jar certmod -A "  # Full path to JAR
-                f"\"{self.name}.pem\""  # Keep quotes for filename
-            )
-            result = await self.run_command.run_command_async(
-                ["docker", "exec", container_name, "bash", "-c", certmod_cmd],
-                'install',
-                emit_event=self.emit_event,
-                ignore_errors=True
-            )
-            
-            # Validate command execution
-            if result.success and "Exception" not in result.stdout and "Exception" not in result.stderr:
-                success_msg = f"✅ Successfully added user {self.name} as admin"
-                if self.emit_event:
-                    await self.emit_event({
-                        "type": "terminal",
-                        "message": success_msg,
-                        "isError": False
-                    })
-                logger.info(success_msg.strip())
-                return
+            try:
+                result = await self.cert_manager.register_user(
+                    username=self.name,
+                    is_admin=True
+                )
+                
+                if result:
+                    success_msg = f"✅ Successfully added user {self.name} as admin"
+                    if self.emit_event:
+                        await self.emit_event({
+                            "type": "terminal",
+                            "message": success_msg,
+                            "isError": False
+                        })
+                    logger.info(success_msg.strip())
+                    return
+                else:
+                    raise Exception(f"Failed to add user {self.name} as admin")
 
-            # Handle retry logic
-            if attempt < retries:
-                retry_msg = f"⚠️  Configuration attempt {attempt} failed. Retrying in 5 seconds..."
-                if self.emit_event:
-                    await self.emit_event({
-                        "type": "terminal",
-                        "message": retry_msg,
-                        "isError": True
-                    })
-                logger.warning(retry_msg.strip())
-                await asyncio.sleep(5)  # Reduced from 10 to 5 seconds
-            else:
-                error_message = (f"❌ Critical error: Failed to add user {self.name} as admin after {retries} attempts. "
-                               f"Final error: {result.stderr or 'Unknown error'}")
+            except Exception as e:
+                error_message = f"Certmod failed: {str(e)}"
+                if attempt < retries:
+                    error_message += " - Retrying..."
+                    await asyncio.sleep(5)
+                    
                 if self.emit_event:
                     await self.emit_event({
                         "type": "terminal",
                         "message": error_message,
                         "isError": True
                     })
-                logger.critical(error_message.strip())
-                raise Exception(error_message)
+                logger.error(error_message.strip())
+                
+                if attempt == retries:
+                    raise Exception(f"Failed to add user after {retries} attempts: {str(e)}")
