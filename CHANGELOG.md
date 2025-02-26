@@ -6,6 +6,57 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [2.1.0] - 2025-02-26
+
+## [2.1.0] - 2025-02-26
+
+
+### Added 🚀
+
+
+- Add search functionality to ATAK Preferences Section
+- Add custom files upload and management for data packages
+- Add environment file support for production Docker configuration
+
+
+### Changed 🔄
+
+
+- Add handleNativeFileDrop type in global ts
+- Optimize Docker build process and environment configuration
+- Optimize development Docker configuration
+- Remove dotenv dependency and simplify environment variable loading
+- Remove error prop from StatusDisplay in TakServerStatus
+
+
+### Documentation 📦
+
+
+- Add detailed tooltips for specifying the purpose of in/out groups
+- Clarify certificate enrollment password tooltip
+
+
+### Fixed 🔧
+
+
+- Ensure error handling in database password reset script
+- Accurate database failure checking and TAK webui loaded checks
+- Remove error <p/> and use toast instead
+- Drag file upload now works using react-dropzone
+- Improve port availability checking reliability using netstat (win) and lsof (mac/linux)
+
+
+### Other 📦
+
+
+- Bump version to v2.0.1
+- Bump version 2.0.1
+- Update package dependencies and version to 2.0.1
+- Add react-dropzone package to client dependencies
+- Optimize Docker development build with client dependency caching
+- Remove python-dotenv from requirements files
+- Release tak-manager@2.1.0 [skip ci]
+
 ## [2.0.1] - 2025-02-21
 
 ## [2.0.1] - 2025-02-21
