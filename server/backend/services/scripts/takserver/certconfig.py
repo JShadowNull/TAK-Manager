@@ -327,8 +327,11 @@ class CertConfig:
                 })
             logger.info(status_msg.strip())
 
-            # Construct and execute certmod command
-            certmod_cmd = f"java -jar /opt/tak/utils/UserManager.jar certmod -A /opt/tak/certs/files/{self.name}.pem"
+            # Construct and execute certmod command with Windows-compatible path handling
+            certmod_cmd = (
+                f"cd /opt/tak/certs/files && java -jar UserManager.jar certmod -A "
+                f"\"{self.name}.pem\""  # Add quotes around filename
+            )
             result = await self.run_command.run_command_async(
                 ["docker", "exec", container_name, "bash", "-c", certmod_cmd],
                 'install',
