@@ -327,10 +327,11 @@ class CertConfig:
                 })
             logger.info(status_msg.strip())
 
-            # Construct and execute certmod command with Windows-compatible path handling
+            # Construct and execute certmod command with full path to UserManager.jar
             certmod_cmd = (
-                f"cd /opt/tak/certs/files && java -jar UserManager.jar certmod -A "
-                f"\"{self.name}.pem\""  # Add quotes around filename
+                f"cd /opt/tak/certs/files && "
+                f"java -jar /opt/tak/utils/UserManager.jar certmod -A "  # Full path to JAR
+                f"\"{self.name}.pem\""  # Keep quotes for filename
             )
             result = await self.run_command.run_command_async(
                 ["docker", "exec", container_name, "bash", "-c", certmod_cmd],
