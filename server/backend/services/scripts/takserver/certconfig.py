@@ -248,11 +248,11 @@ class CertConfig:
         if self.emit_event:
             await self.emit_event({
                 "type": "terminal",
-                "message": "\n🔍 Checking database authentication status (waiting 15s for container startup)...",
+                "message": "\n🔍 Checking database authentication status (waiting 30s for container startup)...",
                 "isError": False
             })
         
-        await asyncio.sleep(15)  # Container startup buffer
+        await asyncio.sleep(30)  # Container startup buffer
         tak_status = TakServerStatus(emit_event=self.emit_event)
         db_error_detected = await tak_status._check_database_logs()
         
@@ -327,13 +327,11 @@ class CertConfig:
                 })
             logger.info(status_msg.strip())
 
-            # Modified certmod command with server connection and readiness check
+            # Construct and execute certmod command with full path to UserManager.jar
             certmod_cmd = (
                 f"cd /opt/tak/certs/files && "
-                f"java -jar /opt/tak/utils/UserManager.jar certmod -A "
-                f"\"{self.name}.pem\" --connect takserver:8089 --password {self.certificate_password} && "
-                f"echo 'Waiting for Ignite services...'; "
-                f"timeout 30s grep -q 'distributed-user-file-manager' <(docker logs {container_name} -f)"
+                f"java -jar /opt/tak/utils/UserManager.jar certmod -A "  # Full path to JAR
+                f"\"{self.name}.pem\""  # Keep quotes for filename
             )
             result = await self.run_command.run_command_async(
                 ["docker", "exec", container_name, "bash", "-c", certmod_cmd],
