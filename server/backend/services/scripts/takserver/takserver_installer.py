@@ -13,6 +13,7 @@ import docker
 import xml.etree.ElementTree as ET
 from backend.services.helpers.directories import DirectoryHelper
 from backend.services.scripts.takserver.check_status import TakServerStatus
+from backend.services.scripts.takserver.takserver_uninstaller import TakServerUninstaller
 
 
 # Load environment variables from .env file
@@ -802,6 +803,32 @@ volumes:
         except Exception as e:
             error_message = f"Installation failed: {str(e)}"
             await self.update_status("error", 100, error=error_message)
+            
+            # Run uninstaller to clean up failed installation
+            if self.emit_event:
+                await self.emit_event({
+                    "type": "terminal",
+                    "message": "\n🧹 Installation failed. Running cleanup...",
+                    "isError": False
+                })
+            
+            try:
+                uninstaller = TakServerUninstaller(emit_event=self.emit_event)
+                await uninstaller.uninstall()
+                if self.emit_event:
+                    await self.emit_event({
+                        "type": "terminal",
+                        "message": "✅ Cleanup completed successfully",
+                        "isError": False
+                    })
+            except Exception as cleanup_error:
+                if self.emit_event:
+                    await self.emit_event({
+                        "type": "terminal",
+                        "message": f"⚠️ Cleanup encountered issues: {str(cleanup_error)}",
+                        "isError": True
+                    })
+            
             return False
 
 
