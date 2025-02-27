@@ -6,6 +6,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [2.1.1] - 2025-02-27
+
+## [2.1.1] - 2025-02-27
+
+
+### Added 🚀
+
+
+- Enhance TAK server readiness monitoring and UI interaction
+- Add automatic cleanup for failed TAK server installations
+
+
+### Changed 🔄
+
+
+- Improve database readiness validation for TAK server certificate configuration
+- Improve TAK server initialization monitoring
+
+
+### Fixed 🔧
+
+
+- Improve Windows compatibility for TAK server certificate management
+- Update UserManager.jar path for TAK server certificate management
+- Adjust TAK server startup and certificate management timing
+- Improve TAK server user registration with CertManager
+- Error messages no longer extend outside of dialog window
+
+
+### Other 📦
+
+
+- Bump version to 2.1.0
+- Update pip version to 25.0.1 in requirements files
+- Update tak-manager-wrapper submodule
+- Release tak-manager@2.1.1 [skip ci]
+
 ## [2.1.0] - 2025-02-26
 
 ## [2.1.0] - 2025-02-26
