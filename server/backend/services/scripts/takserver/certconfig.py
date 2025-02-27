@@ -245,79 +245,65 @@ class CertConfig:
         logger.info("Successfully generated all certificates")
 
     async def run_certmod(self, container_name: str) -> None:
-        """Configure user certificates by executing certmod command with retry logic."""
-        # Database health check
+        # Replace static wait with database schema validation
         if self.emit_event:
             await self.emit_event({
                 "type": "terminal",
-                "message": "\n🔍 Checking database authentication status (waiting 15s for container startup)...",
+                "message": "\n⏳ Validating database schema readiness...",
                 "isError": False
             })
         
-        await asyncio.sleep(15)  # Container startup buffer
-        tak_status = TakServerStatus(emit_event=self.emit_event)
-        db_error_detected = await tak_status._check_database_logs()
-        
-        if db_error_detected:
-            error_msg = "Database authentication error detected (password mismatch)"
-            
-            # Database repair attempt logic
-            if not hasattr(self, 'db_repair_attempted'):
-                if self.emit_event:
+        async def check_database_ready(max_attempts=12, interval=10):
+            """Check if database schema is ready by running SchemaManager validate"""
+            for attempt in range(1, max_attempts + 1):
+                if self.emit_event and attempt > 1:
                     await self.emit_event({
                         "type": "terminal",
-                        "message": "\n⚠️  Attempting database password repair...",
+                        "message": f"🔄 Database check attempt {attempt}/{max_attempts}...",
                         "isError": False
                     })
                 
-                try:
-                    fix_db = FixDatabase()
-                    await fix_db.fix_database_password()
-                    self.db_repair_attempted = True
-                    
-                    # Re-check database after repair
-                    await asyncio.sleep(15)  # Wait for post-repair startup
-                    db_error_still_detected = await tak_status._check_database_logs()
-                    if db_error_still_detected:
-                        raise Exception("Database authentication error persists after repair")
-                    
+                validate_cmd = "java -jar /opt/tak/db-utils/SchemaManager.jar validate"
+                result = await self.run_command.run_command_async(
+                    ["docker", "exec", container_name, "bash", "-c", validate_cmd],
+                    'install',
+                    emit_event=self.emit_event,
+                    ignore_errors=True
+                )
+                
+                # Check for successful schema validation
+                if result.success and "Success" in result.stdout and "shutting down" not in result.stderr:
                     if self.emit_event:
                         await self.emit_event({
                             "type": "terminal",
-                            "message": "✅ Database repair successful, retrying certificate configuration...",
+                            "message": "✅ Database schema validated successfully",
                             "isError": False
                         })
-                except Exception as e:
-                    error_msg = f"Database repair failed: {str(e)}"
+                    return True
+                
+                if "shutting down" in result.stderr:
                     if self.emit_event:
                         await self.emit_event({
                             "type": "terminal",
-                            "message": f"❌ Critical error: {error_msg}",
-                            "isError": True
+                            "message": "⏳ Database is still starting up...",
+                            "isError": False
                         })
-                    logger.critical(error_msg)
-                    raise Exception(error_msg)
+                
+                await asyncio.sleep(interval)
+            return False
 
-                # Retry the entire certmod process once after successful repair
-                return await self.run_certmod(container_name)
-
-            # If we already attempted repair, throw original error
+        # Wait for database to be ready
+        if not await check_database_ready():
+            error_msg = "Database did not become ready within timeout period"
             if self.emit_event:
                 await self.emit_event({
                     "type": "terminal",
-                    "message": f"❌ Error: {error_msg}",
+                    "message": f"❌ {error_msg}",
                     "isError": True
                 })
-            logger.error(error_msg)
             raise Exception(error_msg)
 
-        if self.emit_event:
-            await self.emit_event({
-                "type": "terminal",
-                "message": "✅ Database authentication valid. Starting certificate configuration...",
-                "isError": False
-            })
-
+        # Now proceed with user registration
         retries = 2
         for attempt in range(1, retries + 1):
             status_msg = f"\n🔄 Attempt {attempt}/{retries}: Adding user {self.name} as admin..."
