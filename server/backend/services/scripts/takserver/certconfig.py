@@ -245,56 +245,55 @@ class CertConfig:
         logger.info("Successfully generated all certificates")
 
     async def run_certmod(self, container_name: str) -> None:
-        # Replace static wait with database schema validation
+        # Replace previous checks with log file monitoring
         if self.emit_event:
             await self.emit_event({
                 "type": "terminal",
-                "message": "\n⏳ Validating database schema readiness...",
+                "message": "\n⏳ Waiting for TAK Server to fully initialize...",
                 "isError": False
             })
         
-        async def check_database_ready(max_attempts=12, interval=10):
-            """Check if database schema is ready by running SchemaManager validate"""
-            for attempt in range(1, max_attempts + 1):
-                if self.emit_event and attempt > 1:
-                    await self.emit_event({
-                        "type": "terminal",
-                        "message": f"🔄 Database check attempt {attempt}/{max_attempts}...",
-                        "isError": False
-                    })
-                
-                validate_cmd = "java -jar /opt/tak/db-utils/SchemaManager.jar validate"
+        async def wait_for_server_ready(timeout=180, check_interval=5):
+            """Monitor takserver.log for the final startup message"""
+            start_time = time.time()
+            ready_message = "Retention Application started"
+            
+            while time.time() - start_time < timeout:
+                # Check log file for the ready message
+                log_cmd = "grep -a 'Retention Application started' /opt/tak/logs/takserver.log"
                 result = await self.run_command.run_command_async(
-                    ["docker", "exec", container_name, "bash", "-c", validate_cmd],
+                    ["docker", "exec", container_name, "bash", "-c", log_cmd],
                     'install',
-                    emit_event=self.emit_event,
+                    emit_event=None,  # Don't emit this check to avoid log spam
                     ignore_errors=True
                 )
                 
-                # Check for successful schema validation
-                if result.success and "Success" in result.stdout and "shutting down" not in result.stderr:
+                if result.success and ready_message in result.stdout:
                     if self.emit_event:
                         await self.emit_event({
                             "type": "terminal",
-                            "message": "✅ Database schema validated successfully",
+                            "message": "✅ TAK Server fully initialized and ready",
                             "isError": False
                         })
                     return True
                 
-                if "shutting down" in result.stderr:
+                # Progress update every 30 seconds
+                elapsed = int(time.time() - start_time)
+                if elapsed % 30 == 0 and elapsed > 0:
                     if self.emit_event:
                         await self.emit_event({
                             "type": "terminal",
-                            "message": "⏳ Database is still starting up...",
+                            "message": f"⏳ Still waiting for TAK Server initialization ({elapsed}s elapsed)...",
                             "isError": False
                         })
                 
-                await asyncio.sleep(interval)
+                await asyncio.sleep(check_interval)
+            
             return False
 
-        # Wait for database to be ready
-        if not await check_database_ready():
-            error_msg = "Database did not become ready within timeout period"
+        # Wait for server to be fully initialized
+        if not await wait_for_server_ready():
+            error_msg = "TAK Server did not fully initialize within the timeout period"
             if self.emit_event:
                 await self.emit_event({
                     "type": "terminal",
