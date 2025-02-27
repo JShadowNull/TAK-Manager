@@ -1,19 +1,27 @@
 import os
 import shutil
 import re
+from backend.config.logging_config import configure_logging
+
+# Setup logging
+logger = configure_logging(__name__)
 
 class DirectoryHelper:
     @staticmethod
     def get_base_directory():
         """Get the base directory for the application."""
-        return '/home/tak-manager'
+        base_dir = '/home/tak-manager'
+        logger.debug(f"Base directory: {base_dir}")
+        return base_dir
 
     @staticmethod
     def get_default_working_directory() -> str:
         """Get the working directory."""
         working_dir = os.path.join(DirectoryHelper.get_base_directory(), 'takserver')
         if not os.path.exists(working_dir):
+            logger.info(f"Creating working directory: {working_dir}")
             os.makedirs(working_dir, exist_ok=True)
+        logger.debug(f"Working directory: {working_dir}")
         return working_dir
 
     @staticmethod
@@ -86,17 +94,25 @@ class DirectoryHelper:
 
     @staticmethod
     def ensure_clean_directory(directory: str) -> None:
-        """Ensure directory exists and is empty."""
+        """Ensure a directory exists and is empty."""
+        logger.info(f"Ensuring clean directory: {directory}")
         if os.path.exists(directory):
+            logger.debug(f"Removing existing directory: {directory}")
             shutil.rmtree(directory)
-        os.makedirs(directory)
+        logger.debug(f"Creating directory: {directory}")
+        os.makedirs(directory, exist_ok=True)
 
     @staticmethod
     def cleanup_temp_directory() -> None:
-        """Clean up temporary extraction directory."""
+        """Clean up the temporary directory."""
         temp_dir = DirectoryHelper.get_temp_extract_directory()
+        logger.info(f"Cleaning up temporary directory: {temp_dir}")
         if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
+            try:
+                shutil.rmtree(temp_dir)
+                logger.debug(f"Successfully removed temporary directory: {temp_dir}")
+            except Exception as e:
+                logger.error(f"Error cleaning up temporary directory: {str(e)}")
 
     @staticmethod
     def get_backups_directory() -> str:

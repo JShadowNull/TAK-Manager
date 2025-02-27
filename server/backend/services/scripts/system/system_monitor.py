@@ -54,7 +54,7 @@ class SystemMonitor:
             return metrics
             
         except Exception as e:
-            logger.warning(f"Failed to get Docker stats: {str(e)}")
+            logger.error(f"Error in get_docker_stats: {str(e)}")  # Added error log
             return {}
 
     def _parse_size_value(self, size_str: str) -> float:
@@ -114,7 +114,7 @@ class SystemMonitor:
                 }
             return {}
         except Exception as e:
-            logger.error(f"Error getting system metrics: {str(e)}")
+            logger.error(f"Error getting system metrics: {str(e)}")  # Added error log
             return {}
 
     async def metrics_generator(self) -> AsyncGenerator[Dict[str, Any], None]:
@@ -130,7 +130,7 @@ class SystemMonitor:
                     if self.emit_event:
                         self.emit_event(metrics)
             except Exception as e:
-                logger.error(f"Error generating metrics: {str(e)}")
+                logger.error(f"Error generating metrics: {str(e)}")  # Added error log
                 yield {
                     "event": "system-metrics",
                     "data": json.dumps({

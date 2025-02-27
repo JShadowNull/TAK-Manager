@@ -27,8 +27,13 @@ class CoreConfigManager:
         self._initialize_paths()  # Initialize paths before operation
         if not os.path.exists(self.init_backup_path):
             if os.path.exists(self.config_path):
-                shutil.copy2(self.config_path, self.init_backup_path)
+                try:
+                    shutil.copy2(self.config_path, self.init_backup_path)
+                except Exception as e:
+                    logger.error(f"Failed to create initial backup: {str(e)}")
+                    raise Exception("Failed to create initial backup")
             else:
+                logger.error("CoreConfig.xml not found")
                 raise Exception("CoreConfig.xml not found")
             
     def create_backup(self, name: str = "") -> Dict[str, str]:
@@ -46,6 +51,7 @@ class CoreConfigManager:
                 "path": backup_path
             }
         except Exception as e:
+            logger.error(f"Failed to create backup: {str(e)}")
             raise Exception(f"Failed to create backup: {str(e)}")
 
     def get_backups(self) -> List[Dict[str, str]]:
@@ -86,6 +92,7 @@ class CoreConfigManager:
         """Restore configuration from a backup"""
         backup_path = os.path.join(self.backups_dir, backup_id)
         if not os.path.exists(backup_path):
+            logger.error("Backup not found")
             raise Exception("Backup not found")
             
         try:
@@ -96,27 +103,32 @@ class CoreConfigManager:
             # Validate the backup content
             is_valid, error_msg = self._validate_with_xmllint(backup_path)
             if not is_valid:
+                logger.error(f"Invalid backup configuration: {error_msg}")
                 raise Exception(f"Invalid backup configuration: {error_msg}")
             
             # Restore the backup
             shutil.copy2(backup_path, self.config_path)
             return True
         except Exception as e:
+            logger.error(f"Failed to restore backup: {str(e)}")
             raise Exception(f"Failed to restore backup: {str(e)}")
 
     def delete_backup(self, backup_id: str) -> bool:
         """Delete a backup file"""
         if backup_id == "init_backup.xml":
+            logger.error("Cannot delete initial backup")
             raise Exception("Cannot delete initial backup")
             
         backup_path = os.path.join(self.backups_dir, backup_id)
         if not os.path.exists(backup_path):
+            logger.error("Backup not found")
             raise Exception("Backup not found")
             
         try:
             os.remove(backup_path)
             return True
         except Exception as e:
+            logger.error(f"Failed to delete backup: {str(e)}")
             raise Exception(f"Failed to delete backup: {str(e)}")
 
     def read_config(self) -> str:
@@ -129,6 +141,7 @@ class CoreConfigManager:
             with open(self.config_path, 'r') as file:
                 return file.read()
         except Exception as e:
+            logger.error(f"Error reading CoreConfig.xml: {str(e)}")
             raise Exception(f"Error reading CoreConfig.xml: {str(e)}")
 
     def write_config(self, content: str) -> bool:
@@ -150,6 +163,7 @@ class CoreConfigManager:
             is_valid, error_msg = self._validate_with_xmllint(temp_path)
             if not is_valid:
                 os.remove(temp_path)
+                logger.error(f"Invalid TAK Server configuration: {error_msg}")
                 raise Exception(f"Invalid TAK Server configuration: {error_msg}")
 
             # If validation passes, move temp file to actual location
@@ -157,8 +171,10 @@ class CoreConfigManager:
             return True
 
         except ET.ParseError as e:
+            logger.error(f"Invalid XML format: {str(e)}")
             raise Exception(f"Invalid XML format: {str(e)}")
         except Exception as e:
+            logger.error(f"Error writing to CoreConfig.xml: {str(e)}")
             raise Exception(f"Error writing to CoreConfig.xml: {str(e)}")
 
     def validate_xml(self, content: str) -> bool:
@@ -179,12 +195,15 @@ class CoreConfigManager:
             os.remove(temp_path)
             
             if not is_valid:
+                logger.error(error_msg)
                 raise Exception(error_msg)
                 
             return True
         except ET.ParseError as e:
+            logger.error(f"Invalid XML format: {str(e)}")
             raise Exception(f"Invalid XML format: {str(e)}")
         except Exception as e:
+            logger.error(f"Validation error: {str(e)}")
             raise Exception(str(e))
 
     def _validate_with_xmllint(self, file_path: str) -> Tuple[bool, str]:
@@ -206,8 +225,11 @@ class CoreConfigManager:
             if result.returncode == 0:
                 return True, ""
             else:
+                logger.error(f"Validation failed: {result.stderr.strip()}")
                 return False, result.stderr.strip() or "Validation failed"
         except subprocess.SubprocessError as e:
+            logger.error(f"Validation script error: {str(e)}")
             return False, f"Validation script error: {str(e)}"
         except Exception as e:
+            logger.error(f"Validation error: {str(e)}")
             return False, f"Validation error: {str(e)}" 

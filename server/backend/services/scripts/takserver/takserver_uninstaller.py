@@ -5,6 +5,10 @@ from typing import Dict, Any, Optional, Callable
 import docker
 from backend.services.helpers.directories import DirectoryHelper
 import asyncio
+from backend.config.logging_config import configure_logging
+
+# Configure logging
+logger = configure_logging(__name__)
 
 class TakServerUninstaller:
     def __init__(self, emit_event: Optional[Callable[[Dict[str, Any]], None]] = None):
@@ -59,6 +63,7 @@ class TakServerUninstaller:
             return True
 
         except Exception as e:
+            logger.error(f"Error stopping containers: {str(e)}")  # Added error logging
             if self.emit_event:
                 await self.emit_event({
                     "type": "terminal",
@@ -85,6 +90,7 @@ class TakServerUninstaller:
             return True
 
         except Exception as e:
+            logger.error(f"Error cleaning Docker cache: {str(e)}")  # Added error logging
             if self.emit_event:
                 await self.emit_event({
                     "type": "terminal",
@@ -124,6 +130,7 @@ class TakServerUninstaller:
             return True
 
         except Exception as e:
+            logger.error(f"Error removing directories: {str(e)}")  # Added error logging
             if self.emit_event:
                 await self.emit_event({
                     "type": "terminal",
@@ -183,5 +190,6 @@ class TakServerUninstaller:
             return True
 
         except Exception as e:
+            logger.error(f"Uninstallation failed: {str(e)}")  # Added error logging
             await self.update_status("error", 100, str(e))
             return False 

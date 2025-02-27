@@ -17,6 +17,7 @@ class DataPackageManager:
             packages = []
             for filename in os.listdir(self.packages_dir):
                 if not filename.endswith('.zip'):
+                    logger.error(f"Skipping non-zip file: {filename}")
                     continue
                 
                 file_path = os.path.join(self.packages_dir, filename)
@@ -44,10 +45,12 @@ class DataPackageManager:
     def get_package_path(self, filename: str) -> str:
         """Validate and return full package path."""
         if not filename.endswith('.zip'):
+            logger.error(f"Invalid package file extension for: {filename}")
             raise ValueError("Invalid package file extension")
             
         file_path = os.path.join(self.packages_dir, filename)
         if not os.path.exists(file_path):
+            logger.error(f"Package {filename} not found at path: {file_path}")
             raise FileNotFoundError(f"Package {filename} not found")
             
         return file_path
@@ -59,10 +62,11 @@ class DataPackageManager:
             os.remove(file_path)
             
             if os.path.exists(file_path):
+                logger.error(f"Failed to delete {filename}, file still exists.")
                 raise RuntimeError(f"Failed to delete {filename}")
 
         except Exception as e:
-            logger.error(f"Package deletion failed: {str(e)}")
+            logger.error(f"Package deletion failed for {filename}: {str(e)}")
             raise
 
     async def delete_batch(self, filenames: List[str]) -> None:
@@ -71,7 +75,7 @@ class DataPackageManager:
             for filename in filenames:
                 await self.delete_package(filename)
         except Exception as e:
-            logger.error(f"Batch delete failed: {str(e)}")
+            logger.error(f"Batch delete failed for files {filenames}: {str(e)}")
             raise
 
     async def download_batch(self, filenames: List[str]) -> List[str]:
@@ -79,5 +83,5 @@ class DataPackageManager:
         try:
             return [self.get_package_path(f) for f in filenames]
         except Exception as e:
-            logger.error(f"Download validation failed: {str(e)}")
+            logger.error(f"Download validation failed for files {filenames}: {str(e)}")
             raise 

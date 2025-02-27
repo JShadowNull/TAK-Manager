@@ -51,6 +51,7 @@ class DockerManager:
             self._operation_states[container_name] = {'action': 'start', 'status': 'completed'}
             del self._operation_states[container_name]
         except Exception as e:
+            logger.error(f"Error starting container {container_name}: {str(e)}")  # Added error log
             self._operation_states[container_name] = {'action': 'start', 'status': 'error', 'error': str(e)}
             del self._operation_states[container_name]
             raise
@@ -64,7 +65,7 @@ class DockerManager:
             self._operation_states[container_name] = {'action': 'stop', 'status': 'completed'}
             del self._operation_states[container_name]
         except Exception as e:
+            logger.error(f"Error stopping container {container_name}: {str(e)}")  # Added error log
             self._operation_states[container_name] = {'action': 'stop', 'status': 'error', 'error': str(e)}
             del self._operation_states[container_name]
             raise
-

@@ -14,7 +14,9 @@ import xml.etree.ElementTree as ET
 from backend.services.helpers.directories import DirectoryHelper
 from backend.services.scripts.takserver.check_status import TakServerStatus
 from backend.services.scripts.takserver.takserver_uninstaller import TakServerUninstaller
+from backend.config.logging_config import configure_logging
 
+logger = configure_logging(__name__)
 
 # Load environment variables from .env file
 
@@ -99,6 +101,7 @@ class TakServerInstaller:
                     "isError": False
                 })
         except Exception as e:
+            logger.error(f"Error creating working directory: {str(e)}")  # Added error log
             if self.emit_event:
                 await self.emit_event({
                     "type": "terminal",
@@ -118,6 +121,7 @@ class TakServerInstaller:
         try:
             if not os.path.exists(self.docker_zip_path):
                 error_msg = f"ZIP file not found at {self.docker_zip_path}"
+                logger.error(error_msg)  # Added error log
                 if self.emit_event:
                     await self.emit_event({
                         "type": "terminal",
@@ -139,12 +143,15 @@ class TakServerInstaller:
                 shell=True
             )
             if not result.success:
+                logger.error(f"Unzip command failed: {result.stderr}")  # Added error log
                 raise Exception(result.stderr)
 
             # Find the tak directory in the extracted contents
             extracted_contents = os.listdir(temp_extract_dir)
             if not extracted_contents:
-                raise ValueError("Zip file appears to be empty")
+                error_msg = "Zip file appears to be empty"
+                logger.error(error_msg)  # Added error log
+                raise ValueError(error_msg)
 
             # Get the first directory
             temp_extracted_folder = os.path.join(temp_extract_dir, extracted_contents[0])
@@ -163,17 +170,23 @@ class TakServerInstaller:
 
             # Verify tak directory exists
             if not os.path.exists(os.path.join(temp_extracted_folder, "tak")):
-                raise ValueError(f"TAK directory not found in extracted contents")
+                error_msg = f"TAK directory not found in extracted contents"
+                logger.error(error_msg)  # Added error log
+                raise ValueError(error_msg)
 
             # Get version from the extracted files
             version_file = os.path.join(temp_extracted_folder, "tak", "version.txt")
             if not os.path.exists(version_file):
-                raise ValueError(f"Version file not found at {version_file}")
+                error_msg = f"Version file not found at {version_file}"
+                logger.error(error_msg)  # Added error log
+                raise ValueError(error_msg)
             
             with open(version_file, "r") as f:
                 version = f.read().strip().lower()
                 if not version:
-                    raise ValueError("Version file is empty")
+                    error_msg = "Version file is empty"
+                    logger.error(error_msg)  # Added error log
+                    raise ValueError(error_msg)
                 self.takserver_version = version
 
             # Write version to working directory first
@@ -220,6 +233,7 @@ class TakServerInstaller:
                 })
                 
         except Exception as e:
+            logger.error(f"Extraction failed: {str(e)}")  # Added error log
             if self.emit_event:
                 await self.emit_event({
                     "type": "terminal",
@@ -246,7 +260,9 @@ class TakServerInstaller:
                 if os.path.exists(example_core_config):
                     shutil.copy(example_core_config, core_config_path)
                 else:
-                    raise FileNotFoundError(f"Example CoreConfig file not found at {example_core_config}")
+                    error_msg = f"Example CoreConfig file not found at {example_core_config}"
+                    logger.error(error_msg)  # Added error log
+                    raise FileNotFoundError(error_msg)
                 
             if self.emit_event:
                 await self.emit_event({
@@ -255,6 +271,7 @@ class TakServerInstaller:
                     "isError": False
                 })
         except Exception as e:
+            logger.error(f"CoreConfig copy failed: {str(e)}")  # Added error log
             if self.emit_event:
                 await self.emit_event({
                     "type": "terminal",
@@ -291,9 +308,13 @@ class TakServerInstaller:
                     if connection is not None:
                         connection.set('password', self.postgres_password)
                     else:
-                        raise Exception("Repository connection element not found")
+                        error_msg = "Repository connection element not found"
+                        logger.error(error_msg)  # Added error log
+                        raise Exception(error_msg)
                 else:
-                    raise Exception("Repository element not found")
+                    error_msg = "Repository element not found"
+                    logger.error(error_msg)  # Added error log
+                    raise Exception(error_msg)
 
                 # Write back to file
                 tree.write(core_config_path, encoding='UTF-8', xml_declaration=True)
@@ -306,9 +327,13 @@ class TakServerInstaller:
                     shell=True
                 )
                 if not format_result.success:
-                    raise Exception(format_result.stderr)
+                    error_msg = format_result.stderr
+                    logger.error(f"xmllint formatting failed: {error_msg}")  # Added error log
+                    raise Exception(error_msg)
             else:
-                raise FileNotFoundError(f"CoreConfig.xml not found at {core_config_path}")
+                error_msg = f"CoreConfig.xml not found at {core_config_path}"
+                logger.error(error_msg)  # Added error log
+                raise FileNotFoundError(error_msg)
                 
             if self.emit_event:
                 await self.emit_event({
@@ -317,6 +342,7 @@ class TakServerInstaller:
                     "isError": False
                 })
         except Exception as e:
+            logger.error(f"Password update failed: {str(e)}")  # Added error log
             if self.emit_event:
                 await self.emit_event({
                     "type": "terminal",
@@ -336,7 +362,9 @@ class TakServerInstaller:
         try:
             core_config_path = os.path.join(self.tak_dir, "CoreConfig.xml")
             if not os.path.exists(core_config_path):
-                raise FileNotFoundError(f"CoreConfig.xml not found at {core_config_path}")
+                error_msg = f"CoreConfig.xml not found at {core_config_path}"
+                logger.error(error_msg)  # Added error log
+                raise FileNotFoundError(error_msg)
 
             # Parse XML
             ET.register_namespace('', "http://bbn.com/marti/xml/config")
@@ -402,7 +430,9 @@ class TakServerInstaller:
                 shell=True
             )
             if not format_result.success:
-                raise Exception(format_result.stderr)
+                error_msg = format_result.stderr
+                logger.error(f"xmllint formatting failed: {error_msg}")  # Added error log
+                raise Exception(error_msg)
             
             if self.emit_event:
                 await self.emit_event({
@@ -411,6 +441,7 @@ class TakServerInstaller:
                     "isError": False
                 })
         except Exception as e:
+            logger.error(f"CoreConfig modification failed: {str(e)}")  # Added error log
             if self.emit_event:
                 await self.emit_event({
                     "type": "terminal",
@@ -433,7 +464,9 @@ class TakServerInstaller:
             # Get base directory from environment, with fallback
             host_base_dir = os.getenv('TAK_SERVER_INSTALL_DIR')
             if not host_base_dir:
-                raise ValueError("TAK_SERVER_INSTALL_DIR environment variable is not set")
+                error_msg = "TAK_SERVER_INSTALL_DIR environment variable is not set"
+                logger.error(error_msg)  # Added error log
+                raise ValueError(error_msg)
                 
             host_tak_dir = os.path.join(host_base_dir, 'tak-manager', 'data', 'takserver', self.extracted_folder_name, "tak")
             host_plugins_dir = os.path.join(host_tak_dir, "webcontent")
@@ -451,6 +484,7 @@ PLUGINS_DIR={host_plugins_dir}
                     "isError": False
                 })
         except Exception as e:
+            logger.error(f"Env file creation failed: {str(e)}")  # Added error log
             if self.emit_event:
                 await self.emit_event({
                     "type": "terminal",
@@ -555,6 +589,7 @@ volumes:
                 })
             
         except Exception as e:
+            logger.error(f"Error creating docker-compose.yml: {str(e)}")  # Added error log
             if self.emit_event:
                 await self.emit_event({
                     "type": "terminal",
@@ -598,6 +633,7 @@ volumes:
                 ignore_errors=True
             )
             if not build_result.success:
+                logger.error(f"Build command failed: {build_result.stderr}")  # Added error log
                 raise Exception(build_result.stderr)
 
             # Start containers
@@ -615,6 +651,7 @@ volumes:
                     "isError": False
                 })
             if not up_result.success:
+                logger.error(f"Up command failed: {up_result.stderr}")  # Added error log
                 raise Exception(up_result.stderr)
 
             # Wait for containers to be ready
@@ -635,7 +672,7 @@ volumes:
                     # Container not found yet, continue waiting
                     pass
                 except Exception as e:
-                    # Log other errors but continue waiting
+                    logger.error(f"Container check error: {str(e)}")  # Added error log
                     if self.emit_event:
                         await self.emit_event({
                             "type": "terminal",
@@ -656,6 +693,7 @@ volumes:
                 raise Exception("Timeout waiting for containers to be ready")
 
         except Exception as e:
+            logger.error(f"Error starting Docker containers: {str(e)}")  # Added error log
             if self.emit_event:
                 await self.emit_event({
                     "type": "terminal",
@@ -687,6 +725,7 @@ volumes:
                     "isError": False
                 })
             if not result.success:
+                logger.error(f"Error verifying containers: {result.stderr}")  # Added error log
                 if self.emit_event:
                     await self.emit_event({
                         "type": "terminal",
@@ -696,6 +735,7 @@ volumes:
                 raise Exception(result)
             
         except Exception as e:
+            logger.error(f"Error verifying containers: {str(e)}")  # Added error log
             if self.emit_event:
                 await self.emit_event({
                     "type": "terminal",
@@ -716,6 +756,7 @@ volumes:
                 })
             await self.tak_server_status.restart_containers()
         except Exception as e:
+            logger.error(f"Error restarting TAK Server: {str(e)}")  # Added error log
             if self.emit_event:
                 await self.emit_event({
                     "type": "terminal",
@@ -802,6 +843,7 @@ volumes:
 
         except Exception as e:
             error_message = f"Installation failed: {str(e)}"
+            logger.error(error_message)  # Added error log
             await self.update_status("error", 100, error=error_message)
             
             # Run uninstaller to clean up failed installation
@@ -822,6 +864,7 @@ volumes:
                         "isError": False
                     })
             except Exception as cleanup_error:
+                logger.error(f"Cleanup encountered issues: {str(cleanup_error)}")  # Added error log
                 if self.emit_event:
                     await self.emit_event({
                         "type": "terminal",
@@ -830,5 +873,4 @@ volumes:
                     })
             
             return False
-
 

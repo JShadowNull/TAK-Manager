@@ -18,6 +18,7 @@ class FixDatabase:
         if tak_directory:
             path = os.path.join(tak_directory, "CoreConfig.xml")
             if not os.path.exists(path):
+                logger.error(f"CoreConfig.xml not found at expected path: {path}")
                 raise FileNotFoundError(f"CoreConfig.xml not found at expected path: {path}")
             return path
         logger.error("Failed to retrieve TAK directory while getting CoreConfig path")
@@ -36,6 +37,7 @@ class FixDatabase:
             connection = root.find('.//ns:repository/ns:connection', ns)
             
             if connection is None:
+                logger.error("Missing database connection configuration in CoreConfig.xml")
                 raise ValueError("Missing database connection configuration in CoreConfig.xml")
                 
             creds = {
@@ -45,6 +47,7 @@ class FixDatabase:
             
             if not all(creds.values()):
                 missing = [k for k, v in creds.items() if not v]
+                logger.error(f"Empty credentials in CoreConfig.xml for: {', '.join(missing)}")
                 raise ValueError(f"Empty credentials in CoreConfig.xml for: {', '.join(missing)}")
                 
             return creds
@@ -61,6 +64,7 @@ class FixDatabase:
         try:
             version = self.directory_helper.get_takserver_version()
             if not version:
+                logger.error("TAK Server version unavailable")
                 raise ValueError("TAK Server version unavailable")
             return f"tak-database-{version}"
         except Exception as e:
@@ -109,4 +113,3 @@ class FixDatabase:
             error_msg = f"Database password reset failed: {str(e)}"
             logger.exception(error_msg)
             raise RuntimeError(error_msg) from e
-

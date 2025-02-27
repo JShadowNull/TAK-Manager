@@ -82,6 +82,7 @@ class OTAUpdate:
                 ignore_errors=True
             )
             if not result.success:
+                logger.error(f"Failed to rebuild containers: {result.stderr}")
                 raise Exception(f"Failed to rebuild containers: {result.stderr}")
 
         except Exception as e:
@@ -100,9 +101,11 @@ class OTAUpdate:
                 return exit_code == 0
             except docker.errors.NotFound:
                 return False
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error checking if generate inf script exists: {str(e)}")
                 return False
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in check_if_generate_inf_script_exists: {str(e)}")
             raise
 
     async def create_generate_inf_script(self) -> None:
@@ -138,6 +141,7 @@ class OTAUpdate:
                 )
                 
                 if not result.success:
+                    logger.error(f"Failed to copy script to container: {result.stderr}")
                     raise Exception(f"Failed to copy script to container: {result.stderr}")
 
                 # Convert line endings and make executable
@@ -146,11 +150,14 @@ class OTAUpdate:
                 container.exec_run('chmod +x /opt/android-sdk/build-tools/33.0.0/generate-inf.sh')
 
             except docker.errors.NotFound:
+                logger.error(f"Container {takserver_container_name} not found")
                 raise Exception(f"Container {takserver_container_name} not found")
-            except Exception:
-                raise Exception("Error creating script in container")
+            except Exception as e:
+                logger.error(f"Error creating script in container: {str(e)}")
+                raise
 
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in create_generate_inf_script: {str(e)}")
             raise
         finally:
             if temp_script_path and os.path.exists(temp_script_path):
@@ -182,8 +189,10 @@ class OTAUpdate:
                     ignore_errors=True
                 )
                 if not result.success:
+                    logger.error(f"Error removing existing plugin folder: {result.stderr}")
                     raise Exception(result.stderr)
         except Exception as e:
+            logger.error(f"Error in check_and_remove_existing_plugin_folder: {str(e)}")
             raise
 
     async def extract_and_prepare_plugins(self) -> None:
@@ -213,8 +222,10 @@ class OTAUpdate:
                     ignore_errors=True
                 )
                 if not result.success:
+                    logger.error(f"Error copying plugins to container: {result.stderr}")
                     raise Exception(result.stderr)
         except Exception as e:
+            logger.error(f"Error in extract_and_prepare_plugins: {str(e)}")
             raise
 
     async def run_generate_inf_script(self) -> None:
@@ -353,6 +364,7 @@ class OTAUpdate:
             await self.update_status("complete", progress, "Configuration completed successfully")
             return True
         except Exception as e:
+            logger.error(f"Error in main process: {str(e)}")
             await self.update_status("error", 100, "Configuration failed", str(e))
             return False
 
@@ -490,5 +502,6 @@ class OTAUpdate:
             await self.update_status("complete", progress, "Update completed successfully")
             return True
         except Exception as e:
+            logger.error(f"Error in update process: {str(e)}")
             await self.update_status("error", 100, "Update failed", str(e))
             return False

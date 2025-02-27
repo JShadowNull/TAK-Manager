@@ -300,6 +300,7 @@ class CertConfig:
                     "message": f"❌ {error_msg}",
                     "isError": True
                 })
+            logger.error(error_msg)
             raise Exception(error_msg)
 
         # Now proceed with user registration
@@ -335,6 +336,7 @@ class CertConfig:
 
             except Exception as e:
                 error_message = f"Certmod failed: {str(e)}"
+                logger.error(error_message.strip())
                 if attempt < retries:
                     error_message += " - Retrying..."
                     await asyncio.sleep(5)
@@ -348,4 +350,5 @@ class CertConfig:
                 logger.error(error_message.strip())
                 
                 if attempt == retries:
+                    logger.error(f"Failed to add user after {retries} attempts: {str(e)}")
                     raise Exception(f"Failed to add user after {retries} attempts: {str(e)}")

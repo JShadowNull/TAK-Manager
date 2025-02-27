@@ -154,6 +154,8 @@ class DataPackage:
             return config_pref_path
         except Exception as e:
             logger.error(f"Config generation failed: {str(e)}")
+            logger.error("Preferences data: %s", preferences_data)  # Log preferences data for debugging
+            logger.error("Temporary directory: %s", temp_dir)  # Log temp directory for debugging
             raise Exception(f"Configuration file creation error: {str(e)}")
 
     def create_manifest_file(self, temp_dir, zip_name, ca_certs, client_certs, custom_files):
@@ -205,6 +207,11 @@ class DataPackage:
             return manifest_path
         except Exception as e:
             logger.error(f"Manifest creation failed: {str(e)}")
+            logger.error("Temporary directory: %s", temp_dir)  # Log temp directory for debugging
+            logger.error("Zip name: %s", zip_name)  # Log zip name for debugging
+            logger.error("CA certificates: %s", ca_certs)  # Log CA certificates for debugging
+            logger.error("Client certificates: %s", client_certs)  # Log client certificates for debugging
+            logger.error("Custom files: %s", custom_files)  # Log custom files for debugging
             raise Exception(f"Manifest file creation error: {str(e)}")
 
     async def copy_certificates_from_container(self, temp_dir, ca_certs, client_certs):
@@ -228,6 +235,7 @@ class DataPackage:
                         event_type="data-package",
                     )
                     if not result.success:
+                        logger.error(f"Failed to copy CA certificate {ca_cert}: {result.stderr}")
                         raise Exception(f"Failed to copy CA certificate {ca_cert}: {result.stderr}")
 
             if client_certs:
@@ -242,11 +250,15 @@ class DataPackage:
                         event_type="data-package",
                     )
                     if not result.success:
+                        logger.error(f"Failed to copy client certificate {client_cert}: {result.stderr}")
                         raise Exception(f"Failed to copy client certificate {client_cert}: {result.stderr}")
 
             logger.debug(f"Copied all certificates to {cert_dir}")
         except Exception as e:
             logger.error(f"Certificate copy failed: {str(e)}")
+            logger.error("Temporary directory: %s", temp_dir)  # Log temp directory for debugging
+            logger.error("CA certificates: %s", ca_certs)  # Log CA certificates for debugging
+            logger.error("Client certificates: %s", client_certs)  # Log client certificates for debugging
             raise Exception(f"Certificate transfer error: {str(e)}")
 
     async def create_zip_file(self, temp_dir, zip_name):
@@ -274,6 +286,8 @@ class DataPackage:
             return zip_path
         except Exception as e:
             logger.error(f"Zip creation failed: {str(e)}")
+            logger.error("Temporary directory: %s", temp_dir)  # Log temp directory for debugging
+            logger.error("Zip name: %s", zip_name)  # Log zip name for debugging
             raise Exception(f"Package creation error: {str(e)}")
 
     async def copy_custom_files(self, temp_dir, custom_files):
@@ -295,6 +309,8 @@ class DataPackage:
                     logger.warning(f"[copy_custom_files] File not found: {src}")
         except Exception as e:
             logger.error(f"[copy_custom_files] Failed to copy files: {str(e)}")
+            logger.error("Temporary directory: %s", temp_dir)  # Log temp directory for debugging
+            logger.error("Custom files: %s", custom_files)  # Log custom files for debugging
             raise
 
     async def main(self, preferences_data) -> Dict[str, Any]:
@@ -335,6 +351,7 @@ class DataPackage:
 
         except Exception as e:
             logger.error(f"[main] Data package creation failed: {str(e)}")
+            logger.error("Preferences data: %s", preferences_data)  # Log preferences data for debugging
             return {'error': str(e)}
 
     def _extract_certificates(self, preferences_data, stream_count):
@@ -383,6 +400,7 @@ class DataPackage:
             )
             
             if not result.success:
+                logger.error(f"Certificate listing failed: {result.stderr}")
                 raise Exception(f"Certificate listing failed: {result.stderr}")
             
             cert_files = result.stdout.splitlines()
@@ -391,6 +409,7 @@ class DataPackage:
 
         except Exception as e:
             logger.error(f"Certificate listing error: {str(e)}")
+            logger.error("Container name: %s", container_name)  # Log container name for debugging
             raise Exception(f"Failed to list certificates: {str(e)}")
 
     def get_custom_files_directory(self):
@@ -445,4 +464,5 @@ class DataPackage:
         if os.path.exists(file_path):
             os.remove(file_path)
         else:
+            logger.error(f"File {filename} not found for deletion")
             raise FileNotFoundError(f"File {filename} not found")

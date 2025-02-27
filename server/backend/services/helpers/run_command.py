@@ -4,6 +4,10 @@ import subprocess
 import asyncio
 from typing import Optional, Dict, Any, Callable
 from dataclasses import dataclass
+from backend.config.logging_config import configure_logging
+
+# Setup logging
+logger = configure_logging(__name__)
 
 @dataclass
 class CommandResult:
@@ -25,6 +29,7 @@ class RunCommand:
         """Run a command and stream output exactly like a terminal."""
         try:
             # Create subprocess
+            logger.debug(f"Running command: {command} in directory: {working_dir}")
             if shell:
                 process = await asyncio.create_subprocess_shell(
                     command,
@@ -90,22 +95,30 @@ class RunCommand:
                 return '\n'.join(output_lines)
 
             # Read both streams concurrently
-            stdout_data, stderr_data = await asyncio.gather(
+            stdout_result, stderr_result = await asyncio.gather(
                 read_stream(process.stdout, False),
                 read_stream(process.stderr, True)
             )
             
-            # Wait for process to complete
+            # Wait for the process to complete
             await process.wait()
-
+            success = process.returncode == 0 or ignore_errors
+            
+            if not success:
+                logger.error(f"Command failed with return code {process.returncode}: {command}")
+                logger.error(f"Error output: {stderr_result}")
+            else:
+                logger.debug(f"Command completed successfully: {command}")
+                
             return CommandResult(
-                success=process.returncode == 0 or ignore_errors,
+                success=success,
                 returncode=process.returncode,
-                stdout=stdout_data if stdout_data else "",
-                stderr=stderr_data if stderr_data else ""
+                stdout=stdout_result,
+                stderr=stderr_result
             )
 
         except Exception as e:
+            logger.error(f"Exception running command {command}: {str(e)}")
             if emit_event:
                 await emit_event({
                     "type": "terminal",
@@ -115,7 +128,7 @@ class RunCommand:
                 })
             return CommandResult(
                 success=False,
-                returncode=1,
+                returncode=-1,
                 stdout="",
                 stderr=str(e)
             )

@@ -27,6 +27,7 @@ class CertManager:
         """Get TAK Server container name based on version."""
         version = self.directory_helper.get_takserver_version()
         if not version:
+            logger.error("Could not determine TAK Server version")
             raise Exception("Could not determine TAK Server version")
         return f"takserver-{version}"
 
@@ -77,8 +78,10 @@ class CertManager:
             return certificates
 
         except ET.ParseError as e:
+            logger.error("Failed to parse UserAuthenticationFile.xml")
             raise Exception("Failed to parse UserAuthenticationFile.xml")
         except Exception as e:
+            logger.error(f"Error reading certificates: {str(e)}")
             raise Exception(f"Error reading certificates: {str(e)}")
 
     async def create_main(self, certificates: list) -> bool:
@@ -101,17 +104,20 @@ class CertManager:
                             )
                             completed_certs += 1
                             continue
-                        except Exception:
+                        except Exception as e:
+                            logger.error(f"Registration failed for user {username}: {str(e)}")
                             # If registration fails, delete the created certificate files
                             await self.delete_user_certificates(username)  # Cleanup
                             raise  # Re-raise the exception for further handling
 
                 except Exception as e:
+                    logger.error(f"Error processing certificate for user {username}: {str(e)}")
                     raise
 
             return completed_certs == total_certs
 
         except Exception as e:
+            logger.error(f"Error during certificate creation: {str(e)}")
             raise
 
     async def delete_main(self, username: str) -> bool:
@@ -120,12 +126,14 @@ class CertManager:
             # First verify the user exists
             certificates = await self.get_registered_certificates()
             if not any(cert['identifier'] == username for cert in certificates):
+                logger.error(f"User {username} not found for deletion.")
                 return False
 
             # Delete the certificates
             return await self.delete_user_certificates(username)
 
         except Exception as e:
+            logger.error(f"Error during deletion of user {username}: {str(e)}")
             raise
 
     async def delete_batch(self, usernames: list) -> bool:
@@ -141,6 +149,7 @@ class CertManager:
                 try:
                     # Verify user exists
                     if not any(cert['identifier'] == username for cert in certificates):
+                        logger.warning(f"User {username} not found for batch deletion.")
                         continue
 
                     # Delete certificate
@@ -155,6 +164,7 @@ class CertManager:
             return completed_certs == total_certs
 
         except Exception as e:
+            logger.error(f"Error during batch delete: {str(e)}")
             raise Exception(f"Error during batch delete: {str(e)}")
 # ============================================================================
 # Create Functions
@@ -167,6 +177,7 @@ class CertManager:
             # Check if the user already exists
             certificates = await self.get_registered_certificates()
             if any(cert['identifier'] == username for cert in certificates):
+                logger.error(f"User {username} already exists.")
                 raise Exception(f"User {username} already exists.")
             
             container_name = self.get_container_name()
@@ -180,6 +191,7 @@ class CertManager:
             )
             
             if not result.success:
+                logger.error(f"Failed to create certificate for user {username} : {result.stderr}")
                 raise Exception(f"Failed to create certificate for user {username} : {result.stderr}")
 
             logger.info(f"Successfully created certificate for user: {username}")
@@ -218,11 +230,13 @@ class CertManager:
             )
             
             if not result.success:
+                logger.error(f"Failed to register user {username}: {result.stderr or result.stdout}")
                 raise Exception(result.stderr or result.stdout or f"Failed to register user {username}")
 
             return True
 
         except Exception as e:
+            logger.error(f"Error registering user {username}: {str(e)}")
             raise
 # ============================================================================
 # Delete Functions
@@ -240,6 +254,7 @@ class CertManager:
                 ignore_errors=False
             )
             if not result.success:
+                logger.error(f"Failed to delete files for user {username} : {result.stderr}")
                 raise Exception(f"Failed to delete files for user {username} : {result.stderr}")
 
             # Unregister the user only after successful file deletion
@@ -250,11 +265,13 @@ class CertManager:
                 ignore_errors=False
             )
             if not result.success:
+                logger.error(f"Failed to unregister user {username} : {result.stderr}")
                 raise Exception(f"Failed to unregister user {username} : {result.stderr}")
 
             return True
 
         except Exception as e:
+            logger.error(f"Error deleting certificates for user {username}: {str(e)}")
             raise
 # ============================================================================
 # Download Functions
@@ -267,6 +284,7 @@ class CertManager:
             # First verify the user exists
             certificates = await self.get_registered_certificates()
             if not any(cert['identifier'] == username for cert in certificates):
+                logger.error(f"User {username} not found for download.")
                 return {
                     'success': False,
                     'message': f"User {username} not found"
@@ -281,6 +299,7 @@ class CertManager:
             )
 
             if not result.stdout:
+                logger.error(f"Certificate for user {username} not found.")
                 return {
                     'success': False,
                     'message': f"Certificate for user {username} not found"
@@ -298,6 +317,7 @@ class CertManager:
             )
 
             if not result.success or not os.path.exists(p12_path):
+                logger.error(f"Failed to copy certificate for user {username}.")
                 return {
                     'success': False,
                     'message': f"Failed to copy certificate for user {username}"
@@ -321,6 +341,7 @@ class CertManager:
             }
 
         except Exception as e:
+            logger.error(f"Error downloading certificate for user {username}: {str(e)}")
             return {
                 'success': False,
                 'message': str(e)
@@ -339,6 +360,7 @@ class CertManager:
                 try:
                     # Verify user exists
                     if not any(cert['identifier'] == username for cert in certificates):
+                        logger.warning(f"User {username} not found for batch download.")
                         continue
 
                     # Download certificate
@@ -347,10 +369,12 @@ class CertManager:
                     if result['success']:
                         completed_certs += 1
 
-                except Exception:
+                except Exception as e:
+                    logger.error(f"Error downloading certificate for user {username}: {str(e)}")
                     continue
 
             return completed_certs == total_certs
 
         except Exception as e:
+            logger.error(f"Error during batch download: {str(e)}")
             raise Exception(f"Error during batch download: {str(e)}")

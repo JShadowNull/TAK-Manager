@@ -15,6 +15,7 @@ class CertConfigManager:
         """Initialize paths that require version detection"""
         version = self.directory_helper.get_takserver_version()
         if not version:
+            logger.error("Could not detect TAK Server version. Ensure version.txt exists and is not empty.")
             raise Exception("Could not detect TAK Server version. Ensure version.txt exists and is not empty.")
             
         self.tak_path = self.directory_helper.get_tak_directory()  # Let it use the version from get_takserver_version()
@@ -41,11 +42,13 @@ class CertConfigManager:
             user_elem = root.find(f".//ns:User[@identifier='{identifier}']", self.namespace)
             
             if user_elem is None:
+                logger.error(f"Certificate with identifier {identifier} not found")
                 raise Exception(f"Certificate with identifier {identifier} not found")
             
             # Convert element to string
             return etree.tostring(user_elem, encoding='unicode', pretty_print=True)
         except Exception as e:
+            logger.error(f"Error reading certificate configuration: {str(e)}")
             raise Exception(f"Error reading certificate configuration: {str(e)}")
 
     def validate_cert_config(self, config: str, identifier: str) -> Tuple[bool, str]:
@@ -64,12 +67,14 @@ class CertConfigManager:
             # Find the user element to update
             user_elem = root.find(f".//ns:User[@identifier='{identifier}']", self.namespace)
             if user_elem is None:
+                logger.error(f"Certificate with identifier {identifier} not found")
                 return False, f"Certificate with identifier {identifier} not found"
             
             try:
                 # Parse the new certificate config
                 new_elem = etree.fromstring(config)
             except etree.XMLSyntaxError as e:
+                logger.error(f"Invalid XML format in new configuration: {str(e)}")
                 return False, f"Invalid XML format in new configuration: {str(e)}"
             
             # Create a copy of the tree for validation
@@ -79,11 +84,13 @@ class CertConfigManager:
             # Find and replace the user element in the validation tree
             validation_user = validation_root.find(f".//ns:User[@identifier='{identifier}']", self.namespace)
             if validation_user is None:
+                logger.error("Invalid XML structure")
                 return False, "Invalid XML structure"
             
             # Replace the old element with the new one
             parent = validation_user.getparent()
             if parent is None:
+                logger.error("Invalid XML structure")
                 return False, "Invalid XML structure"
             
             parent.replace(validation_user, new_elem)
@@ -93,11 +100,14 @@ class CertConfigManager:
                 schema.assertValid(validation_tree)
                 return True, ""
             except etree.DocumentInvalid as e:
+                logger.error(f"Document invalid: {str(e)}")
                 return False, str(e)
             
         except etree.XMLSyntaxError as e:
+            logger.error(f"XML Syntax Error: {str(e)}")
             return False, f"XML Syntax Error: {str(e)}"
         except Exception as e:
+            logger.error(f"Error during validation: {str(e)}")
             return False, str(e)
 
     def update_cert_config(self, identifier: str, new_config: str) -> bool:
@@ -107,6 +117,7 @@ class CertConfigManager:
             # Validate first with the complete file context
             is_valid, error_msg = self.validate_cert_config(new_config, identifier)
             if not is_valid:
+                logger.error(f"Invalid configuration: {error_msg}")
                 raise Exception(f"Invalid configuration: {error_msg}")
             
             # Parse the main config file
@@ -117,6 +128,7 @@ class CertConfigManager:
             # Find the user element to update
             user_elem = root.find(f".//ns:User[@identifier='{identifier}']", self.namespace)
             if user_elem is None:
+                logger.error(f"Certificate with identifier {identifier} not found")
                 raise Exception(f"Certificate with identifier {identifier} not found")
             
             # Parse the new configuration
@@ -124,11 +136,13 @@ class CertConfigManager:
             
             # Ensure the identifier hasn't been changed
             if new_elem.get('identifier') != identifier:
+                logger.error("Certificate identifier cannot be changed")
                 raise Exception("Certificate identifier cannot be changed")
             
             # Replace the old element with the new one
             parent = user_elem.getparent()
             if parent is None:
+                logger.error("Invalid XML structure")
                 raise Exception("Invalid XML structure")
             
             parent.replace(user_elem, new_elem)
@@ -138,12 +152,14 @@ class CertConfigManager:
             return True
             
         except Exception as e:
+            logger.error(f"Error updating certificate configuration: {str(e)}")
             raise Exception(f"Error updating certificate configuration: {str(e)}")
 
     def generate_password_hash(self, password: str) -> str:
         """Generate SHA-256 hash for password with salt"""
         try:
             if not password:
+                logger.error("Password cannot be empty")
                 raise ValueError("Password cannot be empty")
             
             # Use a static salt (you could make this configurable)

@@ -115,6 +115,7 @@ class TakServerStatus:
             }
 
         except Exception as e:
+            logger.error(f"Error getting status: {str(e)}")
             return {
                 "isInstalled": False,
                 "isRunning": False,
@@ -188,6 +189,7 @@ class TakServerStatus:
         """Check takserver.log for the final startup message in recent logs only."""
         version = self.directory_helper.get_takserver_version()
         if not version:
+            logger.error("TAK Server version not found")
             return {'status': 'error', 'error': 'TAK Server version not found'}
         
         container_name = f"takserver-{version}"
@@ -216,11 +218,14 @@ class TakServerStatus:
                     return {'status': 'up'}
                 
             if "no such container" in result.stderr.lower():
+                logger.error(f'Container {container_name} not found')
                 return {'status': 'down', 'error': f'Container {container_name} not found'}
                 
+            logger.error('Server initialization not complete')
             return {'status': 'initializing', 'error': 'Server initialization not complete'}
             
         except Exception as e:
+            logger.error(f"Error checking server readiness: {str(e)}")
             return {'status': 'error', 'error': str(e)}
 
     async def check_webui_availability(self) -> Dict[str, Any]:
@@ -231,6 +236,7 @@ class TakServerStatus:
         # First check if container is running
         status = await self.get_status()
         if not status['isRunning']:
+            logger.error('TAK Server is not running')
             return {
                 'status': 'unavailable',
                 'message': 'TAK Server is not running',
