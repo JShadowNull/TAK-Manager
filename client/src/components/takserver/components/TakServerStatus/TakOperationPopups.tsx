@@ -224,7 +224,7 @@ const Popups: React.FC<PopupsProps> = ({
             <DialogTitle>
               {installError ? "Installation Failed" : "Installation Complete"}
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="break-words">
               {installError ? installError : "TAK Server has been successfully installed! You can now enjoy TAK features."}
             </DialogDescription>
           </DialogHeader>
@@ -327,7 +327,7 @@ const Popups: React.FC<PopupsProps> = ({
             <DialogTitle>
               {uninstallError ? "Uninstallation Failed" : "Uninstallation Complete"}
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="break-words">
               {uninstallError ? uninstallError : "TAK Server has been successfully uninstalled!"}
             </DialogDescription>
           </DialogHeader>

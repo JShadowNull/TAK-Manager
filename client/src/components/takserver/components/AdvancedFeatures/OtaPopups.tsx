@@ -239,8 +239,8 @@ const OtaPopups: React.FC<OtaPopupsProps> = ({
             <DialogTitle>
               {configureError ? "Configuration Failed" : "Configuration Complete"}
             </DialogTitle>
-            <DialogDescription>
-              {configureError ? configureError : "OTA has been successfully configured!"}
+            <DialogDescription className="break-words">
+              {configureError ? configureError : "OTA has been successfully configured! You can now use OTA features."}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -269,7 +269,7 @@ const OtaPopups: React.FC<OtaPopupsProps> = ({
             <DialogDescription>
               {updateProgress === 100 
                 ? "Update complete. Review the logs and click Next to continue." 
-                : "Please wait while OTA update is being applied..."}
+                : "Please wait while OTA is being updated..."}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
@@ -324,8 +324,8 @@ const OtaPopups: React.FC<OtaPopupsProps> = ({
             <DialogTitle>
               {updateError ? "Update Failed" : "Update Complete"}
             </DialogTitle>
-            <DialogDescription>
-              {updateError ? updateError : "OTA update has been successfully applied!"}
+            <DialogDescription className="break-words">
+              {updateError ? updateError : "OTA has been successfully updated!"}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
