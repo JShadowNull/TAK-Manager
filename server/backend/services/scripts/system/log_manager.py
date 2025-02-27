@@ -14,6 +14,7 @@ class LogManager:
     def __init__(self):
         self.tak_status = TakServerStatus()
         self._logs_dir = None
+        self._host_api_logs_dir = "/app/logs"
         self.directory_helper = DirectoryHelper()
 
     @property
@@ -31,20 +32,39 @@ class LogManager:
                 raise Exception("Logs directory not found")
                 
         return self._logs_dir
+    
+    @property
+    def host_api_logs_dir(self) -> str:
+        """Get the host API logs directory path"""
+        return self._host_api_logs_dir
 
     def get_available_logs(self) -> List[Dict[str, str]]:
         """Get list of available log files (only .log files, not .gz)"""
         try:
             log_files = []
-            for filename in os.listdir(self.logs_dir):
-                if filename.endswith('.log'):
-                    file_path = os.path.join(self.logs_dir, filename)
-                    log_files.append({
-                        "id": filename,
-                        "name": filename.replace('takserver-', '').replace('.log', ''),
-                        "path": file_path,
-                        "modified": os.path.getmtime(file_path)
-                    })
+            
+            # Get TAK server logs
+            if os.path.exists(self.logs_dir):
+                for filename in os.listdir(self.logs_dir):
+                    if filename.endswith('.log'):
+                        file_path = os.path.join(self.logs_dir, filename)
+                        log_files.append({
+                            "id": filename,
+                            "name": filename.replace('takserver-', '').replace('.log', ''),
+                            "path": file_path,
+                            "modified": os.path.getmtime(file_path)
+                        })
+            
+            # Get host API logs
+            api_log_path = os.path.join(self.host_api_logs_dir, "app.log")
+            if os.path.exists(api_log_path):
+                log_files.append({
+                    "id": "app.log",
+                    "name": "tak-manager",
+                    "path": api_log_path,
+                    "modified": os.path.getmtime(api_log_path)
+                })
+                
             # Sort by modification time, newest first
             return sorted(log_files, key=lambda x: x['modified'], reverse=True)
         except Exception as e:
@@ -54,7 +74,11 @@ class LogManager:
     async def stream_log_file(self, log_file: str) -> AsyncGenerator[Dict[str, Any], None]:
         """Stream a specific log file using tail -f"""
         try:
-            log_path = os.path.join(self.logs_dir, log_file)
+            # Determine if this is a TAK server log or host API log
+            if log_file == "app.log":
+                log_path = os.path.join(self.host_api_logs_dir, log_file)
+            else:
+                log_path = os.path.join(self.logs_dir, log_file)
             
             if not os.path.exists(log_path):
                 yield {

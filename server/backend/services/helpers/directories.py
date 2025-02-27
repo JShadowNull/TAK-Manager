@@ -2,9 +2,11 @@ import os
 import shutil
 import re
 from backend.config.logging_config import configure_logging
+import logging
 
 # Setup logging
 logger = configure_logging(__name__)
+logger.setLevel(logging.INFO)
 
 class DirectoryHelper:
     @staticmethod

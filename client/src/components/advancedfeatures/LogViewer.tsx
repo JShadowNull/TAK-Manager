@@ -226,31 +226,32 @@ const LogViewer: React.FC = () => {
 
           <div className="flex-1 overflow-hidden border rounded-lg mx-4">
             <ScrollArea 
-              ref={scrollAreaRef}
-              className="h-full font-mono text-muted-foreground text-sm bg-background px-2 break-normal [&_*::selection]:bg-blue-500/80 [&_*::selection]:text-primary"
+              className="h-full font-mono text-muted-foreground text-sm bg-background px-2 [&_*::selection]:bg-blue-500/80 [&_*::selection]:text-primary"
               onScroll={handleScroll}
             >
-              {error ? (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-destructive">{error}</div>
-                </div>
-              ) : filteredLogs.length === 0 ? (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-muted-foreground">
-                    {searchQuery ? 'No matching logs found' : 'No logs available'}
+              <div ref={scrollAreaRef}>
+                {error ? (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-destructive">{error}</div>
                   </div>
-                </div>
-              ) : (
-                <div>
-                  {filteredLogs.map((log, index) => (
-                    <div 
-                      key={index} 
-                      className="whitespace-pre-wrap"
-                      dangerouslySetInnerHTML={{ __html: log.html.replace(/bg-yellow-500\/20/g, 'bg-blue-500/80') }}
-                    />
-                  ))}
-                </div>
-              )}
+                ) : filteredLogs.length === 0 ? (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-muted-foreground">
+                      {searchQuery ? 'No matching logs found' : 'No logs available'}
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    {filteredLogs.map((log, index) => (
+                      <div 
+                        key={index} 
+                        className="whitespace-pre-wrap"
+                        dangerouslySetInnerHTML={{ __html: log.html.replace(/bg-yellow-500\/20/g, 'bg-blue-500/80') }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             </ScrollArea>
           </div>
 
