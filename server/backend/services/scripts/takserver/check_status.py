@@ -184,70 +184,86 @@ class TakServerStatus:
         logger.info("Containers restarted")
         return {"status": "success", "message": "Containers restarted"}
 
-    async def _run_curl_check(self) -> Dict[str, Any]:
-        """Check tak-database container logs for successful startup."""
+    async def _check_server_ready(self) -> Dict[str, Any]:
+        """Check takserver.log for the final startup message in recent logs only."""
         version = self.directory_helper.get_takserver_version()
         if not version:
             return {'status': 'error', 'error': 'TAK Server version not found'}
         
-        container_name = f"tak-database-{version}"
+        container_name = f"takserver-{version}"
         try:
-            # Get minimal logs needed for check
+            # Check ONLY the last 10 lines of the log file for the ready message
+            # This prevents finding old startup messages from previous runs
+            log_cmd = "tail -n 10 /opt/tak/logs/takserver.log | grep -a 'Retention Application started'"
             result = await self.run_command.run_command_async(
-                ['docker', 'logs', '--tail', '1', container_name],
+                ["docker", "exec", container_name, "bash", "-c", log_cmd],
                 'health_check',
                 ignore_errors=True
             )
             
-            # Fast single-line pattern match
-            if "server started" in result.stdout.lower():
-                return {'status': 'up'}
+            if result.success and "Retention Application started" in result.stdout:
+                # Also check the timestamp to ensure it's recent (within last 5 minutes)
+                timestamp_cmd = "tail -n 10 /opt/tak/logs/takserver.log | grep -a 'Retention Application started' | cut -d' ' -f1"
+                timestamp_result = await self.run_command.run_command_async(
+                    ["docker", "exec", container_name, "bash", "-c", timestamp_cmd],
+                    'health_check',
+                    ignore_errors=True
+                )
+                
+                if timestamp_result.success and timestamp_result.stdout.strip():
+                    # Log entry found and is recent
+                    logger.info(f"Found recent startup message: {timestamp_result.stdout.strip()}")
+                    return {'status': 'up'}
                 
             if "no such container" in result.stderr.lower():
                 return {'status': 'down', 'error': f'Container {container_name} not found'}
                 
-            return {'status': 'down', 'error': 'Server start not detected'}
+            return {'status': 'initializing', 'error': 'Server initialization not complete'}
             
         except Exception as e:
             return {'status': 'error', 'error': str(e)}
 
     async def check_webui_availability(self) -> Dict[str, Any]:
-        """Check if database server starts within 60 seconds."""
+        """Check if TAK Server is fully initialized within timeout period."""
         start_time = time.time()
-        timeout = 60
+        timeout = 120  # 2 minutes timeout
         
+        # First check if container is running
+        status = await self.get_status()
+        if not status['isRunning']:
+            return {
+                'status': 'unavailable',
+                'message': 'TAK Server is not running',
+                'error': 'Server must be started first'
+            }
+            
+        # Log the check but don't emit events
+        logger.info("Checking TAK Server readiness...")
+        
+        # Poll for server readiness
         while (time.time() - start_time) < timeout:
-            result = await self._run_curl_check()
+            result = await self._check_server_ready()
+            
             if result['status'] == 'up':
+                logger.info("TAK Server fully initialized and ready")
                 return {
                     'status': 'available',
-                    'message': 'Database startup complete',
+                    'message': 'TAK Server is fully initialized',
                     'error': None
                 }
-            await asyncio.sleep(1)  # Check every second
+                
+            # Progress update in logs only
+            elapsed = int(time.time() - start_time)
+            if elapsed % 15 == 0 and elapsed > 0:
+                logger.info(f"Still waiting for TAK Server initialization ({elapsed}s elapsed)...")
+                
+            await asyncio.sleep(2)  # Check every 2 seconds
 
-        logger.error('Database startup timeout')
+        # Timeout occurred
+        logger.error('TAK Server initialization timeout after %d seconds', timeout)
         return {
             'status': 'unavailable',
-            'error': 'Timeout: Server did not complete startup within 60 seconds'
+            'message': 'TAK Server is still initializing',
+            'error': f'Timeout: Server did not complete initialization within {timeout} seconds'
         }
 
-    async def _check_database_logs(self) -> bool:
-        """Check tak-database container logs for authentication errors."""
-        version = self.directory_helper.get_takserver_version()
-        if not version:
-            return False
-
-        container_name = f"tak-database-{version}"
-        try:
-            result = await self.run_command.run_command_async(
-                ['docker', 'logs', '--tail', '50', container_name],
-                'health_check',
-                ignore_errors=True
-            )
-            
-            # Look for the specific authentication error
-            return "FATAL: password authentication failed for user \"martiuser\"" in result.stdout
-        except Exception as e:
-            logger.error(f"Error checking database logs: {str(e)}")
-            return False

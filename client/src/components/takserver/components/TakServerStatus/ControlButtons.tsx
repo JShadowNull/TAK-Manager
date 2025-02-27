@@ -43,7 +43,7 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
       const response = await fetch('/api/takserver/webui-status');
       
       if (!response.ok) {
-        throw new Error('Failed to check Web UI status');
+        throw new Error('Failed to check TAK Server readiness');
       }
       
       const result = await response.json();
@@ -51,10 +51,16 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
       if (takState.isRunning) {
         setWebUIAvailable(result.status === 'available');
         
-        if (result.status !== 'available') {
+        if (result.status === 'initializing') {
           toast({
-            title: "Web UI Unavailable",
-            description: result.error || 'The Web UI is not reachable',
+            title: "TAK Server Initializing",
+            description: "The server is still starting up. Please wait...",
+            variant: "default"
+          });
+        } else if (result.status !== 'available') {
+          toast({
+            title: "TAK Server Not Ready",
+            description: result.error || 'The server is not fully initialized',
             variant: "destructive"
           });
         }
@@ -62,9 +68,9 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
     } catch (error) {
       if (takState.isRunning) {
         setWebUIAvailable(false);
-        const errorMessage = error instanceof Error ? error.message : 'Failed to check Web UI status';
+        const errorMessage = error instanceof Error ? error.message : 'Failed to check TAK Server readiness';
         toast({
-          title: "Web UI Check Failed",
+          title: "Readiness Check Failed",
           description: errorMessage,
           variant: "destructive"
         });
@@ -152,6 +158,12 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
     onInstall(); // Reset to install view
   };
 
+  const getWebUIButtonText = () => {
+    if (isCheckingWebUI) return "Checking Server Readiness...";
+    if (webUIAvailable) return "Launch TAK Web UI";
+    return "Check Server Readiness";
+  };
+
   return (
     <>
       <div className="flex gap-4">
@@ -183,10 +195,10 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
                   rel="noopener noreferrer"
                   disabled={isOperationInProgress || isCheckingWebUI}
                   loading={isCheckingWebUI}
-                  loadingText="Verifying Web UI..."
+                  loadingText="Checking Server Readiness..."
                   onClick={!webUIAvailable ? checkWebUIStatus : undefined}
                 >
-                  {webUIAvailable ? "Launch TAK Web UI" : "Retry Web UI Check"}
+                  {getWebUIButtonText()}
                 </Button>
               </>
             ) : (

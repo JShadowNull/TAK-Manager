@@ -435,7 +435,7 @@ async def get_takserver_status():
 
 @takserver.get('/webui-status')
 async def get_webui_status():
-    """Check if TAK Server web UI is available.
+    """Check if TAK Server is fully initialized and ready.
     
     API Endpoint:
         GET /webui-status
@@ -443,16 +443,22 @@ async def get_webui_status():
     Returns:
         - 200: JSON response with availability status:
             {
-                "status": "available"|"unavailable"|"error",
+                "status": "available"|"unavailable"|"initializing"|"error",
                 "message": str,
                 "error": str|null
             }
         - 500: Error details if check fails
+        
+    Note: Checks for "Retention Application started" message in logs
     """
     try:
         status_checker = TakServerStatus()
         result = await status_checker.check_webui_availability()
         return result
     except Exception as e:
-        logger.error(f"Web UI status check failed: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"TAK Server readiness check failed: {str(e)}", exc_info=True)
+        return {
+            "status": "error",
+            "message": "Failed to check TAK Server readiness",
+            "error": str(e)
+        }
