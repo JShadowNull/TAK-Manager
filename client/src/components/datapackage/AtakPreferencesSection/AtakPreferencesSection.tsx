@@ -437,7 +437,7 @@ const AtakPreferencesSection: React.FC<AtakPreferencesSectionProps> = memo(({
               .map(([categoryKey, categoryName]) => {
                 if (categoryKey === 'CUSTOM') {
                   return (
-                    <div key="custom" className="bg-card p-4 rounded-lg shadow-lg border border-border break-normal">
+                    <div key="custom" className="bg-card p-4 rounded-lg shadow-lg break-normal">
                       <AtakCustomSettings
                         customPreferences={customPreferences}
                         preferences={preferences}

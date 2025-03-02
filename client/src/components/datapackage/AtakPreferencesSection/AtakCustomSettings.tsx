@@ -76,65 +76,68 @@ const AtakCustomSettings: React.FC<AtakCustomSettingsProps> = memo(({
   }, [onPreferenceChange]);
 
   return (
-    <div className="">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-xl font-semibold text-primary">Custom Settings</h3>
-        <div className="flex items-center gap-2">
-          {deleteMode ? (
-            <>
-              <Checkbox
-                checked={selectedSettings.size === customPreferences.length}
-                onCheckedChange={onSelectAll}
-                id="select-all"
-              />
-              <label
-                htmlFor="select-all"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-              >
-                Select All
-              </label>
-              <Button
-                variant="danger"
-                onClick={() => {
-                  onRemoveSelectedCustomPreferences();
-                  onDeleteModeChange(false);
-                }}
-                className="flex items-center gap-2"
-              >
-                <Trash2 className="h-4 w-4" />
-                Remove Selected
-              </Button>
-              <Button 
-                variant="outline"
-                onClick={() => onDeleteModeChange(false)}
-              >
-                Cancel
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button 
-                variant="outline" 
-                className="flex items-center gap-2"
-                onClick={() => onShowAddDialogChange(true)}
-              >
-                <Plus className="h-4 w-4" />
-                Add Custom Setting
-              </Button>
-              <Button
-                variant="outline"
-                className="flex items-center gap-2"
-                onClick={() => onDeleteModeChange(true)}
-              >
-                <Trash2 className="h-4 w-4" />
-                Remove Settings
-              </Button>
-            </>
-          )}
+    <div>
+      <div className="sticky top-0 bg-card z-10 pt-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-semibold text-primary">Custom Settings</h3>
+          <div className="flex items-center gap-2">
+            {deleteMode ? (
+              <>
+                <Checkbox
+                  checked={selectedSettings.size === customPreferences.length}
+                  onCheckedChange={onSelectAll}
+                  id="select-all"
+                />
+                <label
+                  htmlFor="select-all"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  Select All
+                </label>
+                <Button
+                  variant="danger"
+                  onClick={() => {
+                    onRemoveSelectedCustomPreferences();
+                    onDeleteModeChange(false);
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Remove Selected
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={() => onDeleteModeChange(false)}
+                >
+                  Cancel
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button 
+                  variant="outline" 
+                  className="flex items-center gap-2"
+                  onClick={() => onShowAddDialogChange(true)}
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Custom Setting
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex items-center gap-2"
+                  onClick={() => onDeleteModeChange(true)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Remove Settings
+                </Button>
+              </>
+            )}
+          </div>
         </div>
+        <Separator className="my-5"/>
       </div>
-      <Separator />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {customPreferences.map((item) => {
           if (deleteMode) {
             return (
