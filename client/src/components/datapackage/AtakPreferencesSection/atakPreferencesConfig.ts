@@ -49,6 +49,7 @@ export const ATAK_PREFERENCES: AtakPreference[] = [
     category: "DISPLAY",
     defaultValue: "true"
 },
+
 {
     name: "Enable notifications when other users are controlled",
     label: "atakControlOtherUserNotification",
@@ -109,7 +110,7 @@ export const ATAK_PREFERENCES: AtakPreference[] = [
         { value: "false", text: "False" }
     ],
     category: "SYSTEM",
-    defaultValue: "true"
+    defaultValue: "false"
 },
 {
     name: "Disable automatic linking of map item links",
@@ -122,13 +123,7 @@ export const ATAK_PREFERENCES: AtakPreference[] = [
     category: "DISPLAY",
     defaultValue: "true"
 },
-{
-    name: "Scaling factor for relative overlays",
-    label: "relativeOverlaysScalingRadioList",
-    input_type: "text",
-    placeholder: "1.0",
-    category: "DISPLAY"
-},
+
 {
     name: "Enable file sharing functionality",
     label: "filesharingEnabled",
@@ -1616,4 +1611,122 @@ export const loadCustomPreferences = (): AtakPreference[] => {
 
 export const saveCustomPreferences = (preferences: AtakPreference[]) => {
   localStorage.setItem(CUSTOM_PREFERENCES_KEY, JSON.stringify(preferences));
+};
+
+// Parse ATAK preferences XML file
+export const parseAtakPreferencesXml = (xmlContent: string): Record<string, string> => {
+  try {
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xmlContent, "text/xml");
+    
+    // Find the com.atakmap.app_preferences section
+    const appPreferences = xmlDoc.querySelector('preference[name="com.atakmap.app_preferences"]');
+    if (!appPreferences) {
+      throw new Error("No ATAK app preferences found in the file");
+    }
+    
+    // Extract all entries
+    const entries = appPreferences.querySelectorAll('entry');
+    const preferences: Record<string, string> = {};
+    
+    entries.forEach(entry => {
+      const key = entry.getAttribute('key');
+      if (key) {
+        // Get the text content of the entry
+        const value = entry.textContent?.trim() || '';
+        preferences[key] = value;
+      }
+    });
+    
+    return preferences;
+  } catch (error) {
+    console.error("Error parsing ATAK preferences file:", error);
+    throw error;
+  }
+};
+
+// Import ATAK preferences from parsed XML data
+export const importAtakPreferences = (
+  parsedPreferences: Record<string, string>,
+  currentPreferences: Record<string, PreferenceState>,
+  atakPreferencesList: AtakPreference[]
+): {
+  updatedPreferences: Record<string, PreferenceState>,
+  newCustomPreferences: AtakPreference[]
+} => {
+  const updatedPreferences = { ...currentPreferences };
+  const existingLabels = new Set(atakPreferencesList.map(pref => pref.label));
+  const newCustomPreferences: AtakPreference[] = [];
+  
+  // Process each preference from the XML
+  Object.entries(parsedPreferences).forEach(([key, value]) => {
+    // Check if this preference exists in our current list
+    if (existingLabels.has(key)) {
+      // Update existing preference
+      updatedPreferences[key] = {
+        value: convertAtakValueToString(value),
+        enabled: true
+      };
+    } else {
+      // Add as custom preference
+      const inputType = determineInputType(value);
+      const newPref: AtakPreference = {
+        name: key, // Use the key as the name if no better name is available
+        label: key,
+        input_type: inputType,
+        category: 'CUSTOM',
+        defaultValue: convertAtakValueToString(value)
+      };
+      
+      // Add options for boolean values
+      if (inputType === 'select' && (value === 'true' || value === 'false')) {
+        newPref.options = [
+          { value: 'true', text: 'True' },
+          { value: 'false', text: 'False' }
+        ];
+      }
+      
+      newCustomPreferences.push(newPref);
+      
+      // Also add to updated preferences
+      updatedPreferences[key] = {
+        value: convertAtakValueToString(value),
+        enabled: true
+      };
+    }
+  });
+  
+  return { updatedPreferences, newCustomPreferences };
+};
+
+// Helper function to determine input type based on value
+const determineInputType = (value: string): 'text' | 'select' | 'number' | 'password' => {
+  // Check if it's a boolean
+  if (value === 'true' || value === 'false') {
+    return 'select';
+  }
+  
+  // Check if it's a number
+  if (!isNaN(Number(value)) && value.trim() !== '') {
+    return 'number';
+  }
+  
+  // Default to text
+  return 'text';
+};
+
+// Helper function to convert ATAK values to string
+const convertAtakValueToString = (value: string): string => {
+  // Handle class java.lang.Boolean
+  if (value === 'true' || value === 'false') {
+    return value;
+  }
+  
+  // Handle class java.lang.Integer or class java.lang.Float
+  if (!isNaN(Number(value)) && value.trim() !== '') {
+    return value;
+  }
+  
+  // Default to the original string
+  return value;
 }; 

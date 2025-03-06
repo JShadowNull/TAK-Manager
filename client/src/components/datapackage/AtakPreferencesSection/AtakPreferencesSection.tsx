@@ -12,6 +12,7 @@ import AtakCustomSettings from './AtakCustomSettings';
 import { Input } from "@/components/shared/ui/shadcn/input";
 import { Search } from 'lucide-react';
 import { Separator } from "@/components/shared/ui/shadcn/separator";
+import { AtakPreferencesImport } from './AtakPreferencesImport';
 
 
 interface AtakPreferencesSectionProps {
@@ -50,6 +51,7 @@ const AtakPreferencesSection: React.FC<AtakPreferencesSectionProps> = memo(({
   );
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showImportDialog, setShowImportDialog] = useState(false);
 
   // Initialize new preferences only when they don't exist
   useEffect(() => {
@@ -348,6 +350,19 @@ const AtakPreferencesSection: React.FC<AtakPreferencesSectionProps> = memo(({
         <div className="flex items-center justify-between bg-card p-4 rounded-lg shadow-md border border-border">
           <Label className="text-lg font-medium">ATAK Settings</Label>
           <div className="flex gap-2">
+            <AtakPreferencesImport
+              showImportDialog={showImportDialog}
+              onShowImportDialogChange={setShowImportDialog}
+              preferences={preferences}
+              customPreferences={customPreferences}
+              allPreferences={allPreferences}
+              onPreferenceChange={onPreferenceChange}
+              onEnableChange={onEnableChange}
+              onCustomPreferencesChange={(prefs) => {
+                setCustomPreferences(prefs);
+                saveCustomPreferences(prefs);
+              }}
+            />
             <AtakConfirmDefaults 
               handleReset={handleReset}
               showDefaultDialog={resetDialogOpen}
@@ -379,7 +394,7 @@ const AtakPreferencesSection: React.FC<AtakPreferencesSectionProps> = memo(({
       <ScrollArea className="h-full border border-border rounded-lg">
         <div className="space-y-6 px-4">
           {searchTerm ? (
-            <div className="bg-card p-4 rounded-lg break-normal">
+            <div className="bg-card p-4 rounded-lg break-words">
               <div className="sticky top-0 bg-card z-10 pt-5">
                 <h3 className="text-xl font-semibold text-primary">
                   Search Results ({filteredPreferences.length})
@@ -437,7 +452,7 @@ const AtakPreferencesSection: React.FC<AtakPreferencesSectionProps> = memo(({
               .map(([categoryKey, categoryName]) => {
                 if (categoryKey === 'CUSTOM') {
                   return (
-                    <div key="custom" className="bg-card p-4 rounded-lg shadow-lg break-normal">
+                    <div key="custom" className="bg-card p-4 rounded-lg shadow-lg break-words">
                       <AtakCustomSettings
                         customPreferences={customPreferences}
                         preferences={preferences}
@@ -468,7 +483,7 @@ const AtakPreferencesSection: React.FC<AtakPreferencesSectionProps> = memo(({
                 if (categoryPreferences.length === 0) return null;
 
                 return (
-                  <div key={categoryKey} className="bg-card p-4 rounded-lg shadow-lg break-normal">
+                  <div key={categoryKey} className="bg-card p-4 rounded-lg shadow-lg break-words">
                     <div className="sticky top-0 bg-card z-10 pt-5">
                       <h3 className="text-xl font-semibold text-primary">
                         {categoryName}
@@ -484,7 +499,7 @@ const AtakPreferencesSection: React.FC<AtakPreferencesSectionProps> = memo(({
                         return (
                           <div key={item.label} className="relative">
                             <div className="flex items-center justify-between mb-2">
-                              <span className="font-medium">{item.name}</span>
+                              <span className="font-medium w-10/12">{item.name}</span>
                               <Switch
                                 checked={isPreferenceEnabled}
                                 onCheckedChange={(enabled) => handleEnableChange(item.label, enabled)}

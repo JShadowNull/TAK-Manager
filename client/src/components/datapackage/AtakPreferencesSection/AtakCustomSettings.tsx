@@ -158,15 +158,15 @@ const AtakCustomSettings: React.FC<AtakCustomSettingsProps> = memo(({
           return (
             <div key={item.label} className="relative">
               <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{item.name}</span>
+                <div>
+                  <span className="font-medium w-10/12">{item.name}</span>
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => onEditPreference(item)}
-                    className="h-6 w-6 hover:bg-accent"
+                    className="hover:bg-transparent hover:text-green-600 dark:hover:text-green-500 ml-1"
                   >
-                    <Pencil className="h-3 w-3" />
+                    <Pencil/>
                   </Button>
                 </div>
                 <Switch
