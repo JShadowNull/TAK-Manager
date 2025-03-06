@@ -345,8 +345,8 @@ const AtakPreferencesSection: React.FC<AtakPreferencesSectionProps> = memo(({
   }, []);
 
   return (
-    <div className="h-screen overflow-auto">
-      <div className="bg-background p-4">
+    <div className="flex flex-col">
+      <div className="bg-background p-4 flex-shrink-0">
         <div className="flex items-center justify-between bg-card p-4 rounded-lg shadow-md border border-border">
           <Label className="text-lg font-medium">ATAK Settings</Label>
           <div className="flex gap-2">
@@ -389,10 +389,15 @@ const AtakPreferencesSection: React.FC<AtakPreferencesSectionProps> = memo(({
         activeCategory={activeCategory} 
         onCategoryChange={setActiveCategory} 
         categories={PREFERENCE_CATEGORIES}
+        className="flex-shrink-0"
       />
 
-      <ScrollArea className="h-full border border-border rounded-lg">
-        <div className="space-y-6 px-4">
+      <ScrollArea 
+        className="border border-border rounded-lg" 
+        flexHeight={true}
+        maxHeight="calc(100vh - 440px)"
+      >
+        <div className="space-y-6 px-4 pb-4">
           {searchTerm ? (
             <div className="bg-card p-4 rounded-lg break-words">
               <div className="sticky top-0 bg-card z-10 pt-5">

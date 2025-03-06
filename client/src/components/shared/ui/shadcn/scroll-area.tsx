@@ -6,12 +6,14 @@ import { cn } from "@/lib/utils"
 interface ScrollAreaProps extends React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root> {
   autoScroll?: boolean;
   content?: any; // Content to watch for changes
+  flexHeight?: boolean; // Whether to use flexible height based on content
+  maxHeight?: string; // Optional max height for flex mode
 }
 
 const ScrollArea = React.forwardRef<
   React.ElementRef<typeof ScrollAreaPrimitive.Root>,
   ScrollAreaProps
->(({ className, children, autoScroll = false, content, ...props }, ref) => {
+>(({ className, children, autoScroll = false, content, flexHeight = false, maxHeight, ...props }, ref) => {
   const viewportRef = React.useRef<HTMLDivElement>(null);
 
   const scrollToBottom = React.useCallback(() => {
@@ -45,6 +47,20 @@ const ScrollArea = React.forwardRef<
     return () => resizeObserver.disconnect();
   }, [autoScroll, scrollToBottom]);
 
+  // For flexHeight mode, we need to use a different approach
+  if (flexHeight) {
+    return (
+      <div 
+        className={cn("overflow-auto rounded-md", className)}
+        style={maxHeight ? { maxHeight } : undefined}
+        {...props as any}
+      >
+        {children}
+      </div>
+    );
+  }
+
+  // Standard ScrollArea with fixed height
   return (
     <ScrollAreaPrimitive.Root
       ref={ref}
@@ -54,7 +70,10 @@ const ScrollArea = React.forwardRef<
       <ScrollAreaPrimitive.Viewport 
         ref={viewportRef}
         className="h-full w-full rounded-[inherit] break-words"
-        style={{ overflowWrap: 'break-word', wordBreak: 'break-all' }}
+        style={{ 
+          overflowWrap: 'break-word', 
+          wordBreak: 'break-all'
+        }}
       >
         {children}
       </ScrollAreaPrimitive.Viewport>

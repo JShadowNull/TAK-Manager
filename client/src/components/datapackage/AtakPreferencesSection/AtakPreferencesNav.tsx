@@ -5,15 +5,17 @@ interface AtakPreferencesNavProps {
   activeCategory: string;
   onCategoryChange: (category: string) => void;
   categories: typeof PREFERENCE_CATEGORIES;
+  className?: string;
 }
 
 export const AtakPreferencesNav = ({ 
   activeCategory, 
   onCategoryChange,
-  categories 
+  categories,
+  className = ''
 }: AtakPreferencesNavProps) => {
   return (
-    <NavigationMenu className="w-full mb-4">
+    <NavigationMenu className={`w-full mb-4 ${className}`}>
       <NavigationMenuList className="flex-wrap" showSeparator={true}>
         {Object.entries(categories).map(([key, name]) => (
           <NavigationMenuItem key={key}>
