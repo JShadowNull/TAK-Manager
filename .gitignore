@@ -60,3 +60,6 @@ docker/tak-manager-1.0.0.tar.gz
 
 # internal docs
 docs/
+
+# ignore cursor rules
+.cursor 
