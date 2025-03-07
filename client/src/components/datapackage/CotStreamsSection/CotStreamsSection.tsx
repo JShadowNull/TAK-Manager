@@ -214,7 +214,7 @@ const CotStreamsSection: React.FC<CotStreamsSectionProps> = memo(({
 
     const tooltips = {
       description: "A unique, descriptive name for this TAK Server connection",
-      ipAddress: "The IP address of your host machine or vpn connection. This is what clients will connect to.",
+      ipAddress: "The IP address, domain name, or hostname of your host machine or vpn connection. This is what clients will connect to.",
       port: "The port number for the TAK Server connection. If you installed the TAK Server using this application, you should be use 8089.",
       protocol: "The connection protocol - SSL for secure connections, TCP for unencrypted. If you installed the TAK Server using this application, you should use SSL.",
       caLocation: "The CA certificate file used for secure SSL connections. If you installed the TAK Server using this application, you should use truststore-intermediate.p12.",

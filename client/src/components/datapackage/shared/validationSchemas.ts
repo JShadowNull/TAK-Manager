@@ -13,8 +13,25 @@ export const takServerSchema = z.object({
     .regex(/^[a-zA-Z0-9-]+$/, "Only letters, numbers, and hyphens are allowed")
     .nonempty("Server name is required"),
   ipAddress: z.string()
-    .ip("Must be a valid IP address")
-    .nonempty("IP address is required"),
+    .nonempty("IP address or hostname is required")
+    .refine(
+      (value) => {
+        // Check if it's a valid IP address
+        const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+        
+        // Check if it's a valid domain name
+        // This regex allows domain names like example.com, sub.example.com, etc.
+        const domainRegex = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/i;
+        
+        // Check if it's a valid hostname (simple name without dots)
+        const hostnameRegex = /^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/i;
+        
+        return ipRegex.test(value) || domainRegex.test(value) || hostnameRegex.test(value);
+      },
+      {
+        message: "Must be a valid IP address, domain name, or hostname"
+      }
+    ),
   port: z.number()
     .min(1, "Port must be at least 1")
     .max(65535, "Port must be at most 65535"),

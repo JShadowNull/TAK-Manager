@@ -178,7 +178,7 @@ const BulkGeneratorSection: React.FC<BulkGeneratorSectionProps> = ({
       if (match) {
         const [, name, index] = match;
         const fieldMap: Record<string, string> = {
-          ipAddress: 'IP Address',
+          ipAddress: 'IP Address, Domain Name, or Hostname',
           protocol: 'Protocol',
           port: 'Port',
           description: 'Description',

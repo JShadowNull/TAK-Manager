@@ -36,10 +36,10 @@ export const generateCotStreamItems = (count: number): CotStreamItem[] => {
         required: true
       },
       {
-        name: `IP address of TAK Server`,
+        name: `IP address, domain name, or hostname of TAK Server`,
         label: `ipAddress${i}`,
         input_type: "text",
-        placeholder: "192.168.1.20",
+        placeholder: "192.168.1.20, example.com, or takserver",
         required: true
       },
       {
