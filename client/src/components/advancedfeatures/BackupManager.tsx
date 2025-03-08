@@ -199,7 +199,7 @@ const BackupManager: React.FC = () => {
                 placeholder="Backup name (optional)"
                 value={newBackupName}
                 onChange={(e) => setNewBackupName(e.target.value)}
-                className="max-w-xs"
+                className="w-1/2 lg:w-auto"
               />
               <Button
                 onClick={() => setDialog({
@@ -216,7 +216,7 @@ const BackupManager: React.FC = () => {
             </div>
 
             <div className="border rounded-lg">
-              <ScrollArea className="h-[400px]">
+              <ScrollArea className="h-fit lg:h-[400px]">
                 <div className="p-4 space-y-2">
                   {isLoading ? (
                     <div className="text-center py-4 text-muted-foreground">

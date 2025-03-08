@@ -42,7 +42,7 @@ const ContainerStateIcon: React.FC<ContainerStateIconProps> = ({
       disabled={isLoading || disabled}
       loading={isLoading}
       loadingText={isRunning ? "Stopping..." : "Starting..."}
-      className={cn(getStatusColor())}
+      className={cn("w-full", getStatusColor())}
       leadingIcon={
         <FontAwesomeIcon 
           icon={isRunning ? faStop : faPlay}

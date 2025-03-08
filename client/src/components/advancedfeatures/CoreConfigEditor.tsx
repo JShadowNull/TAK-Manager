@@ -148,8 +148,8 @@ const CoreConfigEditor: React.FC = () => {
     <>
       <Card className="w-full">
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+          <div className="lg:flex lg:items-center lg:justify-between">
+            <div className="flex flex-col lg:flex-row lg:items-center gap-4">
               <CardTitle>Core Configuration Editor</CardTitle>
               <div className="flex items-center gap-2">
                 <span className="relative flex h-2 w-2">
@@ -175,6 +175,7 @@ const CoreConfigEditor: React.FC = () => {
                 loading={isRestarting}
                 loadingText="Restarting..."
                 leadingIcon={<RotateCcw className="h-4 w-4" />}
+                className="w-full lg:w-auto mt-4 lg:mt-0"
               >
                 Restart TAK Server
               </Button>
@@ -198,17 +199,19 @@ const CoreConfigEditor: React.FC = () => {
                 />
               )}
             </div>
-            <div className="flex justify-end space-x-2">
+            <div className="flex flex-col lg:flex-row justify-end gap-2">
               <Button
                 variant="outline"
                 onClick={fetchConfig}
                 disabled={isLoading}
+                className="w-full lg:w-auto"
               >
                 Reset
               </Button>
               <Button
                 onClick={handleSave}
                 disabled={isLoading}
+                className="w-full lg:w-auto"
               >
                 Save Changes
               </Button>

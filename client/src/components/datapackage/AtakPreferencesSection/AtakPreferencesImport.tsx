@@ -188,7 +188,7 @@ export const AtakPreferencesImport: React.FC<AtakPreferencesImportProps> = ({
         onClick={() => onShowImportDialogChange(true)}
       >
         <Upload size={16} />
-        <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+        <span className="sr-only lg:not-sr-only lg:whitespace-nowrap">
           Import Preferences
         </span>
       </Button>

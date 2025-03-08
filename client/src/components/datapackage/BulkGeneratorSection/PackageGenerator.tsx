@@ -348,7 +348,7 @@ const BulkGeneratorSection: React.FC<BulkGeneratorSectionProps> = ({
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-4">
-          <ScrollArea className="w-1/3 min-w-fit rounded-md border">
+          <ScrollArea className="w-full lg:w-1/3 min-w-fit rounded-md border">
             <Command>
               <CommandInput 
                 placeholder="Search client certificates..." 
@@ -409,7 +409,7 @@ const BulkGeneratorSection: React.FC<BulkGeneratorSectionProps> = ({
                         onChange={(e) => handleFileNameChange(cert.value, e.target.value)}
                         onBlur={() => handleBlur(cert.value)}
                         className={cn(
-                          "w-64",
+                          "w-32 lg:w-auto",
                           fileNameErrors[cert.value] && "border-destructive focus-visible:ring-destructive"
                         )}
                       />
@@ -424,12 +424,13 @@ const BulkGeneratorSection: React.FC<BulkGeneratorSectionProps> = ({
           </div>
         )}
 
-        <div className="flex justify-end">
+        <div className="flex justify-center lg:justify-end w-full">
           <Button
             onClick={handleGenerate}
             disabled={selectedCerts.length === 0 || isLoading}
             loading={isLoading}
             loadingText="Generating..."
+            className="w-full lg:w-auto"
           >
             Generate {selectedCerts.length} Package{selectedCerts.length !== 1 ? 's' : ''}
           </Button>

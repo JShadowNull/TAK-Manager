@@ -394,7 +394,7 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={handleClose}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Pencil className="h-5 w-5 text-primary" />
@@ -429,7 +429,7 @@ const CertificateConfigEditor: React.FC<CertificateConfigEditorProps> = ({
             </div>
             
             {/* Password & Group Section */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-4 lg:grid lg:grid-cols-2">
               {/* Password Column */}
               <div>
                 <Label>Add Password</Label>

@@ -26,7 +26,7 @@ export const AtakConfirmDefaults = ({
     <DialogTrigger asChild>
       <Button variant="outline">
         <RotateCcw className="h-3.5 w-3.5" />
-        <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+        <span className="sr-only lg:not-sr-only lg:whitespace-nowrap">
           Reset to Defaults
         </span>
       </Button>

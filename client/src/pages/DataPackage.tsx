@@ -222,7 +222,7 @@ const DataPackage: React.FC = () => {
       <div className="mx-auto space-y-8">
         <Tabs defaultValue={currentTab} onValueChange={setCurrentTab} className="w-full">
           <div className="flex justify-center mb-8">
-            <TabsList className="bg-muted">
+            <TabsList className="bg-muted flex-wrap h-auto w-auto">
               <TabsTrigger 
                 value="cot-streams" 
                 className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:rounded-lg"

@@ -93,8 +93,8 @@
     "concurrently": "^9.1.2",
     "typescript": "^5.7.3",
     "vite": "^6.1.1",
+    "vite-plugin-monaco-editor": "^1.1.0",
     "vite-plugin-pwa": "^0.21.1",
-    "workbox-window": "^7.3.0",
-    "vite-plugin-monaco-editor": "^1.1.0"
+    "workbox-window": "^7.3.0"
   }
 }

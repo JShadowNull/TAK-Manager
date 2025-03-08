@@ -286,7 +286,7 @@ export const Dashboard: React.FC = () => {
           description="Real-time CPU utilization"
           trendingValue={`${metrics.totalCpu.toFixed(2)}%`}
           chartColor="blue"
-          className="w-full"
+          className="w-full break-normal"
         />
         <AnalyticsChart
           data={memoryHistory}
@@ -294,7 +294,7 @@ export const Dashboard: React.FC = () => {
           description="Real-time memory utilization"
           trendingValue={`${metrics.totalMemory.toFixed(2)} MB`}
           chartColor="red"
-          className="w-full"
+          className="w-full break-normal"
         />
         <AnalyticsChart
           data={uploadHistory}
@@ -302,7 +302,7 @@ export const Dashboard: React.FC = () => {
           description="Network upload speed"
           trendingValue={`${metrics.network.upload.toFixed(2)} MB/s`}
           chartColor="green"
-          className="w-full"
+          className="w-full break-normal"
         />
         <AnalyticsChart
           data={downloadHistory}
@@ -310,7 +310,7 @@ export const Dashboard: React.FC = () => {
           description="Network download speed"
           trendingValue={`${metrics.network.download.toFixed(2)} MB/s`}
           chartColor="yellow"
-          className="w-full"
+          className="w-full break-normal"
         />
       </div>
 
@@ -326,19 +326,21 @@ export const Dashboard: React.FC = () => {
                 <li className="border-1 border-border p-4 rounded">No containers found</li>
               ) : (
                 containers.map((container) => (
-                  <li key={container.id} className="p-4 rounded flex justify-between items-center space-x-4">
-                    <div className="grow">
+                  <li key={container.id} className="p-4 rounded flex flex-col lg:flex-row justify-between items-start lg:items-center space-y-2 lg:space-y-0 lg:space-x-4">
+                    <div className="grow w-full">
                       <div className="font-medium">{container.name}</div>
                       <div className="text-sm text-muted-foreground">
                         Status: {container.status} | Image: {container.image}
                       </div>
                     </div>
-                    <ContainerStateIcon
-                      name={container.name}
-                      isRunning={container.running}
-                      isLoading={loadingStates[container.name]}
-                      onOperation={handleContainerOperation}
-                    />
+                    <div className="w-full lg:w-auto">
+                      <ContainerStateIcon
+                        name={container.name}
+                        isRunning={container.running}
+                        isLoading={loadingStates[container.name]}
+                        onOperation={handleContainerOperation}
+                      />
+                    </div>
                   </li>
                 ))
               )}

@@ -184,19 +184,19 @@ const OtaConfigurationForm: React.FC<OtaConfigurationFormProps> = ({ onClose }) 
               </div>
             </div>
 
-            <div className="flex justify-end gap-4 mt-4">
+            <div className="flex flex-col lg:flex-row justify-end gap-4 mt-4">
               <Button
                 variant="secondary"
                 onClick={onClose}
                 type="button"
-                className="hover:bg-red-500"
+                className="hover:bg-red-500 w-full"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
                 variant="primary"
-                className="hover:bg-green-500"
+                className="hover:bg-green-500 w-full"
               >
                 Begin Configuration
               </Button>

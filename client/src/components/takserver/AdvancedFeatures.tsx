@@ -37,36 +37,38 @@ const AdvancedFeatures: React.FC = () => {
           <div>
             <h3 className="text-base font-bold mb-4 text-primary">Advanced Features</h3>
 
-            <div className="bg-sidebar border border-border p-4 rounded-lg mb-4">
+            <div className="bg-sidebar border border-border p-4 rounded-lg mb-4 break-normal">
               <p className="text-sm text-primary">
                 Once configured, enter your server ip address and port below and paste into ATAK for update url to check for plugins and install them
               </p>
-              <div className="flex items-center gap-2 mt-2">
+              <div className="flex flex-col lg:flex-row lg:items-center gap-2 mt-2">
                 <Input 
                   type="text" 
                   id="ota-zip-file" 
                   value={inputValue}
-                  className="w-1/3"
+                  className="flex-1 max-w-[450px]"
                   onChange={(e) => setInputValue(e.target.value)}
                 />
-                <Button variant="outline" size="icon" className="w-10 h-10" tooltip="Copy to clipboard" triggerMode="hover" onClick={() => {
-                  navigator.clipboard.writeText(inputValue);
-                  toast({
-                    title: "Copied to clipboard",
-                    description: inputValue
-                  });
-                }}>
-                  <Copy/>
-                </Button>
-                <Button variant="outline" size="icon" className="w-10 h-10" tooltip="Restore default url" triggerMode="hover" onClick={() => {
-                  setInputValue("https://your-ip-address:8443/plugins");
-                  toast({
-                    title: "Default url restored",
-                    description: "https://your-ip-address:8443/plugins"
-                  });
-                }}>
-                  <RefreshCw/>
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="icon" className="w-10 h-10" tooltip="Copy to clipboard" triggerMode="hover" onClick={() => {
+                    navigator.clipboard.writeText(inputValue);
+                    toast({
+                      title: "Copied to clipboard",
+                      description: inputValue
+                    });
+                  }}>
+                    <Copy/>
+                  </Button>
+                  <Button variant="outline" size="icon" className="w-10 h-10" tooltip="Restore default url" triggerMode="hover" onClick={() => {
+                    setInputValue("https://your-ip-address:8443/plugins");
+                    toast({
+                      title: "Default url restored",
+                      description: "https://your-ip-address:8443/plugins"
+                    });
+                  }}>
+                    <RefreshCw/>
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

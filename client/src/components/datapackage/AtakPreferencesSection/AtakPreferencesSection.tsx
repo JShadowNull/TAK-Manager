@@ -348,7 +348,7 @@ const AtakPreferencesSection: React.FC<AtakPreferencesSectionProps> = memo(({
     <div className="flex flex-col">
       <div className="bg-background p-4 flex-shrink-0">
         <div className="flex items-center justify-between bg-card p-4 rounded-lg shadow-md border border-border">
-          <Label className="text-lg font-medium">ATAK Settings</Label>
+          <Label className="text-lg font-medium break-normal">ATAK Settings</Label>
           <div className="flex gap-2">
             <AtakPreferencesImport
               showImportDialog={showImportDialog}
@@ -393,9 +393,8 @@ const AtakPreferencesSection: React.FC<AtakPreferencesSectionProps> = memo(({
       />
 
       <ScrollArea 
-        className="border border-border rounded-lg" 
+        className="border border-border rounded-lg lg:max-h-[calc(100vh-440px)] h-fit" 
         flexHeight={true}
-        maxHeight="calc(100vh - 440px)"
       >
         <div className="space-y-6 px-4 pb-4">
           {searchTerm ? (
@@ -406,7 +405,7 @@ const AtakPreferencesSection: React.FC<AtakPreferencesSectionProps> = memo(({
                 </h3>
                 <Separator className="my-5"/>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 {filteredPreferences.length === 0 ? (
                   <div className="text-muted-foreground col-span-full py-2 text-center">
                     No settings found matching "{searchTerm}"
@@ -495,7 +494,7 @@ const AtakPreferencesSection: React.FC<AtakPreferencesSectionProps> = memo(({
                       </h3>
                       <Separator className="my-5"/>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                       {categoryPreferences.map((item) => {
                         const pref = preferences[item.label] || {};
                         const isPreferenceEnabled = pref.enabled !== undefined ? pref.enabled : false;

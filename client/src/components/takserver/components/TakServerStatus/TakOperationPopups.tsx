@@ -167,7 +167,7 @@ const Popups: React.FC<PopupsProps> = ({
         <DialogContent 
           onInteractOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
-          className="xl:max-w-3xl"
+          className="w-[95%] mx-auto sm:w-full max-w-lg md:max-w-2xl xl:max-w-3xl"
         >
           <DialogHeader>
             <DialogTitle>Installing TAK Server</DialogTitle>
@@ -219,6 +219,7 @@ const Popups: React.FC<PopupsProps> = ({
         <DialogContent 
           onInteractOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
+          className="w-[95%] mx-auto xl:w-full"
         >
           <DialogHeader>
             <DialogTitle>
@@ -239,6 +240,7 @@ const Popups: React.FC<PopupsProps> = ({
         <DialogContent 
           onInteractOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
+          className="w-[95%] mx-auto xl:w-full"
         >
           <DialogHeader>
             <DialogTitle>Confirm Uninstall</DialogTitle>
@@ -246,11 +248,11 @@ const Popups: React.FC<PopupsProps> = ({
               Are you sure you want to uninstall TAK Server? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={onUninstallConfirmClose}>
+          <DialogFooter className="flex flex-col lg:flex-row gap-2">
+            <Button variant="outline" onClick={onUninstallConfirmClose} className="w-full lg:w-auto">
               Cancel
             </Button>
-            <Button variant="danger" onClick={handleUninstall}>
+            <Button variant="danger" onClick={handleUninstall} className="w-full lg:w-auto">
               Uninstall
             </Button>
           </DialogFooter>
@@ -270,7 +272,7 @@ const Popups: React.FC<PopupsProps> = ({
         <DialogContent 
           onInteractOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
-          className="xl:max-w-3xl"
+          className="w-[95%] mx-auto sm:w-full max-w-lg md:max-w-2xl xl:max-w-3xl"
         >
           <DialogHeader>
             <DialogTitle>Uninstalling TAK Server</DialogTitle>
@@ -322,6 +324,7 @@ const Popups: React.FC<PopupsProps> = ({
         <DialogContent 
           onInteractOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
+          className="w-[95%] mx-auto xl:w-full"
         >
           <DialogHeader>
             <DialogTitle>

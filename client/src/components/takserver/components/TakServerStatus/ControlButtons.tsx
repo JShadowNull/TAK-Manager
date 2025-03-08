@@ -166,7 +166,7 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
 
   return (
     <>
-      <div className="flex gap-4">
+      <div className="flex flex-col min-[545px]:flex-row gap-4">
         
         {takState.isInstalled ? (
           <>
@@ -177,6 +177,7 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
                   disabled={isOperationInProgress}
                   loading={currentOperation === 'stop'}
                   loadingText="Stopping"
+                  className="w-full"
                 >
                   Stop
                 </Button>
@@ -185,6 +186,7 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
                   disabled={isOperationInProgress}
                   loading={currentOperation === 'restart'}
                   loadingText="Restarting"
+                  className="w-full"
                 >
                   Restart
                 </Button>
@@ -197,6 +199,7 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
                   loading={isCheckingWebUI}
                   loadingText="Checking Server Readiness..."
                   onClick={!webUIAvailable ? checkWebUIStatus : undefined}
+                  className="w-full whitespace-nowrap text-ellipsis"
                 >
                   {getWebUIButtonText()}
                 </Button>
@@ -207,6 +210,7 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
                 disabled={isOperationInProgress}
                 loading={currentOperation === 'start'}
                 loadingText="Starting"
+                className="w-full"
               >
                 Start
               </Button>
@@ -215,6 +219,7 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
               onClick={handleUninstallClick}
               disabled={isOperationInProgress}
               variant="danger"
+              className="w-full"
             >
               Uninstall
             </Button>

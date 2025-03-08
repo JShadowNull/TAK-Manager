@@ -427,7 +427,7 @@ const CreateCertificates: React.FC = () => {
   };
 
   return (
-    <Card className="w-full max-w-6xl mx-auto">
+    <Card className="w-full max-w-6xl mx-auto break-normal">
       <CardHeader>
         <CardTitle>Certificate Creation</CardTitle>
         <CardDescription>Create single or batch certificates for TAK users</CardDescription>
@@ -473,7 +473,7 @@ const CreateCertificates: React.FC = () => {
                       </Button>
                     )}
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor={`cert-${index}`}>Certificate Name</Label>
                       <Input

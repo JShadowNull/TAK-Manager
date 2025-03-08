@@ -327,7 +327,7 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
 
   return (
     <>
-      <Card className="w-full max-w-6xl mx-auto">
+      <Card className="w-full max-w-6xl mx-auto break-normal">
         <CardHeader>
           <CardTitle>Existing Certificates</CardTitle>
           <CardDescription>Manage and view your existing TAK certificates</CardDescription>
@@ -519,7 +519,7 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
               </ScrollArea>
             </div>
 
-            <div className="flex justify-end pt-4">
+            <div className="flex justify-center lg:justify-end pt-4">
               <Button
                 variant="primary"
                 onClick={handleCreateDataPackages}

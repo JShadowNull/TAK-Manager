@@ -226,7 +226,7 @@ const CotStreamsSection: React.FC<CotStreamsSectionProps> = memo(({
         <div className="mb-4">
           <h3 className="text-lg font-semibold text-primary">TAK Server {streamIndex + 1}</h3>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           {streamItems.map((item) => {
             const pref = preferences[item.label] || {};
             const fieldValue = pref.value !== undefined ? pref.value : '';
@@ -269,11 +269,11 @@ const CotStreamsSection: React.FC<CotStreamsSectionProps> = memo(({
   };
 
   return (
-    <div className="h-[calc(100vh-200px)]">
+    <div className="h-auto lg:h-[calc(100vh-200px)]">
       <div className="bg-background p-4 mb-2">
-        <div className="flex items-center justify-between bg-card p-4 rounded-lg shadow-md border border-border">
-          <div className="flex items-center space-x-4">
-            <Label className="text-lg font-medium">Number of Servers</Label>
+        <div className="flex flex-col lg:flex-row items-center justify-between bg-card p-4 rounded-lg shadow-md border border-border space-y-4 lg:space-y-0">
+          <div className="flex flex-col lg:flex-row items-center space-y-4 lg:space-y-0 lg:space-x-4">
+            <Label className="text-lg font-medium break-normal">Number of Servers</Label>
             <div className="flex items-center space-x-4">
               <Button 
                 onClick={() => {
@@ -317,7 +317,7 @@ const CotStreamsSection: React.FC<CotStreamsSectionProps> = memo(({
           <Button
             onClick={handleReset}
             variant="outline"
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 w-full lg:w-auto justify-center"
           >
             <RotateCcw 
               className="h-4 w-4 transition-transform" 
@@ -331,7 +331,7 @@ const CotStreamsSection: React.FC<CotStreamsSectionProps> = memo(({
         </div>
       </div>
 
-      <ScrollArea className="h-[calc(100%-80px)]">
+      <ScrollArea className="h-auto lg:h-[calc(100%-80px)]">
         <div className="space-y-4 px-4">
           {Array.from({ length: count }, (_, i) => renderStreamConfig(i))}
         </div>
