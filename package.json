@@ -22,8 +22,7 @@
     "dotenv": "^16.4.5",
     "js-yaml": "^4.1.0",
     "prompt-sync": "^4.2.0",
-    "standard-version": "^9.5.0",
-    "vite-plugin-monaco-editor": "^1.1.0"
+    "standard-version": "^9.5.0"
   },
   "author": "Jacob Olsen",
   "description": "TAK Manager - A comprehensive TAK Server management solution",

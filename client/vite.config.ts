@@ -12,6 +12,17 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon-180x180.png', 'maskable-icon-512x512.png'],
+      injectRegister: 'auto',
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,jpeg,json}'],
+        cleanupOutdatedCaches: true,
+        skipWaiting: true,
+        clientsClaim: true
+      },
+      devOptions: {
+        enabled: true,
+        type: 'module'
+      },
       manifest: {
         name: 'TAK Manager',
         short_name: 'TAK Manager',
@@ -19,6 +30,11 @@ export default defineConfig({
         theme_color: '#ffffff',
         background_color: '#ffffff',
         display: 'standalone',
+        orientation: 'portrait',
+        categories: ['utilities', 'productivity'],
+        scope: '/',
+        start_url: '/?source=pwa',
+        prefer_related_applications: false,
         icons: [
           {
             src: 'pwa-64x64.png',
@@ -45,7 +61,7 @@ export default defineConfig({
         ]
       }
     })
-  ],
+  ] as any,
   root: '.',
   build: {
     outDir: 'build',
@@ -75,6 +91,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: parseInt(process.env.FRONTEND_PORT as string), 
+    allowedHosts: ['takserver-dev'],
     proxy: {
       '/api': `http://127.0.0.1:${process.env.BACKEND_PORT}`,
       '/stream': `http://127.0.0.1:${process.env.BACKEND_PORT}`,
