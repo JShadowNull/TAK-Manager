@@ -4,7 +4,7 @@ import { Button } from '../../../shared/ui/shadcn/button';
 import { HelpIconTooltip } from '../../../shared/ui/shadcn/tooltip/HelpIconTooltip';
 import { Eye, EyeOff, Wand2, UploadCloud } from 'lucide-react';
 import { z } from 'zod';
-import TakOperationPopups from './TakOperationPopups';
+import InstallPopup from './InstallPopup';
 import { useDropzone } from 'react-dropzone';
 import { uploadWithProgress } from '../../../../utils/uploadProgress';
 
@@ -200,11 +200,15 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
     } catch (error) {
       console.error('Installation error:', error);
       setErrors({ submit: error instanceof Error ? error.message : 'An error occurred during installation' });
+      // If there's an error during upload, hide the installation progress
+      setShowInstallProgress(false);
     }
   };
 
   const handleInstallComplete = () => {
-    setShowInstallProgress(false); // Only close after user acknowledges completion
+    // Reset all installation-related states
+    setShowInstallProgress(false);
+    setUploadProgress(0);
     onCancel(); // Close the form
   };
 
@@ -592,15 +596,10 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
         </div>
       </div>
 
-      <TakOperationPopups
+      <InstallPopup
         showInstallProgress={showInstallProgress}
-        showUninstallProgress={false}
         onInstallComplete={handleInstallComplete}
-        onUninstallComplete={() => {}}
         uploadProgress={uploadProgress}
-        showUninstallConfirm={false}
-        onUninstallConfirmClose={() => {}}
-        onUninstallConfirm={() => {}}
       />
     </>
   );

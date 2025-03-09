@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '../../../shared/ui/shadcn/button';
-import Popups from './TakOperationPopups';
+import UninstallPopups from './UninstallPopups';
 import { useToast } from '@/components/shared/ui/shadcn/toast/use-toast';
 import { useTakServer } from '../../../shared/ui/shadcn/sidebar/app-sidebar';
 
@@ -166,8 +166,7 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
 
   return (
     <>
-      <div className="flex flex-col min-[545px]:flex-row gap-4">
-        
+      <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 max-w-lg mt-4">
         {takState.isInstalled ? (
           <>
             {takState.isRunning ? (
@@ -234,13 +233,12 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
         )}
       </div>
 
-      <Popups
+      <UninstallPopups
         showUninstallConfirm={showUninstallConfirm}
         onUninstallConfirmClose={() => setShowUninstallConfirm(false)}
         onUninstallConfirm={handleUninstallConfirm}
-        onInstallComplete={() => {}}
-        onUninstallComplete={handleUninstallComplete}
         showUninstallProgress={showUninstallProgress}
+        onUninstallComplete={handleUninstallComplete}
       />
     </>
   );
