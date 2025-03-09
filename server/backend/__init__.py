@@ -65,7 +65,7 @@ def create_app():
             file_path = os.path.join(build_dir, full_path)
             if os.path.exists(file_path) and os.path.isfile(file_path):
                 return FileResponse(file_path)
-            logger.error(f"File not found: {file_path}")  # Added error logging
+            logger.debug(f"File not found: {file_path}")  # Changed from error to debug level
             return FileResponse(os.path.join(build_dir, 'index.html'))
 
     logger.info(f"FastAPI application created in {'development' if is_dev else 'production'} mode")
