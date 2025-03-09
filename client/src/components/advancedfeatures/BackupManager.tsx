@@ -16,7 +16,6 @@ import {
   Trash2,
   History,
   Plus,
-  AlertCircle,
   CheckCircle,
   Lock,
   FileText,
@@ -25,6 +24,9 @@ import CodeMirror from '@uiw/react-codemirror';
 import { xml } from '@codemirror/lang-xml';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { EditorView } from '@codemirror/view';
+import { extractPortsFromXml, applyPortChanges, detectPortChanges, fetchCurrentPorts, PortChange } from './PortManager';
+import { useToast } from '@/components/shared/ui/shadcn/toast/use-toast';
+import { AlertCircle } from "lucide-react";
 
 interface Backup {
   id: string;
@@ -42,9 +44,24 @@ interface DialogState {
   backupId?: string;
 }
 
+interface PortConfirmDialogState {
+  show: boolean;
+  backupId: string;
+  currentPorts: number[];
+  portsToAdd: number[];
+  portsToRemove: number[];
+  backupContent: string;
+}
+
 const BackupManager: React.FC = () => {
+  const { toast } = useToast();
   const [backups, setBackups] = useState<Backup[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isCreatingBackup, setIsCreatingBackup] = useState(false);
+  const [isRestoringBackup, setIsRestoringBackup] = useState(false);
+  const [isDeletingBackup, setIsDeletingBackup] = useState<string | null>(null);
+  const [isViewingBackup, setIsViewingBackup] = useState<string | null>(null);
+  const [isApplyingPortChanges, setIsApplyingPortChanges] = useState(false);
   const [newBackupName, setNewBackupName] = useState('');
   const [selectedBackupContent, setSelectedBackupContent] = useState('');
   const [dialog, setDialog] = useState<DialogState>({
@@ -52,6 +69,14 @@ const BackupManager: React.FC = () => {
     title: '',
     message: '',
     type: 'notification'
+  });
+  const [portConfirmDialog, setPortConfirmDialog] = useState<PortConfirmDialogState>({
+    show: false,
+    backupId: '',
+    currentPorts: [],
+    portsToAdd: [],
+    portsToRemove: [],
+    backupContent: '',
   });
 
   // Fetch backups
@@ -67,7 +92,7 @@ const BackupManager: React.FC = () => {
         throw new Error(data.detail || 'Failed to fetch backups');
       }
     } catch (error) {
-      showNotification('Error', `Failed to fetch backups: ${error instanceof Error ? error.message : 'Unknown error'}`, 'notification');
+      showToast('Error', `Failed to fetch backups: ${error instanceof Error ? error.message : 'Unknown error'}`, 'destructive');
     } finally {
       setIsLoading(false);
     }
@@ -78,11 +103,22 @@ const BackupManager: React.FC = () => {
     fetchBackups();
   }, []);
 
-  const showNotification = (title: string, message: string, type: DialogState['type']) => {
-    setDialog({ show: true, title, message, type });
+  const showToast = (title: string, message: string, variant: 'default' | 'destructive' = 'default') => {
+    toast({
+      title,
+      description: message,
+      variant
+    });
   };
 
   const handleCreateBackup = async () => {
+    if (!newBackupName.trim()) {
+      showToast('Error', 'Backup name cannot be empty', 'destructive');
+      return;
+    }
+    
+    setIsCreatingBackup(true);
+    
     try {
       const response = await fetch('/api/advanced/core-config/backups', {
         method: 'POST',
@@ -91,84 +127,172 @@ const BackupManager: React.FC = () => {
         },
         body: JSON.stringify({ name: newBackupName.trim() }),
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.detail || 'Failed to create backup');
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        showToast('Success', 'Backup created successfully');
+        setNewBackupName('');
+        // Refresh backups list
+        fetchBackups();
+      } else {
+        throw new Error(data.error || data.detail || 'Failed to create backup');
       }
-
-      showNotification('Success', 'Backup created successfully', 'notification');
-      setNewBackupName('');
-      fetchBackups();
     } catch (error) {
-      showNotification('Error', `Failed to create backup: ${error instanceof Error ? error.message : 'Unknown error'}`, 'notification');
+      showToast('Error', `Failed to create backup: ${error instanceof Error ? error.message : 'Unknown error'}`, 'destructive');
+    } finally {
+      setIsCreatingBackup(false);
     }
   };
 
   const handleRestoreBackup = async (backupId: string) => {
     try {
-      const response = await fetch('/api/advanced/core-config/backups/restore', {
+      setIsRestoringBackup(true);
+      
+      // Fetch the backup content to check for port changes
+      const backupContent = await fetchBackupContent(backupId);
+      
+      // Check for port changes
+      const portChanges = await checkPortChangesForBackup(backupContent);
+      
+      // If there are port changes, show the confirmation dialog
+      if (portChanges.portsToAdd.length > 0 || portChanges.portsToRemove.length > 0) {
+        // Get current ports for the dialog
+        const currentPorts = await fetchCurrentPorts();
+        
+        // Show the confirmation dialog
+        setPortConfirmDialog({
+          show: true,
+          backupId,
+          currentPorts,
+          portsToAdd: portChanges.portsToAdd,
+          portsToRemove: portChanges.portsToRemove,
+          backupContent
+        });
+        setIsRestoringBackup(false);
+        return;
+      }
+      
+      await restoreBackupWithoutPortChanges(backupId);
+    } catch (error) {
+      showToast('Error', `Failed to restore backup: ${error instanceof Error ? error.message : 'Unknown error'}`, 'destructive');
+      setIsRestoringBackup(false);
+    }
+  };
+
+  const handlePortConfirmation = async (confirmed: boolean) => {
+    const { backupId, portsToAdd, portsToRemove } = portConfirmDialog;
+    
+    setPortConfirmDialog(prev => ({ ...prev, show: false }));
+    
+    if (!confirmed) {
+      return;
+    }
+    
+    try {
+      setIsApplyingPortChanges(true);
+      await restoreBackupWithoutPortChanges(backupId);
+      
+      await applyPortChanges({ portsToAdd, portsToRemove });
+      
+      showToast('Success', 'Configuration and port mappings restored successfully');
+    } catch (error) {
+      showToast('Error', `Failed to restore backup with port changes: ${error instanceof Error ? error.message : 'Unknown error'}`, 'destructive');
+    } finally {
+      setIsApplyingPortChanges(false);
+    }
+  };
+
+  const restoreBackupWithoutPortChanges = async (backupId: string) => {
+    try {
+      const restoreResponse = await fetch('/api/advanced/core-config/backups/restore', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ backup_id: backupId }),
       });
-
-      if (!response.ok) {
-        const data = await response.json();
+      
+      if (!restoreResponse.ok) {
+        const data = await restoreResponse.json();
         throw new Error(data.detail || 'Failed to restore backup');
       }
-
-      showNotification('Success', 'Configuration restored successfully', 'notification');
+      
+      showToast('Success', 'Configuration restored successfully');
+      
+      // Refresh backups list to update the "current" indicator
       fetchBackups();
-    } catch (error) {
-      showNotification('Error', `Failed to restore backup: ${error instanceof Error ? error.message : 'Unknown error'}`, 'notification');
+    } finally {
+      setIsRestoringBackup(false);
     }
   };
 
   const handleDeleteBackup = async (backupId: string) => {
     try {
+      setIsDeletingBackup(backupId);
+      
       const response = await fetch(`/api/advanced/core-config/backups/${backupId}`, {
         method: 'DELETE',
       });
-
+      
       if (!response.ok) {
         const data = await response.json();
         throw new Error(data.detail || 'Failed to delete backup');
       }
-
-      showNotification('Success', 'Backup deleted successfully', 'notification');
+      
+      showToast('Success', 'Backup deleted successfully');
       fetchBackups();
     } catch (error) {
-      showNotification('Error', `Failed to delete backup: ${error instanceof Error ? error.message : 'Unknown error'}`, 'notification');
+      showToast('Error', `Failed to delete backup: ${error instanceof Error ? error.message : 'Unknown error'}`, 'destructive');
+    } finally {
+      setIsDeletingBackup(null);
     }
   };
 
-  const fetchBackupContent = async (backupId: string) => {
-    try {
-      const response = await fetch(`/api/advanced/core-config/backups/${backupId}/content`);
-      const data = await response.json();
-      
-      if (response.ok) {
-        setSelectedBackupContent(data.content);
-      } else {
-        throw new Error(data.detail || 'Failed to fetch backup content');
-      }
-    } catch (error) {
-      showNotification('Error', `Failed to fetch backup content: ${error instanceof Error ? error.message : 'Unknown error'}`, 'notification');
+  // Helper function to check port changes for a backup
+  const checkPortChangesForBackup = async (backupContent: string): Promise<PortChange> => {
+    // Extract ports from backup content
+    const backupPorts = extractPortsFromXml(backupContent);
+    
+    // Get current ports
+    const currentPorts = await fetchCurrentPorts();
+    
+    // Detect changes
+    return detectPortChanges(backupPorts, currentPorts);
+  };
+
+  const fetchBackupContent = async (backupId: string): Promise<string> => {
+    const contentResponse = await fetch(`/api/advanced/core-config/backups/${backupId}/content`);
+    
+    if (!contentResponse.ok) {
+      const data = await contentResponse.json();
+      throw new Error(data.detail || 'Failed to fetch backup content');
     }
+    
+    const contentData = await contentResponse.json();
+    const content = contentData.content || '';
+    
+    return content;
   };
 
   const handleViewBackup = async (backupId: string, name: string) => {
-    await fetchBackupContent(backupId);
-    setDialog({
-      show: true,
-      title: `Viewing Backup: ${name}`,
-      message: '',
-      type: 'view',
-      backupId
-    });
+    try {
+      setIsViewingBackup(backupId);
+      
+      const content = await fetchBackupContent(backupId);
+      setSelectedBackupContent(content);
+      
+      setDialog({
+        show: true,
+        title: `Viewing Backup: ${name}`,
+        message: '',
+        type: 'view'
+      });
+    } catch (error) {
+      showToast('Error', `Failed to fetch backup content: ${error instanceof Error ? error.message : 'Unknown error'}`, 'destructive');
+    } finally {
+      setIsViewingBackup(null);
+    }
   };
 
   const formatTimestamp = (timestamp: string) => {
@@ -196,7 +320,7 @@ const BackupManager: React.FC = () => {
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <Input
-                placeholder="Backup name (optional)"
+                placeholder="Backup name"
                 value={newBackupName}
                 onChange={(e) => setNewBackupName(e.target.value)}
                 className="w-1/2 lg:w-auto"
@@ -210,6 +334,9 @@ const BackupManager: React.FC = () => {
                 })}
                 className="whitespace-nowrap"
                 leadingIcon={<Plus/>}
+                loading={isCreatingBackup}
+                loadingText="Creating..."
+                disabled={isCreatingBackup}
               >
                 Create Backup
               </Button>
@@ -247,8 +374,10 @@ const BackupManager: React.FC = () => {
                             size="icon"
                             onClick={() => handleViewBackup(backup.id, backup.name)}
                             className="hover:text-blue-500 dark:hover:text-blue-600"
+                            loading={isViewingBackup === backup.id}
+                            disabled={isViewingBackup !== null}
                           >
-                            <FileText className="h-4 w-4" />
+                            {isViewingBackup !== backup.id && <FileText className="h-4 w-4" />}
                           </Button>
                           <Button
                             variant="outline"
@@ -261,8 +390,10 @@ const BackupManager: React.FC = () => {
                               backupId: backup.id
                             })}
                             className="hover:text-blue-500 dark:hover:text-blue-600"
+                            loading={isRestoringBackup}
+                            disabled={isRestoringBackup || isViewingBackup !== null || isDeletingBackup !== null}
                           >
-                            <RotateCcw className="h-4 w-4" />
+                            {!isRestoringBackup && <RotateCcw className="h-4 w-4" />}
                           </Button>
                           {!backup.isInit && (
                             <Button
@@ -276,8 +407,10 @@ const BackupManager: React.FC = () => {
                                 backupId: backup.id
                               })}
                               className="hover:text-red-500"
+                              loading={isDeletingBackup === backup.id}
+                              disabled={isDeletingBackup !== null || isRestoringBackup || isViewingBackup !== null}
                             >
-                              <Trash2 className="h-4 w-4" />
+                              {isDeletingBackup !== backup.id && <Trash2 className="h-4 w-4" />}
                             </Button>
                           )}
                         </div>
@@ -350,6 +483,17 @@ const BackupManager: React.FC = () => {
                     }
                     setDialog(prev => ({ ...prev, show: false }));
                   }}
+                  loading={
+                    (dialog.type === 'create' && isCreatingBackup) ||
+                    (dialog.type === 'restore' && isRestoringBackup) ||
+                    (dialog.type === 'delete' && dialog.backupId && isDeletingBackup === dialog.backupId) ||
+                    false
+                  }
+                  loadingText={
+                    dialog.type === 'create' ? 'Creating...' :
+                    dialog.type === 'restore' ? 'Restoring...' :
+                    dialog.type === 'delete' ? 'Deleting...' : 'Processing...'
+                  }
                 >
                   {dialog.type === 'create' ? 'Create' : 
                    dialog.type === 'restore' ? 'Restore' : 
@@ -358,6 +502,71 @@ const BackupManager: React.FC = () => {
               )}
             </DialogFooter>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={portConfirmDialog.show} onOpenChange={(open) => setPortConfirmDialog(prev => ({ ...prev, show: open }))}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-amber-500" />
+              Port Configuration Changes
+            </DialogTitle>
+            <DialogDescription>
+              Restoring this backup will modify the following port mappings in the Docker configuration:
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            {portConfirmDialog.currentPorts.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-sm font-medium mb-2">Current Ports:</h4>
+                <div className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                  {portConfirmDialog.currentPorts.join(', ')}
+                </div>
+              </div>
+            )}
+
+            {portConfirmDialog.portsToAdd.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-sm font-medium mb-2 text-green-600">Ports to Add:</h4>
+                <div className="text-sm bg-green-50 dark:bg-green-900/20 p-2 rounded text-green-600">
+                  {portConfirmDialog.portsToAdd.join(', ')}
+                </div>
+              </div>
+            )}
+
+            {portConfirmDialog.portsToRemove.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-sm font-medium mb-2 text-red-600">Ports to Remove:</h4>
+                <div className="text-sm bg-red-50 dark:bg-red-900/20 p-2 rounded text-red-600">
+                  {portConfirmDialog.portsToRemove.join(', ')}
+                </div>
+              </div>
+            )}
+
+            <p className="text-sm text-muted-foreground mt-4">
+              Do you want to restore this backup and apply these port changes?
+            </p>
+          </div>
+
+          <DialogFooter className="sm:justify-between">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handlePortConfirmation(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => handlePortConfirmation(true)}
+              loading={isApplyingPortChanges}
+              loadingText="Applying Changes..."
+            >
+              Restore with Port Changes
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

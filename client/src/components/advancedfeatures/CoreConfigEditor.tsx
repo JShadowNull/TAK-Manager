@@ -9,85 +9,108 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/shared/ui/shadcn/dialog";
-import { CheckCircle, AlertCircle, RotateCcw } from "lucide-react";
+import { RotateCcw, AlertCircle } from "lucide-react";
 import { EditorView } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import CodeMirror from '@uiw/react-codemirror';
 import { xml } from '@codemirror/lang-xml';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { useTakServer } from '@/components/shared/ui/shadcn/sidebar/app-sidebar';
+import { usePortManager } from './PortManager';
+import { useToast } from '@/components/shared/ui/shadcn/toast/use-toast';
 
-interface NotificationState {
+// Add interface for port confirmation dialog
+interface PortConfirmDialogState {
   show: boolean;
-  title: string;
-  message: string;
-  type: 'success' | 'error';
+  currentPorts: number[];
+  portsToAdd: number[];
+  portsToRemove: number[];
 }
 
 const CoreConfigEditor: React.FC = () => {
-  const { serverState } = useTakServer();
+  const { toast } = useToast();
   const [xmlContent, setXmlContent] = useState<string>('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isRestarting, setIsRestarting] = useState(false);
-  const [notification, setNotification] = useState<NotificationState>({
+  const [isApplyingPortChanges, setIsApplyingPortChanges] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  
+  // Add port confirmation dialog state
+  const [portConfirmDialog, setPortConfirmDialog] = useState<PortConfirmDialogState>({
     show: false,
-    title: '',
-    message: '',
-    type: 'success'
+    currentPorts: [],
+    portsToAdd: [],
+    portsToRemove: []
   });
 
+  // Initialize port manager hook
+  const portManager = usePortManager(xmlContent);
+  const { serverState } = useTakServer();
+
   useEffect(() => {
-    fetchConfig();
+    fetchConfig(false);
   }, []);
 
   const handleRestart = async () => {
+    if (isRestarting) return;
+    
+    setIsRestarting(true);
+    
     try {
-      setIsRestarting(true);
-      const response = await fetch('/api/takserver/restart-takserver', {
-        method: 'POST'
-      });
-
+      const response = await fetch('/api/takserver/restart-takserver', { method: 'POST' });
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || `Operation failed: ${response.statusText}`);
+        const data = await response.json();
+        throw new Error(data.detail || 'Failed to restart server');
       }
       
-      showNotification('Success', 'Server restarted successfully', 'success');
+      showToast('Success', 'TAK Server restarted successfully');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Operation failed';
-      showNotification('Error', errorMessage, 'error');
+      showToast('Error', `Failed to restart TAK Server: ${errorMessage}`, 'destructive');
     } finally {
       setIsRestarting(false);
     }
   };
 
-  const showNotification = (title: string, message: string, type: 'success' | 'error') => {
-    setNotification({ show: true, title, message, type });
-    
-    // Only auto-hide success notifications
-    if (type === 'success') {
-      setTimeout(() => {
-        setNotification(prev => ({ ...prev, show: false }));
-      }, 3000);
-    }
+  const showToast = (title: string, message: string, variant: 'default' | 'destructive' = 'default') => {
+    toast({
+      title,
+      description: message,
+      variant
+    });
   };
 
-  const fetchConfig = async () => {
-    try {
+  const fetchConfig = async (isReset = false) => {
+    // Use appropriate loading state based on whether this is initial load or reset
+    if (isReset) {
+      setIsResetting(true);
+    } else {
       setIsLoading(true);
+    }
+    
+    try {
       const response = await fetch('/api/advanced/core-config');
       const data = await response.json();
       
       if (response.ok) {
         setXmlContent(data.content);
+        if (isReset) {
+          showToast('Success', 'Configuration reset successfully');
+        }
       } else {
         throw new Error(data.error || data.detail || 'Failed to fetch configuration');
       }
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      showNotification('Error', `Failed to load configuration: ${errorMessage}`, 'error');
+      showToast('Error', `Failed to load configuration: ${errorMessage}`, 'destructive');
     } finally {
-      setIsLoading(false);
+      if (isReset) {
+        setIsResetting(false);
+      } else {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -100,26 +123,86 @@ const CoreConfigEditor: React.FC = () => {
         },
         body: JSON.stringify({ content }),
       });
-      const data = await response.json();
       
-      if (!response.ok || !data.valid) {
-        throw new Error(data.error || data.detail || 'Invalid XML configuration');
+      if (!response.ok) {
+        const errorData = await response.json();
+        showToast('Validation Error', errorData.detail || 'Invalid configuration', 'destructive');
+        return false;
       }
+      
       return true;
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      showNotification('Validation Error', errorMessage, 'error');
+      showToast('Validation Error', errorMessage, 'destructive');
       return false;
     }
   };
 
-  const handleSave = async () => {
-    try {
-      // Validate first
-      const isValid = await validateConfig(xmlContent);
-      if (!isValid) return;
+  const handleReset = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    fetchConfig(true);
+  };
 
-      // Save if valid
+  const handleSave = async () => {
+    if (isSaving) return;
+    
+    setIsSaving(true);
+    
+    try {
+      // Validate the configuration
+      const isValid = await validateConfig(xmlContent);
+      
+      if (!isValid) {
+        showToast('Invalid Configuration', 'The configuration is invalid and cannot be saved.', 'destructive');
+        setIsSaving(false);
+        return;
+      }
+      
+      // Make a deterministic check for port changes right before saving
+      // This returns the actual port changes without relying on timeouts or debouncing
+      const portChanges = await portManager.checkPortChanges(false);
+      
+      // If there are port changes, show the confirmation dialog
+      if (portChanges.portsToAdd.length > 0 || portChanges.portsToRemove.length > 0) {
+        // Get current ports for the dialog
+        const currentPorts = await fetchCurrentPorts();
+        
+        // Show the confirmation dialog
+        setPortConfirmDialog({
+          show: true,
+          currentPorts,
+          portsToAdd: portChanges.portsToAdd,
+          portsToRemove: portChanges.portsToRemove
+        });
+        
+        setIsSaving(false);
+        return;
+      }
+      
+      // No port changes, save directly
+      await saveConfiguration();
+      
+    } catch (error) {
+      console.error('Error saving configuration:', error);
+      showToast(
+        'Error',
+        `Failed to save configuration: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'destructive'
+      );
+      setIsSaving(false);
+    }
+  };
+  
+  // Create new function to handle actual saving
+  const saveConfiguration = async (applyPortChanges = false) => {
+    if (applyPortChanges) {
+      setIsApplyingPortChanges(true);
+    } else {
+      setIsSaving(true);
+    }
+    
+    try {
+      // Save the configuration first - ensure the endpoint is correct
       const response = await fetch('/api/advanced/core-config', {
         method: 'POST',
         headers: {
@@ -130,17 +213,82 @@ const CoreConfigEditor: React.FC = () => {
       
       const data = await response.json();
       if (response.ok) {
-        showNotification(
-          'Success', 
-          'Configuration saved successfully. Restart TAK Server for changes to take effect.',
-          'success'
-        );
+        // Apply port changes if requested
+        if (applyPortChanges) {
+          try {
+            await portManager.applyChanges();
+            showToast(
+              'Success', 
+              'Configuration saved and port changes applied. Restart the server for changes to take effect.'
+            );
+          } catch (error) {
+            // If port changes fail, still notify about config save but mention port issue
+            showToast(
+              'Partial Success', 
+              'Configuration saved successfully, but failed to update docker port mappings.'
+            );
+          }
+        } else {
+          showToast('Success', 'Configuration saved successfully');
+        }
+        
+        // Refresh the configuration after saving to ensure everything is in sync
+        await fetchConfig(false);
       } else {
         throw new Error(data.error || data.detail || 'Failed to save configuration');
       }
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      showNotification('Error', `Failed to save configuration: ${errorMessage}`, 'error');
+    } catch (error) {
+      console.error('Error saving configuration:', error);
+      showToast(
+        'Error',
+        `Failed to save configuration: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'destructive'
+      );
+    } finally {
+      if (applyPortChanges) {
+        setIsApplyingPortChanges(false);
+      } else {
+        setIsSaving(false);
+      }
+      // Close dialog if it was open
+      setPortConfirmDialog(prev => ({ ...prev, show: false }));
+    }
+  };
+  
+  // New function to handle port confirmation
+  const handlePortConfirmation = (confirmed: boolean) => {
+    if (confirmed) {
+      // Save with port changes
+      saveConfiguration(true);
+    } else {
+      // Just close the dialog
+      setPortConfirmDialog(prev => ({ ...prev, show: false }));
+    }
+  };
+  
+  // Helper function to fetch current ports
+  const fetchCurrentPorts = async (): Promise<number[]> => {
+    try {
+      const response = await fetch('/api/port-manager/ports');
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch ports: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data && data.port_mappings) {
+        // Extract host ports from port mappings (format: "host_port:container_port")
+        return data.port_mappings.map((mapping: string) => {
+          const [hostPort] = mapping.split(':');
+          return parseInt(hostPort, 10);
+        });
+      }
+      
+      return [];
+    } catch (error) {
+      console.error('Error fetching current ports:', error);
+      return [];
     }
   };
 
@@ -169,16 +317,16 @@ const CoreConfigEditor: React.FC = () => {
             </div>
             {serverState.isRunning && (
               <Button
-                variant="outline"
-                onClick={handleRestart}
-                disabled={isRestarting}
-                loading={isRestarting}
-                loadingText="Restarting..."
-                leadingIcon={<RotateCcw className="h-4 w-4" />}
-                className="w-full lg:w-auto mt-4 lg:mt-0"
-              >
-                Restart TAK Server
-              </Button>
+              variant="outline"
+              onClick={handleRestart}
+              disabled={isRestarting}
+              loading={isRestarting}
+              loadingText="Restarting..."
+              leadingIcon={<RotateCcw className="h-4 w-4" />}
+              className="w-full lg:w-auto mt-4 lg:mt-0"
+            >
+              Restart TAK Server
+            </Button>
             )}
           </div>
         </CardHeader>
@@ -187,8 +335,8 @@ const CoreConfigEditor: React.FC = () => {
             <div className="h-[600px] border rounded-md overflow-hidden">
               {isLoading ? (
                 <div className="flex items-center justify-center h-full">
-                  <span className="text-muted-foreground">Loading...</span>
-                </div>
+                <span className="text-muted-foreground">Loading...</span>
+              </div>
               ) : (
                 <CodeMirror
                   value={xmlContent}
@@ -202,15 +350,19 @@ const CoreConfigEditor: React.FC = () => {
             <div className="flex flex-col lg:flex-row justify-end gap-2">
               <Button
                 variant="outline"
-                onClick={fetchConfig}
-                disabled={isLoading}
+                onClick={handleReset}
+                disabled={isResetting || isLoading}
+                loading={isResetting}
+                loadingText="Resetting..."
                 className="w-full lg:w-auto"
               >
                 Reset
               </Button>
               <Button
                 onClick={handleSave}
-                disabled={isLoading}
+                disabled={isSaving || isLoading}
+                loading={isSaving}
+                loadingText="Saving..."
                 className="w-full lg:w-auto"
               >
                 Save Changes
@@ -220,30 +372,69 @@ const CoreConfigEditor: React.FC = () => {
         </CardContent>
       </Card>
 
-      <Dialog open={notification.show} onOpenChange={(open) => setNotification(prev => ({ ...prev, show: open }))}>
+      {/* Port Changes Confirmation Dialog */}
+      <Dialog open={portConfirmDialog.show} onOpenChange={(open) => setPortConfirmDialog(prev => ({ ...prev, show: open }))}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              {notification.type === 'success' ? (
-                <CheckCircle className="h-5 w-5 text-primary" />
-              ) : (
-                <AlertCircle className="h-5 w-5 text-destructive" />
-              )}
-              {notification.title}
+              <AlertCircle className="h-5 w-5 text-amber-500" />
+              Port Configuration Changes
             </DialogTitle>
             <DialogDescription>
-              {notification.message}
+              Your changes will modify the following port mappings in the Docker configuration:
             </DialogDescription>
           </DialogHeader>
-          {notification.type === 'error' && (
-            <DialogFooter>
-              <Button 
-                onClick={() => setNotification(prev => ({ ...prev, show: false }))}
-              >
-                Close
-              </Button>
-            </DialogFooter>
-          )}
+
+          <div className="py-4">
+            {portConfirmDialog.currentPorts.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-sm font-medium mb-2">Current Ports:</h4>
+                <div className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                  {portConfirmDialog.currentPorts.join(', ')}
+                </div>
+              </div>
+            )}
+
+            {portConfirmDialog.portsToAdd.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-sm font-medium mb-2 text-green-600">Ports to Add:</h4>
+                <div className="text-sm bg-green-50 dark:bg-green-900/20 p-2 rounded text-green-600">
+                  {portConfirmDialog.portsToAdd.join(', ')}
+                </div>
+              </div>
+            )}
+
+            {portConfirmDialog.portsToRemove.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-sm font-medium mb-2 text-red-600">Ports to Remove:</h4>
+                <div className="text-sm bg-red-50 dark:bg-red-900/20 p-2 rounded text-red-600">
+                  {portConfirmDialog.portsToRemove.join(', ')}
+                </div>
+              </div>
+            )}
+
+            <p className="text-sm text-muted-foreground mt-4">
+              Do you want to save the configuration and apply these port changes?
+            </p>
+          </div>
+
+          <DialogFooter className="sm:justify-between">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handlePortConfirmation(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => handlePortConfirmation(true)}
+              loading={isApplyingPortChanges}
+              loadingText="Applying Changes..."
+            >
+              Apply Changes
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
