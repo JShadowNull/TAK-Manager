@@ -26,12 +26,13 @@ interface UpdatePluginsFormData {
   ota_zip_file: File | null;
 }
 
-const UpdatePluginsForm: React.FC<UpdatePluginsFormProps> = ({ onClose, onUpdateStart }) => {
+const UpdatePluginsForm: React.FC<UpdatePluginsFormProps> = ({ onClose }) => {
   const [formData, setFormData] = useState<UpdatePluginsFormData>({
     ota_zip_file: null,
   });
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [showUpdateProgress, setShowUpdateProgress] = useState(false);
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const validateField = (name: string, value: any) => {
@@ -50,6 +51,11 @@ const UpdatePluginsForm: React.FC<UpdatePluginsFormProps> = ({ onClose, onUpdate
     if (file) {
       setFormData(prev => ({ ...prev, ota_zip_file: file }));
       validateField('ota_zip_file', file);
+      
+      // Validate immediately if submission was attempted
+      if (hasAttemptedSubmit) {
+        validateField('ota_zip_file', file);
+      }
     }
   };
 
@@ -72,15 +78,38 @@ const UpdatePluginsForm: React.FC<UpdatePluginsFormProps> = ({ onClose, onUpdate
     };
   }, []);
 
+  const validateForm = () => {
+    try {
+      formSchema.parse(formData);
+      return {};
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const newErrors: { [key: string]: string } = {};
+        error.errors.forEach(err => {
+          if (err.path?.[0]) {
+            newErrors[err.path[0]] = err.message;
+          }
+        });
+        return newErrors;
+      }
+      return { submit: 'Validation failed' };
+    }
+  };
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setHasAttemptedSubmit(true);
+    
+    const validationErrors = validateForm();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
     
     if (!formData.ota_zip_file) return;
 
     try {
-      formSchema.parse(formData);
-      
-      // Clear any previous errors before making API call
+      // Clear any previous errors and show progress popup before making API call
       setErrors({});
       setUploadProgress(0);
       setShowUpdateProgress(true);
@@ -88,7 +117,6 @@ const UpdatePluginsForm: React.FC<UpdatePluginsFormProps> = ({ onClose, onUpdate
       const uploadData = new FormData();
       uploadData.append('file', formData.ota_zip_file);
 
-      onUpdateStart();
 
       // Use uploadWithProgress instead of fetch
       const response = await uploadWithProgress(
@@ -102,16 +130,15 @@ const UpdatePluginsForm: React.FC<UpdatePluginsFormProps> = ({ onClose, onUpdate
       }
     } catch (error) {
       console.error('Plugin update error:', error);
-      if (error instanceof z.ZodError) {
-        const newErrors: { [key: string]: string } = {};
-        error.errors.forEach(err => {
-          if (err.path?.[0]) {
-            newErrors[err.path[0]] = err.message;
-          }
-        });
-        setErrors(newErrors);
+      if (!showUpdateProgress) {
+        setErrors({ submit: error instanceof Error ? error.message : 'An error occurred during update' });
       }
     }
+  };
+
+  const handleUpdateComplete = () => {
+    setShowUpdateProgress(false);
+    onClose();
   };
 
   return (
@@ -190,9 +217,6 @@ const UpdatePluginsForm: React.FC<UpdatePluginsFormProps> = ({ onClose, onUpdate
                 type="submit"
                 variant="primary"
                 className="hover:bg-green-500 w-full"
-                tooltipStyle="shadcn"
-                tooltipPosition="top"
-                tooltipDelay={200}
               >
                 Begin Update
               </Button>
@@ -203,7 +227,7 @@ const UpdatePluginsForm: React.FC<UpdatePluginsFormProps> = ({ onClose, onUpdate
       
       <OtaPopups
         onConfigureComplete={() => {}}
-        onUpdateComplete={() => {}}
+        onUpdateComplete={handleUpdateComplete}
         showUpdateProgress={showUpdateProgress}
         updateUploadProgress={uploadProgress}
       />
