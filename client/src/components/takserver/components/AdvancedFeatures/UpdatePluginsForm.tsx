@@ -4,6 +4,8 @@ import { HelpIconTooltip } from '../../../shared/ui/shadcn/tooltip/HelpIconToolt
 import { z } from 'zod';
 import { useDropzone } from 'react-dropzone';
 import { UploadCloud } from 'lucide-react';
+import OtaPopups from './OtaPopups';
+import { uploadWithProgress } from '../../../../utils/uploadProgress';
 
 interface UpdatePluginsFormProps {
   onClose: () => void;
@@ -29,6 +31,8 @@ const UpdatePluginsForm: React.FC<UpdatePluginsFormProps> = ({ onClose, onUpdate
     ota_zip_file: null,
   });
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [showUpdateProgress, setShowUpdateProgress] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const validateField = (name: string, value: any) => {
     try {
@@ -78,18 +82,20 @@ const UpdatePluginsForm: React.FC<UpdatePluginsFormProps> = ({ onClose, onUpdate
       
       // Clear any previous errors before making API call
       setErrors({});
+      setUploadProgress(0);
+      setShowUpdateProgress(true);
 
       const uploadData = new FormData();
       uploadData.append('file', formData.ota_zip_file);
 
       onUpdateStart();
 
-      const response = await fetch('/api/ota/update', {
-        method: 'POST',
-        body: uploadData,
-        // Set a longer timeout for large file uploads
-        signal: AbortSignal.timeout(3600000) // 1 hour timeout for very large files
-      });
+      // Use uploadWithProgress instead of fetch
+      const response = await uploadWithProgress(
+        '/api/ota/update',
+        uploadData,
+        (progress) => setUploadProgress(progress)
+      );
 
       if (!response.ok) {
         throw new Error(`Update failed: ${response.statusText}`);
@@ -109,90 +115,99 @@ const UpdatePluginsForm: React.FC<UpdatePluginsFormProps> = ({ onClose, onUpdate
   };
 
   return (
-    <div className="w-full border border-border bg-card p-6 rounded-lg break-normal">
-      <h3 className="text-base font-bold mb-4">Update TAK Server Plugins</h3>
-      
-      <div className="flex flex-col gap-4">
-        <div className="bg-background border border-border p-4 rounded-lg mb-4">
-          <h4 className="text-sm font-semibold text-selectedColor mb-2">Purpose</h4>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            Update the plugins available through OTA updates on your TAK Server. This allows you to add new plugins or update existing ones
-            that will be available to your ATAK users. Download the updated plugins ZIP file from <a href="https://tak.gov/products/tak-server" target="_blank" rel="noopener noreferrer" className="foreground hover:text-muted-foreground text-primary">TAK.gov</a> and upload it here.
-          </p>
-        </div>
+    <>
+      <div className="w-full border border-border bg-card p-6 rounded-lg break-normal">
+        <h3 className="text-base font-bold mb-4">Update TAK Server Plugins</h3>
+        
+        <div className="flex flex-col gap-4">
+          <div className="bg-background border border-border p-4 rounded-lg mb-4">
+            <h4 className="text-sm font-semibold text-selectedColor mb-2">Purpose</h4>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Update the plugins available through OTA updates on your TAK Server. This allows you to add new plugins or update existing ones
+              that will be available to your ATAK users. Download the updated plugins ZIP file from <a href="https://tak.gov/products/tak-server" target="_blank" rel="noopener noreferrer" className="foreground hover:text-muted-foreground text-primary">TAK.gov</a> and upload it here.
+            </p>
+          </div>
 
-        <div className="bg-background border border-border p-4 rounded-lg mb-4">
-          <h4 className="text-sm font-semibold text-selectedColor mb-2">Update Summary</h4>
-          <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
-            <li>This will update the available plugins for OTA updates</li>
-            <li>Existing plugins folder will be removed and replaced with the new content</li>
-            <li>TAK Server will be restarted to apply the changes</li>
-          </ul>
-        </div>
+          <div className="bg-background border border-border p-4 rounded-lg mb-4">
+            <h4 className="text-sm font-semibold text-selectedColor mb-2">Update Summary</h4>
+            <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
+              <li>This will update the available plugins for OTA updates</li>
+              <li>Existing plugins folder will be removed and replaced with the new content</li>
+              <li>TAK Server will be restarted to apply the changes</li>
+            </ul>
+          </div>
 
-        <div className="text-sm dark:text-yellow-400 text-yellow-600 mb-2">
-          All fields are required
-        </div>
+          <div className="text-sm dark:text-yellow-400 text-yellow-600 mb-2">
+            All fields are required
+          </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-semibold text-primary flex items-center gap-1">
-              Plugins ZIP File 
-              <HelpIconTooltip
-                tooltip="Select the ZIP file containing the updated or new plugins"
-                iconSize={14}
-              />
-              <span className="text-red-500">*</span>
-            </label>
-            <p className="text-sm text-muted-foreground">Example: ATAK-MIL_5.2.0_loadout.zip</p>
-            
-            <div {...getRootProps()} className="flex flex-col gap-2 cursor-pointer">
-              <input {...getInputProps()} />
-              <div className={`border-2 border-dashed rounded-lg p-6 text-center 
-                ${isDragActive ? 'border-primary bg-primary/10' : 'border-border'}
-                ${errors.ota_zip_file ? 'border-red-500' : ''}`}>
-                <div className="flex flex-col items-center gap-2">
-                  <UploadCloud className="h-8 w-8 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">
-                    {isDragActive ? (
-                      "Drop the ZIP file here"
-                    ) : formData.ota_zip_file ? (
-                      <span className="text-primary">{formData.ota_zip_file.name}</span>
-                    ) : (
-                      "Drag and drop your plugins ZIP file here, or click to select"
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-semibold text-primary flex items-center gap-1">
+                Plugins ZIP File 
+                <HelpIconTooltip
+                  tooltip="Select the ZIP file containing the updated or new plugins"
+                  iconSize={14}
+                />
+                <span className="text-red-500">*</span>
+              </label>
+              <p className="text-sm text-muted-foreground">Example: ATAK-MIL_5.2.0_loadout.zip</p>
+              
+              <div {...getRootProps()} className="flex flex-col gap-2 cursor-pointer">
+                <input {...getInputProps()} />
+                <div className={`border-2 border-dashed rounded-lg p-6 text-center 
+                  ${isDragActive ? 'border-primary bg-primary/10' : 'border-border'}
+                  ${errors.ota_zip_file ? 'border-red-500' : ''}`}>
+                  <div className="flex flex-col items-center gap-2">
+                    <UploadCloud className="h-8 w-8 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">
+                      {isDragActive ? (
+                        "Drop the ZIP file here"
+                      ) : formData.ota_zip_file ? (
+                        <span className="text-primary">{formData.ota_zip_file.name}</span>
+                      ) : (
+                        "Drag and drop your plugins ZIP file here, or click to select"
+                      )}
+                    </p>
+                    {errors.ota_zip_file && (
+                      <p className="text-sm text-red-500">{errors.ota_zip_file}</p>
                     )}
-                  </p>
-                  {errors.ota_zip_file && (
-                    <p className="text-sm text-red-500">{errors.ota_zip_file}</p>
-                  )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="flex flex-col lg:flex-row justify-end gap-4 mt-4">
-            <Button
-              variant="secondary"
-              onClick={onClose}
-              type="button"
-              className="hover:bg-red-500 w-full"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              className="hover:bg-green-500 w-full"
-              tooltipStyle="shadcn"
-              tooltipPosition="top"
-              tooltipDelay={200}
-            >
-              Begin Update
-            </Button>
-          </div>
-        </form>
+            <div className="flex flex-col lg:flex-row justify-end gap-4 mt-4">
+              <Button
+                variant="secondary"
+                onClick={onClose}
+                type="button"
+                className="hover:bg-red-500 w-full"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                className="hover:bg-green-500 w-full"
+                tooltipStyle="shadcn"
+                tooltipPosition="top"
+                tooltipDelay={200}
+              >
+                Begin Update
+              </Button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+      
+      <OtaPopups
+        onConfigureComplete={() => {}}
+        onUpdateComplete={() => {}}
+        showUpdateProgress={showUpdateProgress}
+        updateUploadProgress={uploadProgress}
+      />
+    </>
   );
 };
 

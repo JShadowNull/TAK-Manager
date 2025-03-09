@@ -22,13 +22,17 @@ interface OtaPopupsProps {
   onUpdateComplete: () => void;
   showConfigureProgress?: boolean;
   showUpdateProgress?: boolean;
+  configureUploadProgress?: number;
+  updateUploadProgress?: number;
 }
 
 const OtaPopups: React.FC<OtaPopupsProps> = ({
   onConfigureComplete,
   onUpdateComplete,
   showConfigureProgress = false,
-  showUpdateProgress = false
+  showUpdateProgress = false,
+  configureUploadProgress = 0,
+  updateUploadProgress = 0
 }) => {
   // Configure state
   const [showConfigureComplete, setShowConfigureComplete] = useState(false);
@@ -162,16 +166,148 @@ const OtaPopups: React.FC<OtaPopupsProps> = ({
     onUpdateComplete();
   };
 
+  // Configuration dialog content
+  const renderConfigureContent = () => (
+    <>
+      <DialogHeader>
+        <DialogTitle>Configuring OTA</DialogTitle>
+        <DialogDescription>
+          {configureProgress === 100 
+            ? "Configuration complete. Review the logs and click Next to continue." 
+            : "Please wait while OTA is being configured..."}
+        </DialogDescription>
+      </DialogHeader>
+      <div className="py-4">
+        {/* Show upload progress if still uploading */}
+        {configureUploadProgress < 100 && configureProgress === 0 && (
+          <>
+            <Progress 
+              value={configureUploadProgress}
+              text={`Uploading ATAK plugin files: ${configureUploadProgress}%`}
+            />
+          </>
+        )}
+        
+        {/* Show configuration progress once upload is complete */}
+        {(configureUploadProgress === 100 || configureProgress > 0) && (
+          <Progress 
+            value={configureProgress}
+            isIndeterminate={configureProgress === 0}
+            text={configureProgress === 0 
+              ? "Preparing configuration..." 
+              : `Configuration progress: ${configureProgress}%`
+            }
+          />
+        )}
+        
+        {configureTerminalOutput.length > 0 && (
+          <ScrollArea 
+            className="w-full rounded-md border p-4 mt-4 h-[300px] bg-background [&_*::selection]:bg-blue-500/80 [&_*::selection]:text-primary"
+            content={configureTerminalOutput}
+            autoScroll={true}
+          >
+            <div className="space-y-1">
+              {configureTerminalOutput.map((line, index) => (
+                <div key={index}>
+                  <div className={`font-mono text-sm whitespace-pre-wrap ${line.isError ? 'text-destructive' : 'text-foreground'}`}>
+                    {line.timestamp && (
+                      <span className="text-muted-foreground mr-2">
+                        {new Date(line.timestamp).toLocaleTimeString()}
+                      </span>
+                    )}
+                    {line.message}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        )}
+      </div>
+      <DialogFooter>
+        {isConfigurationComplete && (
+          <Button onClick={() => setShowConfigureComplete(true)}>
+            Next
+          </Button>
+        )}
+      </DialogFooter>
+    </>
+  );
+
+  // Update dialog content
+  const renderUpdateContent = () => (
+    <>
+      <DialogHeader>
+        <DialogTitle>Updating OTA</DialogTitle>
+        <DialogDescription>
+          {updateProgress === 100 
+            ? "Update complete. Review the logs and click Next to continue." 
+            : "Please wait while OTA is being updated..."}
+        </DialogDescription>
+      </DialogHeader>
+      <div className="py-4">
+        {/* Show upload progress if still uploading */}
+        {updateUploadProgress < 100 && updateProgress === 0 && (
+          <>
+            <Progress 
+              value={updateUploadProgress}
+              text={`Uploading ATAK plugin files: ${updateUploadProgress}%`}
+            />
+          </>
+        )}
+        
+        {/* Show update progress once upload is complete */}
+        {(updateUploadProgress === 100 || updateProgress > 0) && (
+          <Progress 
+            value={updateProgress}
+            isIndeterminate={updateProgress === 0}
+            text={updateProgress === 0 
+              ? "Preparing update..." 
+              : `Update progress: ${updateProgress}%`
+            }
+          />
+        )}
+        
+        {updateTerminalOutput.length > 0 && (
+          <ScrollArea 
+            className="w-full rounded-md border p-4 mt-4 h-[300px] bg-background"
+            content={updateTerminalOutput}
+            autoScroll={true}
+          >
+            <div className="space-y-1">
+              {updateTerminalOutput.map((line, index) => (
+                <div key={index}>
+                  <div className={`font-mono text-sm whitespace-pre-wrap ${line.isError ? 'text-destructive' : 'text-foreground'}`}>
+                    {line.timestamp && (
+                      <span className="text-muted-foreground mr-2">
+                        {new Date(line.timestamp).toLocaleTimeString()}
+                      </span>
+                    )}
+                    {line.message}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        )}
+      </div>
+      <DialogFooter>
+        {isUpdateComplete && (
+          <Button onClick={() => setShowUpdateComplete(true)}>
+            Next
+          </Button>
+        )}
+      </DialogFooter>
+    </>
+  );
+
   return (
     <>
-      {/* Configure Progress Dialog */}
+      {/* Configuration Progress Dialog */}
       <Dialog 
         open={showConfigureProgress && !showConfigureComplete} 
-        onOpenChange={(open) => {
+        onOpenChange={(e) => {
           // Prevent dialog from being closed except through explicit user action
-          if (!open) {
-            return;
-          }
+          if (!e) return;
         }}
       >
         <DialogContent 
@@ -179,53 +315,7 @@ const OtaPopups: React.FC<OtaPopupsProps> = ({
           onEscapeKeyDown={(e) => e.preventDefault()}
           className="xl:max-w-3xl"
         >
-          <DialogHeader>
-            <DialogTitle>Configuring OTA</DialogTitle>
-            <DialogDescription>
-              {configureProgress === 100 
-                ? "Configuration complete. Review the logs and click Next to continue." 
-                : "Please wait while OTA is being configured..."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <Progress 
-              value={configureProgress}
-              isIndeterminate={configureProgress === 0}
-              text={configureProgress === 0 
-                ? "Uploading file to server..." 
-                : `Progress: ${configureProgress}%`
-              }
-            />
-            {configureTerminalOutput.length > 0 && (
-              <ScrollArea 
-                className="w-full rounded-md border p-4 mt-4 h-[300px] bg-background [&_*::selection]:bg-blue-500/80 [&_*::selection]:text-primary"
-                content={configureTerminalOutput}
-                autoScroll={true}
-              >
-                <div className="space-y-1">
-                  {configureTerminalOutput.map((line, index) => (
-                    <div key={index}>
-                      <div className={`font-mono text-sm whitespace-pre-wrap ${line.isError ? 'text-destructive' : 'text-foreground'}`}>
-                        {line.timestamp && (
-                          <span className="text-muted-foreground mr-2">
-                            {new Date(line.timestamp).toLocaleTimeString()}
-                          </span>
-                        )}
-                        {line.message}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            )}
-          </div>
-          <DialogFooter>
-            {isConfigurationComplete && (
-              <Button onClick={() => setShowConfigureComplete(true)}>
-                Next
-              </Button>
-            )}
-          </DialogFooter>
+          {renderConfigureContent()}
         </DialogContent>
       </Dialog>
 
@@ -251,12 +341,10 @@ const OtaPopups: React.FC<OtaPopupsProps> = ({
 
       {/* Update Progress Dialog */}
       <Dialog 
-        open={showUpdateProgress && !showUpdateComplete} 
-        onOpenChange={(open) => {
+        open={showUpdateProgress && !showUpdateComplete}
+        onOpenChange={(e) => {
           // Prevent dialog from being closed except through explicit user action
-          if (!open) {
-            return;
-          }
+          if (!e) return;
         }}
       >
         <DialogContent 
@@ -264,53 +352,7 @@ const OtaPopups: React.FC<OtaPopupsProps> = ({
           onEscapeKeyDown={(e) => e.preventDefault()}
           className="xl:max-w-3xl"
         >
-          <DialogHeader>
-            <DialogTitle>Updating OTA</DialogTitle>
-            <DialogDescription>
-              {updateProgress === 100 
-                ? "Update complete. Review the logs and click Next to continue." 
-                : "Please wait while OTA is being updated..."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <Progress 
-              value={updateProgress}
-              isIndeterminate={updateProgress === 0}
-              text={updateProgress === 0 
-                ? "Uploading file to server..." 
-                : `Progress: ${updateProgress}%`
-              }
-            />
-            {updateTerminalOutput.length > 0 && (
-              <ScrollArea 
-                className="w-full rounded-md border p-4 mt-4 h-[300px] bg-background"
-                content={updateTerminalOutput}
-                autoScroll={true}
-              >
-                <div className="space-y-1">
-                  {updateTerminalOutput.map((line, index) => (
-                    <div key={index}>
-                      <div className={`font-mono text-sm whitespace-pre-wrap ${line.isError ? 'text-destructive' : 'text-foreground'}`}>
-                        {line.timestamp && (
-                          <span className="text-muted-foreground mr-2">
-                            {new Date(line.timestamp).toLocaleTimeString()}
-                          </span>
-                        )}
-                        {line.message}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            )}
-          </div>
-          <DialogFooter>
-            {isUpdateComplete && (
-              <Button onClick={() => setShowUpdateComplete(true)}>
-                Next
-              </Button>
-            )}
-          </DialogFooter>
+          {renderUpdateContent()}
         </DialogContent>
       </Dialog>
 

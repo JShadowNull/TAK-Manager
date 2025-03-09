@@ -118,9 +118,14 @@ async def get_custom_files():
 async def upload_custom_file(file: UploadFile = File(...)):
     """Upload a custom file to be included in packages"""
     try:
+        logger.info(f"Received custom file: {file.filename}")
         data_package = DataPackage()
+        
+        # Save the file
         await data_package.save_custom_file(file)
-        return {'success': True, 'filename': file.filename}
+        
+        logger.info(f"Custom file saved successfully: {file.filename}")
+        return {'success': True, 'filename': file.filename, 'message': 'File uploaded successfully'}
     except Exception as e:
         logger.error(f"[upload_custom_file] Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

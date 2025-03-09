@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect} from 'react';
 import { Input } from '../../../shared/ui/shadcn/input';
 import { Button } from '../../../shared/ui/shadcn/button';
 import { HelpIconTooltip } from '../../../shared/ui/shadcn/tooltip/HelpIconTooltip';
 import { Eye, EyeOff, Wand2, UploadCloud } from 'lucide-react';
 import { z } from 'zod';
-import Popups from './TakOperationPopups';
+import TakOperationPopups from './TakOperationPopups';
 import { useDropzone } from 'react-dropzone';
+import { uploadWithProgress } from '../../../../utils/uploadProgress';
 
 // Form validation schema
 const formSchema = z.object({
@@ -99,6 +100,7 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
     organizational_unit: '',
     name: ''
   });
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const validateField = (name: string, value: any) => {
     if (name === 'docker_zip_file') {
@@ -173,8 +175,9 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
     }
     
     try {
-      // Clear any previous errors and show progress popup before making API call
+      // Clear errors and reset progress
       setErrors({});
+      setUploadProgress(0);
       setShowInstallProgress(true);
       
       const formDataToSend = new FormData();
@@ -184,12 +187,12 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
         }
       });
 
-      const response = await fetch('/api/takserver/install-takserver', {
-        method: 'POST',
-        body: formDataToSend,
-        // Set a longer timeout for large file uploads
-        signal: AbortSignal.timeout(3600000) // 1 hour timeout for very large files
-      });
+      // Use uploadWithProgress instead of fetch
+      const response = await uploadWithProgress(
+        '/api/takserver/install-takserver',
+        formDataToSend,
+        (progress) => setUploadProgress(progress)
+      );
 
       if (!response.ok) {
         throw new Error(`Installation failed: ${response.statusText}`);
@@ -589,13 +592,15 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
         </div>
       </div>
 
-      <Popups
+      <TakOperationPopups
+        showInstallProgress={showInstallProgress}
+        showUninstallProgress={false}
+        onInstallComplete={handleInstallComplete}
+        onUninstallComplete={() => {}}
+        uploadProgress={uploadProgress}
         showUninstallConfirm={false}
         onUninstallConfirmClose={() => {}}
         onUninstallConfirm={() => {}}
-        onInstallComplete={handleInstallComplete}
-        onUninstallComplete={() => {}}
-        showInstallProgress={showInstallProgress}
       />
     </>
   );

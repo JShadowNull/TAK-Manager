@@ -268,6 +268,15 @@ async def install_takserver(
         file_path = os.path.join(upload_dir, docker_zip_file.filename)
         
         logger.debug("Saving uploaded file to: %s", file_path)
+        
+        # Emit file received event
+        await install_queue.put({
+            "status": "uploading", 
+            "progress": 100,
+            "message": "File upload complete, starting installation",
+            "isInProgress": True
+        })
+        
         with open(file_path, "wb") as buffer:
             # Process file in chunks of 8MB to avoid memory issues with large files
             chunk_size = 8 * 1024 * 1024  # 8MB chunks

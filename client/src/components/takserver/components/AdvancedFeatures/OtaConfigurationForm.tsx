@@ -4,6 +4,7 @@ import { HelpIconTooltip } from '../../../shared/ui/shadcn/tooltip/HelpIconToolt
 import OtaPopups from './OtaPopups';
 import { useDropzone } from 'react-dropzone';
 import { UploadCloud } from 'lucide-react';
+import { uploadWithProgress } from '../../../../utils/uploadProgress';
 
 interface OtaConfigurationFormProps {
   onClose: () => void;
@@ -21,6 +22,7 @@ const OtaConfigurationForm: React.FC<OtaConfigurationFormProps> = ({ onClose }) 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [showConfigureProgress, setShowConfigureProgress] = useState(false);
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const validateField = (name: string, value: any) => {
     if (name === 'ota_zip_file') {
@@ -94,6 +96,7 @@ const OtaConfigurationForm: React.FC<OtaConfigurationFormProps> = ({ onClose }) 
     try {
       // Clear any previous errors and show progress popup before making API call
       setErrors({});
+      setUploadProgress(0);
       setShowConfigureProgress(true);
       
       const formData = new FormData();
@@ -101,19 +104,21 @@ const OtaConfigurationForm: React.FC<OtaConfigurationFormProps> = ({ onClose }) 
         formData.append('file', otaFormData.ota_zip_file);
       }
 
-      const response = await fetch('/api/ota/configure', {
-        method: 'POST',
-        body: formData,
-        // Set a longer timeout for large file uploads
-        signal: AbortSignal.timeout(3600000) // 1 hour timeout for very large files
-      });
+      // Use uploadWithProgress instead of fetch
+      const response = await uploadWithProgress(
+        '/api/ota/configure',
+        formData,
+        (progress) => setUploadProgress(progress)
+      );
 
       if (!response.ok) {
         throw new Error(`Configuration failed: ${response.statusText}`);
       }
     } catch (error) {
-      console.error('OTA configuration error:', error);
-      setErrors({ submit: error instanceof Error ? error.message : 'An error occurred during configuration' });
+      console.error('Configuration error:', error);
+      if (!showConfigureProgress) {
+        setErrors({ submit: error instanceof Error ? error.message : 'An error occurred during configuration' });
+      }
     }
   };
 
@@ -211,6 +216,7 @@ const OtaConfigurationForm: React.FC<OtaConfigurationFormProps> = ({ onClose }) 
         onConfigureComplete={handleConfigureComplete}
         onUpdateComplete={() => {}}
         showConfigureProgress={showConfigureProgress}
+        configureUploadProgress={uploadProgress}
       />
     </>
   );

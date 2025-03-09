@@ -76,6 +76,14 @@ async def configure_ota(file: UploadFile = File(...)):
         file_path = os.path.join(upload_dir, file.filename)
         logger.debug(f"Saving uploaded file to: {file_path}")
         
+        # Emit file received event
+        await ota_queue.put({
+            "status": "uploading", 
+            "progress": 100,
+            "message": "File upload complete, starting configuration",
+            "isInProgress": True
+        })
+        
         # Save uploaded file with chunked processing for large files
         with open(file_path, "wb") as buffer:
             # Process file in chunks of 8MB to avoid memory issues
@@ -124,6 +132,14 @@ async def update_ota(file: UploadFile = File(...)):
         upload_dir = DirectoryHelper.get_upload_directory()
         file_path = os.path.join(upload_dir, file.filename)
         logger.debug(f"Saving uploaded file to: {file_path}")
+        
+        # Emit file received event
+        await ota_queue.put({
+            "status": "uploading", 
+            "progress": 100,
+            "message": "File upload complete, starting update",
+            "isInProgress": True
+        })
         
         # Save uploaded file with chunked processing for large files
         with open(file_path, "wb") as buffer:

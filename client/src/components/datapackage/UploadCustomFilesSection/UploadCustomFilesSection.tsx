@@ -10,6 +10,8 @@ import { Trash2, UploadCloud, Loader2, FileText } from 'lucide-react';
 import { toast } from '@/components/shared/ui/shadcn/toast/use-toast';
 import { PreferenceState } from '../AtakPreferencesSection/atakPreferencesConfig';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/shared/ui/shadcn/tooltip/tooltip';
+import FileUploadProgress from './FileUploadProgress';
+import { uploadWithProgress } from '../../../utils/uploadProgress';
 
 interface UploadCustomFilesSectionProps {
   onFilesChange: (files: { customFiles: PreferenceState }) => void;
@@ -31,6 +33,8 @@ const UploadCustomFilesSection: React.FC<UploadCustomFilesSectionProps> = ({ onF
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentOperation, setCurrentOperation] = useState<'upload' | 'delete' | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [currentUploadFile, setCurrentUploadFile] = useState<string | null>(null);
 
   // Add a ref to track initial mount
   const initialMount = useRef(true);
@@ -176,14 +180,18 @@ const UploadCustomFilesSection: React.FC<UploadCustomFilesSectionProps> = ({ onF
         try {
           const formData = new FormData();
           formData.append('file', file);  // Use 'file' as the field name
+          
+          // Reset and show progress for current file
+          setUploadProgress(0);
+          setCurrentUploadFile(file.name);
           console.log('[UploadCustomFilesSection] Uploading file:', file.name);
 
-          const response = await fetch('/api/datapackage/custom-files', {
-            method: 'POST',
-            body: formData,
-            // Set a longer timeout for large file uploads
-            signal: AbortSignal.timeout(3600000) // 1 hour timeout for very large files
-          });
+          // Use uploadWithProgress instead of fetch
+          const response = await uploadWithProgress(
+            '/api/datapackage/custom-files',
+            formData,
+            (progress) => setUploadProgress(progress)
+          );
 
           if (!response.ok) {
             const errorData = await response.json();
@@ -201,6 +209,9 @@ const UploadCustomFilesSection: React.FC<UploadCustomFilesSectionProps> = ({ onF
             title: `Failed to upload ${file.name}`, 
             description: error instanceof Error ? error.message : 'Upload failed' 
           });
+        } finally {
+          // Clear progress display
+          setCurrentUploadFile(null);
         }
       }
 
@@ -220,6 +231,7 @@ const UploadCustomFilesSection: React.FC<UploadCustomFilesSectionProps> = ({ onF
       console.error('[UploadCustomFilesSection] Upload error:', error);
     } finally {
       setCurrentOperation(null);
+      setCurrentUploadFile(null);
     }
   };
 
@@ -267,182 +279,191 @@ const UploadCustomFilesSection: React.FC<UploadCustomFilesSectionProps> = ({ onF
   };
 
   return (
-    <Card className="w-full max-w-6xl mx-auto">
-      <CardHeader>
-        <CardTitle>Custom Files</CardTitle>
-        <CardDescription>Manage files to include in data packages</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-6">
-          <div {...getRootProps()} className="border-2 border-dashed rounded-lg py-4 pl-4 text-center cursor-pointer">
-            <input {...getInputProps()} />
-            <div className="space-y-2">
-              {pendingFiles.length > 0 ? (
-                <div className="text-left">
-                  <div className="flex items-center gap-2 mb-4">
-                    <UploadCloud className="h-6 w-6 text-muted-foreground" />
-                    <h4 className="font-medium">Files to upload</h4>
-                  </div>
-                  <ScrollArea className="h-32 pr-4">
-                    {pendingFiles.map((file) => (
-                      <div 
-                        key={file.name} 
-                        className="flex items-center gap-1 py-2 text-sm"
-                      >
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        <div className="flex-1">
-                          <span className="font-medium">{file.name}</span>
-                          <span className="text-muted-foreground ml-2">
-                            ({formatFileSize(file.size)})
-                          </span>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 hover:text-red-500 hover:bg-transparent"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removePendingFile(file.name);
-                          }}
+    <>
+      <Card className="w-full max-w-6xl mx-auto">
+        <CardHeader>
+          <CardTitle>Custom Files</CardTitle>
+          <CardDescription>Manage files to include in data packages</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-6">
+            <div {...getRootProps()} className="border-2 border-dashed rounded-lg py-4 pl-4 text-center cursor-pointer">
+              <input {...getInputProps()} />
+              <div className="space-y-2">
+                {pendingFiles.length > 0 ? (
+                  <div className="text-left">
+                    <div className="flex items-center gap-2 mb-4">
+                      <UploadCloud className="h-6 w-6 text-muted-foreground" />
+                      <h4 className="font-medium">Files to upload</h4>
+                    </div>
+                    <ScrollArea className="h-32 pr-4">
+                      {pendingFiles.map((file) => (
+                        <div 
+                          key={file.name} 
+                          className="flex items-center gap-1 py-2 text-sm"
                         >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </ScrollArea>
-                </div>
-              ) : (
-                <>
-                  <UploadCloud className="mx-auto h-8 w-8 text-muted-foreground" />
-                  {isDragActive ? (
-                    <p className="text-muted-foreground">Drop files here</p>
-                  ) : (
-                    <p className="text-muted-foreground">Drag files here or click to select</p>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-
-          {pendingFiles.length > 0 && (
-            <div className="flex justify-end gap-2">
-              <Button 
-                onClick={handleUpload} 
-                disabled={currentOperation === 'upload'}
-                loading={currentOperation === 'upload'}
-                loadingText="Uploading..."
-              >
-                {`Upload ${pendingFiles.length} File${pendingFiles.length !== 1 ? 's' : ''}`}
-              </Button>
-              <Button variant="outline" onClick={() => setPendingFiles([])}>
-                Cancel
-              </Button>
-            </div>
-          )}
-
-          {/* Updated Search and Select controls */}
-          <div className="space-y-4">
-            <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4">
-              <div className="w-full">
-                <Input
-                  placeholder="Search files..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full"
-                />
+                          <FileText className="h-4 w-4 text-muted-foreground" />
+                          <div className="flex-1">
+                            <span className="font-medium">{file.name}</span>
+                            <span className="text-muted-foreground ml-2">
+                              ({formatFileSize(file.size)})
+                            </span>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 hover:text-red-500 hover:bg-transparent"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removePendingFile(file.name);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </ScrollArea>
+                  </div>
+                ) : (
+                  <>
+                    <UploadCloud className="mx-auto h-8 w-8 text-muted-foreground" />
+                    {isDragActive ? (
+                      <p className="text-muted-foreground">Drop files here</p>
+                    ) : (
+                      <p className="text-muted-foreground">Drag files here or click to select</p>
+                    )}
+                  </>
+                )}
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="outline"
-                onClick={handleSelectAll}
-                disabled={currentOperation !== null}
-                className="whitespace-nowrap"
-              >
-                {selectedFiles.size === filteredFiles.length && filteredFiles.length > 0 
-                  ? 'Deselect All' 
-                  : 'Select All'}
-              </Button>
-              
-              {selectedFiles.size > 0 && (
+            {pendingFiles.length > 0 && (
+              <div className="flex justify-end gap-2">
+                <Button 
+                  onClick={handleUpload} 
+                  disabled={currentOperation === 'upload'}
+                  loading={currentOperation === 'upload'}
+                  loadingText="Uploading..."
+                >
+                  {`Upload ${pendingFiles.length} File${pendingFiles.length !== 1 ? 's' : ''}`}
+                </Button>
+                <Button variant="outline" onClick={() => setPendingFiles([])}>
+                  Cancel
+                </Button>
+              </div>
+            )}
+
+            {/* Updated Search and Select controls */}
+            <div className="space-y-4">
+              <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4">
+                <div className="w-full">
+                  <Input
+                    placeholder="Search files..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
-                  variant="danger"
-                  onClick={() => handleDelete()}
+                  variant="outline"
+                  onClick={handleSelectAll}
                   disabled={currentOperation !== null}
                   className="whitespace-nowrap"
                 >
-                  {currentOperation === 'delete' ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : (
-                    `Delete Selected (${selectedFiles.size})`
-                  )}
+                  {selectedFiles.size === filteredFiles.length && filteredFiles.length > 0 
+                    ? 'Deselect All' 
+                    : 'Select All'}
                 </Button>
-              )}
+                
+                {selectedFiles.size > 0 && (
+                  <Button
+                    variant="danger"
+                    onClick={() => handleDelete()}
+                    disabled={currentOperation !== null}
+                    className="whitespace-nowrap"
+                  >
+                    {currentOperation === 'delete' ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      `Delete Selected (${selectedFiles.size})`
+                    )}
+                  </Button>
+                )}
+              </div>
             </div>
-          </div>
 
-          <ScrollArea className="h-[400px] border rounded-lg">
-            <div className="p-4 space-y-2">
-              {filteredFiles.map((fileName) => (
-                <div 
-                  key={fileName} 
-                  className="flex flex-col md:flex-row items-start md:items-center justify-between p-3 border rounded-lg bg-muted/50 hover:bg-muted/60 transition-all duration-200 gap-2 cursor-pointer"
-                  onClick={() => handleSelectFile(fileName)}
-                >
-                  <div className={`flex items-center ${selectedFiles.has(fileName) ? 'gap-4' : 'gap-0'} flex-1 w-full md:w-auto`}>
-                    <div className={`transition-all duration-200 overflow-hidden ${selectedFiles.has(fileName) ? 'w-4 opacity-100' : 'w-0 opacity-0'} flex items-center h-full`}>
-                      <Checkbox
-                        checked={selectedFiles.has(fileName)}
-                        onCheckedChange={() => handleSelectFile(fileName)}
-                        disabled={currentOperation !== null}
-                        onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                        className="h-4 w-4"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1 justify-center">
-                      <span className="font-medium">{fileName}</span>
-                      <div className="text-xs text-muted-foreground flex gap-2">
-                        <span>{formatFileSize(files[fileName].metadata.size)}</span>
-                        <span>•</span>
-                        <span>{files[fileName].metadata.type}</span>
-                        <span>•</span>
-                        <span>
-                          {new Date(files[fileName].metadata.lastModified).toLocaleDateString()}
-                        </span>
+            <ScrollArea className="h-[400px] border rounded-lg">
+              <div className="p-4 space-y-2">
+                {filteredFiles.map((fileName) => (
+                  <div 
+                    key={fileName} 
+                    className="flex flex-col md:flex-row items-start md:items-center justify-between p-3 border rounded-lg bg-muted/50 hover:bg-muted/60 transition-all duration-200 gap-2 cursor-pointer"
+                    onClick={() => handleSelectFile(fileName)}
+                  >
+                    <div className={`flex items-center ${selectedFiles.has(fileName) ? 'gap-4' : 'gap-0'} flex-1 w-full md:w-auto`}>
+                      <div className={`transition-all duration-200 overflow-hidden ${selectedFiles.has(fileName) ? 'w-4 opacity-100' : 'w-0 opacity-0'} flex items-center h-full`}>
+                        <Checkbox
+                          checked={selectedFiles.has(fileName)}
+                          onCheckedChange={() => handleSelectFile(fileName)}
+                          disabled={currentOperation !== null}
+                          onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                          className="h-4 w-4"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1 justify-center">
+                        <span className="font-medium">{fileName}</span>
+                        <div className="text-xs text-muted-foreground flex gap-2">
+                          <span>{formatFileSize(files[fileName].metadata.size)}</span>
+                          <span>•</span>
+                          <span>{files[fileName].metadata.type}</span>
+                          <span>•</span>
+                          <span>
+                            {new Date(files[fileName].metadata.lastModified).toLocaleDateString()}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div 
-                    className="flex items-center gap-2"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-muted-foreground">Include</span>
-                          <div className="relative flex items-center">
-                            <Switch
-                              checked={files[fileName].enabled}
-                              onCheckedChange={(checked) => handleToggleFile(fileName, checked)}
-                              className="data-[state=checked]:bg-primary data-[state=unchecked]:bg-input"
-                              onClick={(e) => e.stopPropagation()}
-                            />
+                    <div 
+                      className="flex items-center gap-2"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground">Include</span>
+                            <div className="relative flex items-center">
+                              <Switch
+                                checked={files[fileName].enabled}
+                                onCheckedChange={(checked) => handleToggleFile(fileName, checked)}
+                                className="data-[state=checked]:bg-primary data-[state=unchecked]:bg-input"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            </div>
                           </div>
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Include in data packages</p>
-                      </TooltipContent>
-                    </Tooltip>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Include in data packages</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
-        </div>
-      </CardContent>
-    </Card>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        </CardContent>
+      </Card>
+      
+      {/* Add upload progress dialog */}
+      <FileUploadProgress
+        isOpen={!!currentUploadFile}
+        fileName={currentUploadFile || ''}
+        progress={uploadProgress}
+      />
+    </>
   );
 };
 

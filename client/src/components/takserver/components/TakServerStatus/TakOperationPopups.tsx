@@ -9,24 +9,26 @@ interface TerminalLine {
   isError: boolean;
 }
 
-interface PopupsProps {
+interface TakOperationPopupsProps {
+  showInstallProgress: boolean;
+  showUninstallProgress: boolean;
+  onInstallComplete: () => void;
+  onUninstallComplete: () => void;
+  uploadProgress?: number;
   showUninstallConfirm: boolean;
   onUninstallConfirmClose: () => void;
   onUninstallConfirm: () => void;
-  onInstallComplete: () => void;
-  onUninstallComplete: () => void;
-  showInstallProgress?: boolean;
-  showUninstallProgress?: boolean;
 }
 
-const Popups: React.FC<PopupsProps> = ({
-  showUninstallConfirm,
-  onUninstallConfirmClose,
-  onUninstallConfirm,
+const TakOperationPopups: React.FC<TakOperationPopupsProps> = ({
+  showInstallProgress,
+  showUninstallProgress,
   onInstallComplete,
   onUninstallComplete,
-  showInstallProgress = false,
-  showUninstallProgress = false
+  uploadProgress = 0,
+  showUninstallConfirm,
+  onUninstallConfirmClose,
+  onUninstallConfirm
 }) => {
   // Installation state
   const [showInstallComplete, setShowInstallComplete] = useState(false);
@@ -152,6 +154,68 @@ const Popups: React.FC<PopupsProps> = ({
     onUninstallComplete();
   };
 
+  // Installation dialog content
+  const renderInstallContent = () => (
+    <>
+      <DialogHeader>
+        <DialogTitle>Installing TAK Server</DialogTitle>
+        <DialogDescription>
+          {installProgress === 100 
+            ? "Installation complete. Review the logs and click Next to continue." 
+            : "Please wait while TAK Server is being installed..."}
+        </DialogDescription>
+      </DialogHeader>
+      <div className="py-4">
+        {/* Show upload progress if still uploading */}
+        {uploadProgress < 100 && installProgress === 0 && (
+          <>
+            <Progress 
+              value={uploadProgress}
+              text={`Uploading installation files: ${uploadProgress}%`}
+            />
+          </>
+        )}
+        
+        {/* Show installation progress once upload is complete */}
+        {(uploadProgress === 100 || installProgress > 0) && (
+          <Progress 
+            value={installProgress}
+            isIndeterminate={installProgress === 0}
+            text={installProgress === 0 
+              ? "Preparing installation..." 
+              : `Installation progress: ${installProgress}%`
+            }
+          />
+        )}
+        
+        {installTerminalOutput.length > 0 && (
+          <ScrollArea 
+            className="w-full rounded-md border p-4 mt-4 h-[300px] bg-background [&_*::selection]:bg-blue-500/80 [&_*::selection]:text-primary"
+            content={installTerminalOutput}
+            autoScroll={true}
+          >
+            <div className="space-y-1">
+              {installTerminalOutput.map((line, index) => (
+                <div key={index}>
+                  <div className={`font-mono text-sm whitespace-pre-wrap ${line.isError ? 'text-destructive' : 'text-foreground'}`}>
+                    {line.message}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        )}
+      </div>
+      <DialogFooter>
+        {isInstallationComplete && (
+          <Button onClick={() => setShowInstallComplete(true)}>
+            Next
+          </Button>
+        )}
+      </DialogFooter>
+    </>
+  );
+
   return (
     <>
       {/* Installation Progress Dialog */}
@@ -169,48 +233,7 @@ const Popups: React.FC<PopupsProps> = ({
           onEscapeKeyDown={(e) => e.preventDefault()}
           className="w-[95%] mx-auto sm:w-full max-w-lg md:max-w-2xl xl:max-w-3xl"
         >
-          <DialogHeader>
-            <DialogTitle>Installing TAK Server</DialogTitle>
-            <DialogDescription>
-              {installProgress === 100 
-                ? "Installation complete. Review the logs and click Next to continue." 
-                : "Please wait while TAK Server is being installed..."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <Progress 
-              value={installProgress}
-              isIndeterminate={installProgress === 0}
-              text={installProgress === 0 
-                ? "Uploading file to server..." 
-                : `Progress: ${installProgress}%`
-              }
-            />
-            {installTerminalOutput.length > 0 && (
-              <ScrollArea 
-                className="w-full rounded-md border p-4 mt-4 h-[300px] bg-background [&_*::selection]:bg-blue-500/80 [&_*::selection]:text-primary"
-                content={installTerminalOutput}
-                autoScroll={true}
-              >
-                <div className="space-y-1">
-                  {installTerminalOutput.map((line, index) => (
-                    <div key={index}>
-                      <div className={`font-mono text-sm whitespace-pre-wrap ${line.isError ? 'text-destructive' : 'text-foreground'}`}>
-                        {line.message}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            )}
-          </div>
-          <DialogFooter>
-            {isInstallationComplete && (
-              <Button onClick={() => setShowInstallComplete(true)}>
-                Next
-              </Button>
-            )}
-          </DialogFooter>
+          {renderInstallContent()}
         </DialogContent>
       </Dialog>
 
@@ -343,4 +366,4 @@ const Popups: React.FC<PopupsProps> = ({
   );
 };
 
-export default Popups; 
+export default TakOperationPopups; 
