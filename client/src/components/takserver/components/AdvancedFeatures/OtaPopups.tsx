@@ -192,7 +192,7 @@ const OtaPopups: React.FC<OtaPopupsProps> = ({
               value={configureProgress}
               isIndeterminate={configureProgress === 0}
               text={configureProgress === 0 
-                ? "Initializing..." 
+                ? "Uploading file to server..." 
                 : `Progress: ${configureProgress}%`
               }
             />
@@ -277,7 +277,7 @@ const OtaPopups: React.FC<OtaPopupsProps> = ({
               value={updateProgress}
               isIndeterminate={updateProgress === 0}
               text={updateProgress === 0 
-                ? "Initializing..." 
+                ? "Uploading file to server..." 
                 : `Progress: ${updateProgress}%`
               }
             />

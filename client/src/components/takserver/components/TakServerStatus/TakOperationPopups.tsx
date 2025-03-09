@@ -182,7 +182,7 @@ const Popups: React.FC<PopupsProps> = ({
               value={installProgress}
               isIndeterminate={installProgress === 0}
               text={installProgress === 0 
-                ? "Initializing..." 
+                ? "Uploading file to server..." 
                 : `Progress: ${installProgress}%`
               }
             />
@@ -287,7 +287,7 @@ const Popups: React.FC<PopupsProps> = ({
               value={uninstallProgress}
               isIndeterminate={uninstallProgress === 0}
               text={uninstallProgress === 0 
-                ? "Initializing..." 
+                ? "Uploading file to server..." 
                 : `Progress: ${uninstallProgress}%`
               }
             />

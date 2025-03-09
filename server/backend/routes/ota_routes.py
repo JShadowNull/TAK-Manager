@@ -69,7 +69,7 @@ async def ota_status_stream():
 async def configure_ota(file: UploadFile = File(...)):
     """Configure OTA update with uploaded file"""
     logger.debug("Starting OTA configuration")
-    logger.debug(f"Received file: {file.filename}")
+    logger.info(f"Received file: {file.filename}")
     try:
         # Save file
         upload_dir = DirectoryHelper.get_upload_directory()
@@ -80,7 +80,7 @@ async def configure_ota(file: UploadFile = File(...)):
         with open(file_path, "wb") as buffer:
             content = await file.read()
             buffer.write(content)
-        logger.debug("File saved successfully")
+        logger.info("File saved successfully")
 
         # Create OTA updater with SSE event emitter
         async def emit_event(data: Dict[str, Any]):
@@ -92,7 +92,7 @@ async def configure_ota(file: UploadFile = File(...)):
 
         logger.debug("Starting configuration process")
         success = await ota_updater.main()
-        logger.debug(f"Configuration completed with success={success}")
+        logger.info(f"Configuration completed with success={success}")
         
         # Clean up uploaded file regardless of success
         if os.path.exists(file_path):
@@ -113,7 +113,7 @@ async def configure_ota(file: UploadFile = File(...)):
 async def update_ota(file: UploadFile = File(...)):
     """Update OTA with uploaded file"""
     logger.debug("Starting OTA update")
-    logger.debug(f"Received file: {file.filename}")
+    logger.info(f"Received file: {file.filename}")
     try:
         # Save file
         upload_dir = DirectoryHelper.get_upload_directory()
@@ -124,7 +124,7 @@ async def update_ota(file: UploadFile = File(...)):
         with open(file_path, "wb") as buffer:
             content = await file.read()
             buffer.write(content)
-        logger.debug("File saved successfully")
+        logger.info("File saved successfully")
 
         # Create OTA updater with SSE event emitter
         async def emit_event(data: Dict[str, Any]):
@@ -136,7 +136,7 @@ async def update_ota(file: UploadFile = File(...)):
 
         logger.debug("Starting update process")
         success = await ota_updater.update()
-        logger.debug(f"Update completed with success={success}")
+        logger.info(f"Update completed with success={success}")
         
         # Clean up uploaded file regardless of success
         if os.path.exists(file_path):
