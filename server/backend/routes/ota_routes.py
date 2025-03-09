@@ -76,10 +76,15 @@ async def configure_ota(file: UploadFile = File(...)):
         file_path = os.path.join(upload_dir, file.filename)
         logger.debug(f"Saving uploaded file to: {file_path}")
         
-        # Save uploaded file
+        # Save uploaded file with chunked processing for large files
         with open(file_path, "wb") as buffer:
-            content = await file.read()
-            buffer.write(content)
+            # Process file in chunks of 8MB to avoid memory issues
+            chunk_size = 8 * 1024 * 1024  # 8MB chunks
+            while True:
+                chunk = await file.read(chunk_size)
+                if not chunk:
+                    break
+                buffer.write(chunk)
         logger.info("File saved successfully")
 
         # Create OTA updater with SSE event emitter
@@ -120,10 +125,15 @@ async def update_ota(file: UploadFile = File(...)):
         file_path = os.path.join(upload_dir, file.filename)
         logger.debug(f"Saving uploaded file to: {file_path}")
         
-        # Save uploaded file
+        # Save uploaded file with chunked processing for large files
         with open(file_path, "wb") as buffer:
-            content = await file.read()
-            buffer.write(content)
+            # Process file in chunks of 8MB to avoid memory issues
+            chunk_size = 8 * 1024 * 1024  # 8MB chunks
+            while True:
+                chunk = await file.read(chunk_size)
+                if not chunk:
+                    break
+                buffer.write(chunk)
         logger.info("File saved successfully")
 
         # Create OTA updater with SSE event emitter

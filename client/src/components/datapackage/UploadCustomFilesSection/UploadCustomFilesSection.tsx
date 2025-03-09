@@ -180,7 +180,9 @@ const UploadCustomFilesSection: React.FC<UploadCustomFilesSectionProps> = ({ onF
 
           const response = await fetch('/api/datapackage/custom-files', {
             method: 'POST',
-            body: formData
+            body: formData,
+            // Set a longer timeout for large file uploads
+            signal: AbortSignal.timeout(3600000) // 1 hour timeout for very large files
           });
 
           if (!response.ok) {

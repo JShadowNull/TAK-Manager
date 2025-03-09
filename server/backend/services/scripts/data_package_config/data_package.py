@@ -451,8 +451,13 @@ class DataPackage:
         file_path = os.path.join(custom_dir, file.filename)
         
         async with aiofiles.open(file_path, 'wb') as f:
-            while content := await file.read(1024):
-                await f.write(content)
+            # Use larger chunks (8MB) for better performance with large files
+            chunk_size = 8 * 1024 * 1024  # 8MB chunks
+            while True:
+                chunk = await file.read(chunk_size)
+                if not chunk:
+                    break
+                await f.write(chunk)
 
     async def delete_custom_file(self, filename: str):
         """Delete a custom file from the server"""

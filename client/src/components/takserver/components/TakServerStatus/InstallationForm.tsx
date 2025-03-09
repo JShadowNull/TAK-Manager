@@ -186,7 +186,9 @@ const InstallationForm: React.FC<InstallationFormProps> = ({
 
       const response = await fetch('/api/takserver/install-takserver', {
         method: 'POST',
-        body: formDataToSend
+        body: formDataToSend,
+        // Set a longer timeout for large file uploads
+        signal: AbortSignal.timeout(3600000) // 1 hour timeout for very large files
       });
 
       if (!response.ok) {

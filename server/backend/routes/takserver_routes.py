@@ -269,8 +269,14 @@ async def install_takserver(
         
         logger.debug("Saving uploaded file to: %s", file_path)
         with open(file_path, "wb") as buffer:
-            content = await docker_zip_file.read()
-            buffer.write(content)
+            # Process file in chunks of 8MB to avoid memory issues with large files
+            chunk_size = 8 * 1024 * 1024  # 8MB chunks
+            while True:
+                chunk = await docker_zip_file.read(chunk_size)
+                if not chunk:
+                    break
+                buffer.write(chunk)
+        logger.debug("File saved successfully")
 
         async def emit_event(data: Dict[str, Any]):
             logger.debug("Installation progress update: %s", data.get('type', 'unknown_event'))

@@ -4,6 +4,15 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from backend.config.logging_config import configure_logging
+from starlette.middleware.base import BaseHTTPMiddleware
+
+# Define middleware for large file uploads
+class LargeRequestMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        # Increase upload limit to 10GB
+        request._body_size_limit = 10 * 1024 * 1024 * 1024  # 10GB
+        response = await call_next(request)
+        return response
 
 # Import routers (equivalent to blueprints)
 from backend.routes.dashboard_routes import dashboard
@@ -29,6 +38,9 @@ def create_app():
         title="TAK Manager API",
         debug=is_dev
     )
+
+    # Add middleware for large file uploads
+    app.add_middleware(LargeRequestMiddleware)
 
     # Health check endpoint
     @app.get('/health')

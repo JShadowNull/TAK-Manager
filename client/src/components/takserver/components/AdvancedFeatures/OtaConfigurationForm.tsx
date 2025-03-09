@@ -103,7 +103,9 @@ const OtaConfigurationForm: React.FC<OtaConfigurationFormProps> = ({ onClose }) 
 
       const response = await fetch('/api/ota/configure', {
         method: 'POST',
-        body: formData
+        body: formData,
+        // Set a longer timeout for large file uploads
+        signal: AbortSignal.timeout(3600000) // 1 hour timeout for very large files
       });
 
       if (!response.ok) {

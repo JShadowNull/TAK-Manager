@@ -86,7 +86,9 @@ const UpdatePluginsForm: React.FC<UpdatePluginsFormProps> = ({ onClose, onUpdate
 
       const response = await fetch('/api/ota/update', {
         method: 'POST',
-        body: uploadData
+        body: uploadData,
+        // Set a longer timeout for large file uploads
+        signal: AbortSignal.timeout(3600000) // 1 hour timeout for very large files
       });
 
       if (!response.ok) {
