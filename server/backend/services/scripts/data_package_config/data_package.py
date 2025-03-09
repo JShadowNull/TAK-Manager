@@ -129,6 +129,10 @@ class DataPackage:
                 if isinstance(value, bool) or str(value).lower() in ('true', 'false'):
                     entry.set('class', 'class java.lang.Boolean')
                     entry.text = str(value).lower()
+                elif key == 'constantReportingRateUnreliable' or key == 'constantReportingRateReliable':
+                    # Always treat constantReportingRateUnreliable as String
+                    entry.set('class', 'class java.lang.String')
+                    entry.text = str(value)
                 elif str(value).isdigit():
                     entry.set('class', 'class java.lang.Integer')
                     entry.text = str(value)
