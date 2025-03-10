@@ -20,6 +20,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useLocation } from 'react-router-dom';
 import { toast } from "@/components/shared/ui/shadcn/toast/use-toast";
 import { HelpIconTooltip } from "@/components/shared/ui/shadcn/tooltip/HelpIconTooltip";
+import { Switch } from "@/components/shared/ui/shadcn/switch";
 
 interface CertOption {
   label: string;
@@ -74,6 +75,8 @@ const BulkGeneratorSection: React.FC<BulkGeneratorSectionProps> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [fileNameErrors, setFileNameErrors] = useState<Record<string, string>>({});
   const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({});
+  const [enrollmentEnabled, setEnrollmentEnabled] = useState(false);
+  const [zipFileName, setZipFileName] = useState("enrollment_package");
 
   const validateFileName = useCallback((value: string, certValue: string): Record<string, string> => {
     try {
@@ -229,10 +232,8 @@ const BulkGeneratorSection: React.FC<BulkGeneratorSectionProps> = ({
     setIsLoading(true);
 
     try {
-      let successCount = 0;
-      const totalCerts = selectedCerts.length;
-
-      for (const cert of selectedCerts) {
+      if (enrollmentEnabled) {
+        // Handle enrollment package generation (single package)
         try {
           const streamCount = parseInt(preferences.count?.value || "1");
           const fullTakServerConfig: Record<string, string> = { count: streamCount.toString() };
@@ -271,21 +272,16 @@ const BulkGeneratorSection: React.FC<BulkGeneratorSectionProps> = ({
             } catch (e) {
               console.error('[PackageGenerator] Failed to parse custom files:', e);
             }
-          } else {
-            console.log('[PackageGenerator] No custom files to process:', {
-              enabled: preferences.customFiles?.enabled,
-              hasValue: !!preferences.customFiles?.value
-            });
           }
 
           const requestBody = {
             takServerConfig: fullTakServerConfig,
             atakPreferences,
-            clientCert: cert.value,
-            zipFileName: bulkFileNames[cert.value] || cert.label,
-            customFiles
+            zipFileName: zipFileName,
+            customFiles,
+            enrollment: true
           };
-          console.log('[PackageGenerator] Sending request:', requestBody);
+          console.log('[PackageGenerator] Sending enrollment request:', requestBody);
 
           const response = await fetch('/api/datapackage/generate', {
             method: 'POST',
@@ -297,30 +293,122 @@ const BulkGeneratorSection: React.FC<BulkGeneratorSectionProps> = ({
 
           if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(errorData.detail || 'Failed to generate package');
+            throw new Error(errorData.detail || 'Failed to generate enrollment package');
           }
 
           const data = await response.json();
           if (!data.success) {
-            throw new Error(data.message || 'Failed to generate package');
+            throw new Error(data.message || 'Failed to generate enrollment package');
           }
 
-          successCount++;
+          toast({
+            variant: "success",
+            title: "Enrollment Package Generated",
+            description: `Successfully created enrollment package: ${zipFileName}`
+          });
         } catch (error) {
           toast({
             variant: "destructive",
-            title: `Generation Failed for ${cert.label}`,
-            description: error instanceof Error ? error.message : 'Failed to generate package'
+            title: "Enrollment Package Generation Failed",
+            description: error instanceof Error ? error.message : 'Failed to generate enrollment package'
           });
         }
-      }
+      } else {
+        // Handle existing client cert package generation
+        let successCount = 0;
+        const totalCerts = selectedCerts.length;
 
-      if (successCount > 0) {
-        toast({
-          variant: "success",
-          title: "Packages Generated",
-          description: `Successfully created ${successCount} of ${totalCerts} package${totalCerts > 1 ? 's' : ''}`
-        });
+        for (const cert of selectedCerts) {
+          try {
+            const streamCount = parseInt(preferences.count?.value || "1");
+            const fullTakServerConfig: Record<string, string> = { count: streamCount.toString() };
+
+            for (let i = 0; i < streamCount; i++) {
+              fullTakServerConfig[`description${i}`] = preferences[`description${i}`]?.value || "";
+              fullTakServerConfig[`ipAddress${i}`] = preferences[`ipAddress${i}`]?.value || "";
+              fullTakServerConfig[`port${i}`] = preferences[`port${i}`]?.value || "";
+              fullTakServerConfig[`protocol${i}`] = preferences[`protocol${i}`]?.value || "";
+              fullTakServerConfig[`caLocation${i}`] = preferences[`caLocation${i}`]?.value || "";
+              fullTakServerConfig[`certPassword${i}`] = preferences[`certPassword${i}`]?.value || "";
+            }
+
+            const atakPreferences = Object.entries(preferences).reduce((acc, [key, pref]) => {
+              if (pref.enabled && pref.value && 
+                  !key.startsWith('description') && !key.startsWith('ipAddress') && 
+                  !key.startsWith('port') && !key.startsWith('protocol') && 
+                  !key.startsWith('caLocation') && !key.startsWith('certPassword') &&
+                  !key.startsWith('count') && key !== 'customFiles') {
+                acc[key] = pref.value;
+              }
+              return acc;
+            }, {} as Record<string, any>);
+
+            // Get the list of enabled custom files
+            let customFiles: string[] = [];
+            if (preferences.customFiles?.enabled && preferences.customFiles?.value) {
+              try {
+                console.log('[PackageGenerator] Raw custom files value:', preferences.customFiles.value);
+                customFiles = JSON.parse(preferences.customFiles.value);
+                if (!Array.isArray(customFiles)) {
+                  console.warn('[PackageGenerator] Custom files not an array, resetting to empty array');
+                  customFiles = [];
+                }
+                console.log('[PackageGenerator] Parsed custom files:', customFiles);
+              } catch (e) {
+                console.error('[PackageGenerator] Failed to parse custom files:', e);
+              }
+            } else {
+              console.log('[PackageGenerator] No custom files to process:', {
+                enabled: preferences.customFiles?.enabled,
+                hasValue: !!preferences.customFiles?.value
+              });
+            }
+
+            const requestBody = {
+              takServerConfig: fullTakServerConfig,
+              atakPreferences,
+              clientCert: cert.value,
+              zipFileName: bulkFileNames[cert.value] || cert.label,
+              customFiles,
+              enrollment: false
+            };
+            console.log('[PackageGenerator] Sending request:', requestBody);
+
+            const response = await fetch('/api/datapackage/generate', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+              const errorData = await response.json();
+              throw new Error(errorData.detail || 'Failed to generate package');
+            }
+
+            const data = await response.json();
+            if (!data.success) {
+              throw new Error(data.message || 'Failed to generate package');
+            }
+
+            successCount++;
+          } catch (error) {
+            toast({
+              variant: "destructive",
+              title: `Generation Failed for ${cert.label}`,
+              description: error instanceof Error ? error.message : 'Failed to generate package'
+            });
+          }
+        }
+
+        if (successCount > 0) {
+          toast({
+            variant: "success",
+            title: "Packages Generated",
+            description: `Successfully created ${successCount} of ${totalCerts} package${totalCerts > 1 ? 's' : ''}`
+          });
+        }
       }
     } finally {
       setIsLoading(false);
@@ -343,45 +431,78 @@ const BulkGeneratorSection: React.FC<BulkGeneratorSectionProps> = ({
           />
         </CardTitle>
         <CardDescription>
-        Select one or more client certificates to generate data packages for.
+          Select one or more client certificates to generate data packages for.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="space-y-4">
-          <ScrollArea className="w-full lg:w-1/3 min-w-fit rounded-md border">
-            <Command>
-              <CommandInput 
-                placeholder="Search client certificates..." 
-                onValueChange={setSearchQuery}
-              />
-              <CommandList>
-                <CommandEmpty>No certificates found.</CommandEmpty>
-                <CommandGroup>
-                  {filteredCerts.map((cert) => {
-                    const isSelected = selectedCerts.some(selected => selected.value === cert.value);
-                    return (
-                      <CommandItem
-                        key={cert.value}
-                        onSelect={() => toggleCertificate(cert)}
-                        className="cursor-pointer"
-                      >
-                        <div className={cn(
-                          "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
-                          isSelected ? "bg-primary text-primary-foreground" : "opacity-50"
-                        )}>
-                          {isSelected && <Check className="h-4 w-4" />}
-                        </div>
-                        <span>{cert.label}</span>
-                      </CommandItem>
-                    );
-                  })}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </ScrollArea>
+        <div className="flex items-center space-x-2">
+          <Switch
+            id="enrollment-mode"
+            checked={enrollmentEnabled}
+            onCheckedChange={setEnrollmentEnabled}
+          />
+          <Label htmlFor="enrollment-mode" className="cursor-pointer">
+            Enable Enrollment Mode
+          </Label>
+          <HelpIconTooltip
+            tooltip="Enrollment mode creates a package without client certificates. Client will enroll with the server to receive a certificate."
+            triggerMode="hover"
+            side="right"
+          />
         </div>
 
-        {selectedCerts.length > 0 && (
+        {!enrollmentEnabled ? (
+          // Show client certificate selection UI when enrollment is disabled
+          <div className="space-y-4">
+            <ScrollArea className="w-full lg:w-1/3 min-w-fit rounded-md border">
+              <Command>
+                <CommandInput 
+                  placeholder="Search client certificates..." 
+                  onValueChange={setSearchQuery}
+                />
+                <CommandList>
+                  <CommandEmpty>No certificates found.</CommandEmpty>
+                  <CommandGroup>
+                    {filteredCerts.map((cert) => {
+                      const isSelected = selectedCerts.some(selected => selected.value === cert.value);
+                      return (
+                        <CommandItem
+                          key={cert.value}
+                          onSelect={() => toggleCertificate(cert)}
+                          className="cursor-pointer"
+                        >
+                          <div className={cn(
+                            "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
+                            isSelected ? "bg-primary text-primary-foreground" : "opacity-50"
+                          )}>
+                            {isSelected && <Check className="h-4 w-4" />}
+                          </div>
+                          <span>{cert.label}</span>
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </ScrollArea>
+          </div>
+        ) : (
+          // Show enrollment package configuration when enrollment is enabled
+          <div className="space-y-4">
+            <div className="flex flex-col space-y-2">
+              <Label htmlFor="enrollment-zip-name">Enrollment Package Name</Label>
+              <Input 
+                id="enrollment-zip-name"
+                value={zipFileName}
+                onChange={(e) => setZipFileName(e.target.value)}
+                placeholder="Enter package name..."
+                className="w-full lg:w-1/3"
+              />
+            </div>
+          </div>
+        )}
+
+        {!enrollmentEnabled && selectedCerts.length > 0 && (
           <div>
             <Label className="text-lg font-medium flex items-center gap-2">
               Package Names
@@ -427,12 +548,14 @@ const BulkGeneratorSection: React.FC<BulkGeneratorSectionProps> = ({
         <div className="flex justify-center lg:justify-end w-full">
           <Button
             onClick={handleGenerate}
-            disabled={selectedCerts.length === 0 || isLoading}
+            disabled={(enrollmentEnabled ? false : selectedCerts.length === 0) || isLoading}
             loading={isLoading}
             loadingText="Generating..."
             className="w-full lg:w-auto"
           >
-            Generate {selectedCerts.length} Package{selectedCerts.length !== 1 ? 's' : ''}
+            {enrollmentEnabled 
+              ? "Generate Enrollment Package" 
+              : `Generate ${selectedCerts.length} Package${selectedCerts.length !== 1 ? 's' : ''}`}
           </Button>
         </div>
       </CardContent>

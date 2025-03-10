@@ -33,7 +33,7 @@ class PackageCreator:
                 for ca_cert in ca_certs:
                     manifest_content += f'\n        <Content ignore="false" zipEntry="cert/{ca_cert}"/>'
             
-            # Then add all client certificates
+            # Then add all client certificates (if any)
             if client_certs:
                 for client_cert in client_certs:
                     manifest_content += f'\n        <Content ignore="false" zipEntry="cert/{client_cert}"/>'

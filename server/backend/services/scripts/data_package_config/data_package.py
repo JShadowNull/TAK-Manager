@@ -34,6 +34,9 @@ class DataPackage:
                 custom_files = preferences_data.get('customFiles', [])
                 logger.debug(f"[main] Processing custom files: {custom_files}")
                 
+                # Check if enrollment is enabled
+                enrollment_enabled = preferences_data.get('enrollment', False)
+                
                 # Extract certificate names
                 stream_count = int(preferences_data.get('count', 1))
                 ca_certs, client_certs = self.preferences_manager.extract_certificates(preferences_data, stream_count)

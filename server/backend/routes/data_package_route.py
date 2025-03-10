@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, HTTPException, Request, File, UploadFile
 from pydantic import BaseModel, ValidationError
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from backend.services.scripts.data_package_config.data_package import DataPackage
 from backend.config.logging_config import configure_logging
 import json
@@ -25,9 +25,10 @@ class TakServerConfig(BaseModel):
 class DataPackageRequest(BaseModel):
     takServerConfig: TakServerConfig
     atakPreferences: Dict[str, Any]
-    clientCert: str
+    clientCert: Optional[str] = None  # Make clientCert optional for enrollment mode
     zipFileName: str
     customFiles: List[str]  # List of filenames to include
+    enrollment: Optional[bool] = False  # Add enrollment flag with default False
 
 @datapackage.post('/generate')
 async def generate_package(request: Request, data: DataPackageRequest):
@@ -55,8 +56,12 @@ async def generate_package(request: Request, data: DataPackageRequest):
             preferences[f'protocol{i}'] = raw_config.get(f'protocol{i}', '')
             preferences[f'caLocation{i}'] = raw_config.get(f'caLocation{i}', '')
             preferences[f'certPassword{i}'] = raw_config.get(f'certPassword{i}', '')
-            preferences[f'certificateLocation{i}'] = data.clientCert
-            preferences[f'clientPassword{i}'] = raw_config.get(f'certPassword{i}', '')
+            
+            # Only add client cert if not in enrollment mode
+            if not data.enrollment and data.clientCert:
+                preferences[f'certificateLocation{i}'] = data.clientCert
+                preferences[f'clientPassword{i}'] = raw_config.get(f'certPassword{i}', '')
+            
             preferences[f'caPassword{i}'] = raw_config.get(f'certPassword{i}', '')
 
         # Special fields for file naming
@@ -67,6 +72,9 @@ async def generate_package(request: Request, data: DataPackageRequest):
 
         # Add custom files list
         preferences['customFiles'] = data.customFiles
+
+        # Add enrollment flag
+        preferences['enrollment'] = data.enrollment
 
         # Execute package generation
         result = await data_package.main(preferences)

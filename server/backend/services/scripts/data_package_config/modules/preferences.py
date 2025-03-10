@@ -29,6 +29,10 @@ class PreferencesManager:
             count_entry.set('class', 'class java.lang.Integer')
             count_entry.text = str(stream_count)
             
+            # Check if enrollment mode is enabled
+            enrollment_enabled = preferences_data.get('enrollment', False)
+            logger.debug(f"Enrollment mode: {enrollment_enabled}")
+            
             # Process each stream's configuration
             for i in range(stream_count):
                 # Get stream details with proper error handling
@@ -77,14 +81,33 @@ class PreferencesManager:
                     ca_entry.set('class', 'class java.lang.String')
                     ca_entry.text = ca_location
 
-                if cert_location:
-                    cert_entry = ET.SubElement(cot_streams, 'entry')
-                    cert_entry.set('key', f'certificateLocation{i}')
-                    cert_entry.set('class', 'class java.lang.String')
-                    cert_entry.text = cert_location
+                # Handle enrollment differently than regular client cert mode
+                if enrollment_enabled:
+                    # Add enrollment entries
+                    enroll_entry = ET.SubElement(cot_streams, 'entry')
+                    enroll_entry.set('key', f'enrollForCertificateWithTrust{i}')
+                    enroll_entry.set('class', 'class java.lang.Boolean')
+                    enroll_entry.text = 'true'
+                    
+                    use_auth_entry = ET.SubElement(cot_streams, 'entry')
+                    use_auth_entry.set('key', f'useAuth{i}')
+                    use_auth_entry.set('class', 'class java.lang.Boolean')
+                    use_auth_entry.text = 'true'
+                    
+                    cache_creds_entry = ET.SubElement(cot_streams, 'entry')
+                    cache_creds_entry.set('key', f'cacheCreds{i}')
+                    cache_creds_entry.set('class', 'class java.lang.String')
+                    cache_creds_entry.text = 'Cache credentials'
+                else:
+                    # Regular mode - add client certificate if it exists
+                    if cert_location:
+                        cert_entry = ET.SubElement(cot_streams, 'entry')
+                        cert_entry.set('key', f'certificateLocation{i}')
+                        cert_entry.set('class', 'class java.lang.String')
+                        cert_entry.text = cert_location
 
                 # Add password entries if they exist
-                if client_password:
+                if not enrollment_enabled and client_password:
                     client_pass_entry = ET.SubElement(cot_streams, 'entry')
                     client_pass_entry.set('key', f'clientPassword{i}')
                     client_pass_entry.set('class', 'class java.lang.String')
@@ -98,7 +121,9 @@ class PreferencesManager:
 
             # Create the main preferences section for ATAK settings
             main_pref = ET.SubElement(preferences, 'preference')
-            main_pref.set('name', 'com.atakmap.app.civ_preferences')
+            
+            # Use app_preferences instead of civ_preferences since it's more general
+            main_pref.set('name', 'com.atakmap.app_preferences')
             main_pref.set('version', '1')
             
             # Process ATAK preferences as direct entries
@@ -106,7 +131,7 @@ class PreferencesManager:
                 # Skip CoT stream related keys and special keys
                 if (any(key.startswith(prefix) for prefix in ['description', 'ipAddress', 'port', 'protocol', 
                     'caLocation', 'certificateLocation', 'clientPassword', 'caPassword', 'certPassword', 'count']) or 
-                    key.startswith('#')):
+                    key.startswith('#') or key == 'enrollment' or key == 'customFiles'):
                     continue
 
                 # Add the preference entry
@@ -157,6 +182,18 @@ class PreferencesManager:
         ca_certs = []
         client_certs = []
 
+        # Skip client certs in enrollment mode
+        enrollment_enabled = preferences_data.get('enrollment', False)
+        if enrollment_enabled:
+            logger.debug("Enrollment mode enabled - skipping client certificates")
+            # Only include CA certificates in enrollment mode
+            for i in range(stream_count):
+                ca_cert = preferences_data.get(f'caLocation{i}', '').replace('cert/', '')
+                if ca_cert and ca_cert not in ca_certs:
+                    ca_certs.append(ca_cert)
+            return ca_certs, []
+        
+        # Standard mode - include both CA and client certs
         main_client_cert = preferences_data.get('certificateLocation0', '').replace('cert/', '')
         if main_client_cert:
             client_certs.append(main_client_cert)
