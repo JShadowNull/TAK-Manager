@@ -93,9 +93,10 @@ const UploadCustomFilesSection: React.FC<UploadCustomFilesSectionProps> = ({ onF
       'application/x-yaml': ['.yaml', '.yml'],
       'application/zip': ['.zip'],
       'image/*': ['.jpg', '.jpeg', '.png', '.gif'],
-      'application/pdf': ['.pdf']
+      'application/pdf': ['.pdf'],
+      'application/vnd.android.package-archive': ['.apk']
     },
-    maxSize: 5000000000,
+    maxSize: 12000000000, // 12 GB in bytes
     multiple: true
   });
 
