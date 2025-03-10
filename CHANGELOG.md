@@ -6,6 +6,68 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.0.0] - 2025-03-10
+
+## [3.0.0] - 2025-03-10
+
+
+### Added 🚀
+
+
+- Add tak-manger logs to advanced features logging tab
+- Improve AtakCustomSettings UI with sticky header and layout refinements
+- Add loading states for frontend buttons in TAK Manager wrapper application
+- Add ATAK preferences import option from existing preferences file
+- Improve AtakPreferencesSection layout and scrolling
+- Support IP, domain, and hostname input for TAK Server datapackage configuration
+- Enhance PWA support and metadata for TAK Manager
+- Enhance responsive design and mobile layout across TAK Manager components
+- Port edits in CoreConfig.xml now properly open ports in container based on modifications
+- Add file upload progress tracking for large files
+- Add enrollment mode for generating data packages without client certificates
+- Add enrollment certificate generation support
+
+
+### Changed 🔄
+
+
+- Split TakOperationPopups into separate install and uninstall components
+- Modularize data package configuration with separate module managers
+
+
+### Documentation 📦
+
+
+- Add comprehensive logging across backend services
+- Create comprehensive development README for TAK Manager
+
+
+### Fixed 🔧
+
+
+- Update ATAK preferences XML selector for CIV variant
+- Handle constantReportingRate as String in data package
+- Data package now only creates preferences as strings or boolean
+- Improve large file upload handling across client and server
+- File upload progress tracking for update plugins
+- Data package custom file upload now supports apk files
+- Custom imported settings are reset on delete and reset to defaults
+- Reset to default handling is separate for TAK Server settings and ATAK settings
+- Enrollment user certs cannot be downloaded or included in data package generator
+
+
+### Other 📦
+
+
+- Bump version to v2.1.1
+- Remove setup scripts for Mac and Windows environments
+- Ignore Cursor IDE configuration files
+- Update PWA theme color to use HSL color format
+- Change file not found logging from error to debug level
+- Update progress messages for file upload and OTA operations
+- Update success toast to display a restart is needed for changes to take effect
+- Release tak-manager@3.0.0 [skip ci]
+
 ## [2.1.1] - 2025-02-27
 
 ## [2.1.1] - 2025-02-27
