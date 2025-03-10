@@ -200,9 +200,21 @@ const AtakPreferencesSection: React.FC<AtakPreferencesSectionProps> = memo(({
       onEnableChange(item.label, false);
     });
     
-    // Clear custom preferences
+    // Clear custom preferences from localStorage
     setCustomPreferences([]);
     saveCustomPreferences([]);
+
+    // Also clear any custom preferences from the preferences state
+    // Get all custom preference labels that might still be in the state
+    const customPrefLabels = Object.keys(preferences).filter(
+      label => !ATAK_PREFERENCES.some(pref => pref.label === label)
+    );
+    
+    // Clear these custom preferences from state
+    customPrefLabels.forEach(label => {
+      onPreferenceChange(label, '');
+      onEnableChange(label, false);
+    });
     
     // Clear selections
     setSelectedSettings(new Set());
@@ -213,7 +225,7 @@ const AtakPreferencesSection: React.FC<AtakPreferencesSectionProps> = memo(({
     
     // Close dialog immediately after confirming
     setResetDialogOpen(false);
-  }, [onPreferenceChange, onEnableChange, validateAll]);
+  }, [onPreferenceChange, onEnableChange, validateAll, preferences]);
 
   // Add toggle selection handler
   const handleToggleSelection = useCallback((label: string) => {

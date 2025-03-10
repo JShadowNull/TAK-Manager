@@ -81,19 +81,29 @@ export const AtakPreferencesImport: React.FC<AtakPreferencesImportProps> = ({
         
         // Add new custom preferences
         if (newCustomPreferences.length > 0) {
-          const updatedCustomPrefs = [...customPreferences, ...newCustomPreferences];
-          onCustomPreferencesChange(updatedCustomPrefs);
+          // Merge with existing custom preferences, avoiding duplicates by label
+          const mergedCustomPrefs = [...customPreferences];
+          for (const newPref of newCustomPreferences) {
+            // Check if this custom preference already exists
+            const existingIndex = mergedCustomPrefs.findIndex(p => p.label === newPref.label);
+            if (existingIndex >= 0) {
+              // Update existing preference
+              mergedCustomPrefs[existingIndex] = newPref;
+            } else {
+              // Add new preference
+              mergedCustomPrefs.push(newPref);
+            }
+          }
+          
+          // Update custom preferences
+          onCustomPreferencesChange(mergedCustomPrefs);
+          
+          toast({
+            title: "ATAK Preferences Imported",
+            description: `Imported ${Object.keys(filteredPreferences).length} preferences (${skippedCount} empty values skipped). Added or updated ${newCustomPreferences.length} custom preferences.`,
+            variant: "success"
+          });
         }
-        
-        const successMessage = skippedCount > 0 
-          ? `Successfully imported ${Object.keys(filteredPreferences).length} preferences. Added ${newCustomPreferences.length} new custom settings. Skipped ${skippedCount} empty values.`
-          : `Successfully imported ${Object.keys(filteredPreferences).length} preferences. Added ${newCustomPreferences.length} new custom settings.`;
-        
-        toast({
-          title: "Import Successful",
-          description: successMessage,
-          variant: "success",
-        });
         
         // Close the dialog after successful import
         setTimeout(() => {
