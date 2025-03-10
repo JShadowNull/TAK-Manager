@@ -407,7 +407,7 @@ const CreateCertificates: React.FC = () => {
             
           toast({
             title: "Partial Success",
-            description: `Created ${completedCount} certificate(s) successfully: ${successDetails}. Failed to create ${failedCount} certificate(s): ${failDetails}`,
+            description: `Created ${completedCount} certificate(s) successfully: ${successDetails}. Failed to create ${failedCount} certificate(s): ${failDetails}. Restart the TAK server for new certificates to take effect.`,
             variant: 'destructive'
           });
         } else {
@@ -430,7 +430,7 @@ const CreateCertificates: React.FC = () => {
           
         toast({
           title: "Certificates Created",
-          description: `Successfully created ${completedCount} certificate(s): ${certificateNames}.`,
+          description: `Successfully created ${completedCount} certificate(s): ${certificateNames}. Restart the TAK server for new certificates to take effect.`,
           variant: 'success'
         });
       }
