@@ -84,41 +84,114 @@ class CertManager:
             logger.error(f"Error reading certificates: {str(e)}")
             raise Exception(f"Error reading certificates: {str(e)}")
 
-    async def create_main(self, certificates: list) -> bool:
+    async def create_main(self, certificates: list) -> dict:
         """Create multiple certificates in a batch."""
         try:
-            total_certs = len(certificates)
-            completed_certs = 0
+            results = {
+                "success": True,
+                "total": len(certificates),
+                "completed": 0,
+                "failed": 0,
+                "details": []
+            }
 
             for cert_data in certificates:
                 try:
                     username = cert_data['username']
-
-                    if await self.create_client_certificate(username):
+                    is_enrollment = cert_data.get('is_enrollment', False)
+                    
+                    # Skip certificate creation for enrollment users
+                    if is_enrollment:
+                        logger.info(f"Skipping certificate creation for enrollment user: {username}")
                         try:
+                            # Only register the user (without certificate)
                             await self.register_user(
                                 username=username,
                                 password=cert_data.get('password'),
                                 is_admin=cert_data.get('is_admin', False),
-                                groups=cert_data.get('groups', ['__ANON__'])
+                                groups=cert_data.get('groups', ['__ANON__']),
+                                is_enrollment=True
                             )
-                            completed_certs += 1
-                            continue
+                            results["completed"] += 1
+                            results["details"].append({
+                                "username": username,
+                                "success": True,
+                                "message": "Enrollment user registered successfully"
+                            })
                         except Exception as e:
-                            logger.error(f"Registration failed for user {username}: {str(e)}")
-                            # If registration fails, delete the created certificate files
-                            await self.delete_user_certificates(username)  # Cleanup
-                            raise  # Re-raise the exception for further handling
+                            error_msg = str(e)
+                            logger.error(f"Registration failed for enrollment user {username}: {error_msg}")
+                            results["failed"] += 1
+                            results["success"] = False
+                            results["details"].append({
+                                "username": username,
+                                "success": False,
+                                "message": f"Failed to register enrollment user: {error_msg}"
+                            })
+                    else:
+                        # Regular user with certificate
+                        try:
+                            if await self.create_client_certificate(username):
+                                try:
+                                    await self.register_user(
+                                        username=username,
+                                        password=cert_data.get('password'),
+                                        is_admin=cert_data.get('is_admin', False),
+                                        groups=cert_data.get('groups', ['__ANON__']),
+                                        is_enrollment=False
+                                    )
+                                    results["completed"] += 1
+                                    results["details"].append({
+                                        "username": username,
+                                        "success": True,
+                                        "message": "Certificate created and user registered successfully"
+                                    })
+                                except Exception as e:
+                                    error_msg = str(e)
+                                    logger.error(f"Registration failed for user {username}: {error_msg}")
+                                    # If registration fails, delete the created certificate files
+                                    await self.delete_user_certificates(username)  # Cleanup
+                                    results["failed"] += 1
+                                    results["success"] = False
+                                    results["details"].append({
+                                        "username": username,
+                                        "success": False,
+                                        "message": f"Certificate created but registration failed: {error_msg}"
+                                    })
+                        except Exception as e:
+                            error_msg = str(e)
+                            logger.error(f"Failed to create certificate for user {username}: {error_msg}")
+                            results["failed"] += 1
+                            results["success"] = False
+                            results["details"].append({
+                                "username": username,
+                                "success": False,
+                                "message": f"Failed to create certificate: {error_msg}"
+                            })
 
                 except Exception as e:
-                    logger.error(f"Error processing certificate for user {username}: {str(e)}")
-                    raise
+                    error_msg = str(e)
+                    username = cert_data.get('username', 'unknown')
+                    logger.error(f"Error processing certificate for user {username}: {error_msg}")
+                    results["failed"] += 1
+                    results["success"] = False
+                    results["details"].append({
+                        "username": username,
+                        "success": False,
+                        "message": f"Error processing certificate: {error_msg}"
+                    })
 
-            return completed_certs == total_certs
+            return results
 
         except Exception as e:
             logger.error(f"Error during certificate creation: {str(e)}")
-            raise
+            return {
+                "success": False,
+                "message": f"Error during certificate creation: {str(e)}",
+                "total": len(certificates),
+                "completed": 0,
+                "failed": len(certificates)
+            }
 
     async def delete_main(self, username: str) -> bool:
         """Delete a user and their certificates."""
@@ -201,27 +274,62 @@ class CertManager:
             logger.error(f"Error creating certificate for user {username}: {str(e)}")
             raise
 
-    async def register_user(self, username: str, password: Optional[str] = None, is_admin: bool = False, groups: Optional[list] = None) -> bool:
+    async def register_user(self, username: str, password: Optional[str] = None, is_admin: bool = False, groups: Optional[list] = None, is_enrollment: bool = False) -> bool:
         """Register a user with their certificate."""
         try:
+            # Validate that enrollment users have passwords
+            if is_enrollment and not password:
+                logger.error(f"Error registering user {username}: Enrollment users require a password")
+                raise ValueError("Enrollment users require a password")
+                
             container_name = self.get_container_name()
-            cmd_parts = ["java", "-jar", "/opt/tak/utils/UserManager.jar", "certmod"]
             
-            if is_admin:
-                cmd_parts.append("-A")
+            # Different command based on enrollment status
+            if is_enrollment:
+                # For enrollment users, use usermod instead of certmod
+                cmd_parts = ["java", "-jar", "/opt/tak/utils/UserManager.jar", "usermod"]
                 
-            if groups:
-                for group in groups:
-                    cmd_parts.extend(["-g", group])
+                # For usermod, we add options first, then username at the end
+                # Add common parameters for both modes
+                if is_admin:
+                    cmd_parts.append("-A")
+                    
+                if groups:
+                    for group in groups:
+                        cmd_parts.extend(["-g", group])
+                else:
+                    cmd_parts.extend(["-g", "__ANON__"])
+                    
+                if password:
+                    # Use single quotes as recommended in the documentation
+                    cmd_parts.extend(["-p", f"'{password}'"])
+                
+                # Add username at the end for usermod
+                cmd_parts.append(username)
             else:
-                cmd_parts.extend(["-g", "__ANON__"])
+                # For regular users with certificates, use certmod
+                cmd_parts = ["java", "-jar", "/opt/tak/utils/UserManager.jar", "certmod"]
                 
-            if password:
-                cmd_parts.extend(["-p", f'"{password}"'])
+                # Common parameters for certmod mode
+                if is_admin:
+                    cmd_parts.append("-A")
+                    
+                if groups:
+                    for group in groups:
+                        cmd_parts.extend(["-g", group])
+                else:
+                    cmd_parts.extend(["-g", "__ANON__"])
+                    
+                if password:
+                    # Use single quotes as recommended in the documentation
+                    cmd_parts.extend(["-p", f"'{password}'"])
                 
-            cmd_parts.append(f"/opt/tak/certs/files/{username}.pem")
+                # Specify certificate path for regular users at the end
+                cmd_parts.append(f"/opt/tak/certs/files/{username}.pem")
             
             command = ["docker", "exec", container_name, "bash", "-c", " ".join(cmd_parts)]
+            
+            logger.debug(f"Running command: {' '.join(command)}")
             
             result = await self.run_command.run_command_async(
                 command=command,

@@ -20,6 +20,7 @@ interface CertField {
   isAdmin: boolean;
   group: string;
   password: string;
+  isEnrollment: boolean;
 }
 
 interface BatchCertificateData {
@@ -31,11 +32,13 @@ interface BatchCertificateData {
   isAdmin: boolean;
   includeGroupInName: boolean;
   startAt: string | number;
+  isEnrollment: boolean;
   certificates?: Array<{
     username: string;
     groups: string[];
     is_admin: boolean;
     password?: string;
+    is_enrollment: boolean;
   }>;
 }
 
@@ -46,6 +49,7 @@ interface SingleCertificateData {
     groups: string[];
     is_admin: boolean;
     password?: string;
+    is_enrollment: boolean;
   }>;
 }
 
@@ -100,7 +104,8 @@ const CreateCertificates: React.FC = () => {
     name: '',
     group: '__ANON__',
     password: '',
-    isAdmin: false
+    isAdmin: false,
+    isEnrollment: false
   }]);
 
   // Batch certificate state
@@ -109,6 +114,9 @@ const CreateCertificates: React.FC = () => {
   const [count, setCount] = useState(1);
   const [prefixType, setPrefixType] = useState<'numeric' | 'alpha'>('numeric');
   const [startAt, setStartAt] = useState<string>('1');
+  const [batchEnrollment, setBatchEnrollment] = useState(false);
+  const [batchPassword, setBatchPassword] = useState('');
+  const [batchPasswordVisible, setBatchPasswordVisible] = useState(false);
 
   // Update startAt when prefix type changes
   useEffect(() => {
@@ -198,6 +206,8 @@ const CreateCertificates: React.FC = () => {
       // In batch mode, require name but maintain validation behavior
       if (!batchName) return true;
       if (!batchValidation.isValid) return true;
+      // Require password for enrollment
+      if (batchEnrollment && !batchPassword) return true;
       return false;
     } else {
       // In single mode, require at least one certificate with a name
@@ -205,6 +215,8 @@ const CreateCertificates: React.FC = () => {
         // If there's a name, check validation
         if (field.name) {
           const validation = certFieldsValidation[certFields.indexOf(field)];
+          // If this is an enrollment certificate, password is required
+          if (field.isEnrollment && !field.password) return false;
           return validation.isValid;
         }
         return false;
@@ -217,7 +229,7 @@ const CreateCertificates: React.FC = () => {
       // If we have certs with names but none are valid, disable button
       return !hasValidCert;
     }
-  }, [isOperationInProgress, isBatchMode, batchName, batchValidation, certFields, certFieldsValidation]);
+  }, [isOperationInProgress, isBatchMode, batchName, batchValidation, certFields, certFieldsValidation, batchEnrollment, batchPassword]);
 
   const prefixOptions = [
     { value: 'numeric', text: 'Numeric (1, 2, 3...)' },
@@ -244,7 +256,7 @@ const CreateCertificates: React.FC = () => {
 
   // Handlers
   const handleAddCertField = () => {
-    setCertFields([...certFields, { name: '', isAdmin: false, group: '__ANON__', password: '' }]);
+    setCertFields([...certFields, { name: '', isAdmin: false, group: '__ANON__', password: '', isEnrollment: false }]);
   };
 
   const handleRemoveCertField = (index: number) => {
@@ -288,7 +300,8 @@ const CreateCertificates: React.FC = () => {
           username,
           groups: groups.length ? [groups[0]] : ['__ANON__'],
           is_admin: false,
-          password: undefined
+          password: batchEnrollment ? batchPassword : undefined,
+          is_enrollment: batchEnrollment
         };
       });
 
@@ -301,6 +314,7 @@ const CreateCertificates: React.FC = () => {
         isAdmin: false,
         includeGroupInName: true,
         startAt,
+        isEnrollment: batchEnrollment,
         certificates
       };
     } else {
@@ -314,7 +328,8 @@ const CreateCertificates: React.FC = () => {
               ? field.group.split(',').map(g => g.trim()).filter(g => g)
               : ['__ANON__'],
             is_admin: field.isAdmin,
-            password: field.password || undefined
+            password: field.password || undefined,
+            is_enrollment: field.isEnrollment
           };
         });
 
@@ -347,27 +362,78 @@ const CreateCertificates: React.FC = () => {
         throw new Error(errorData.detail || 'Failed to create certificate(s)')
       }
 
+      // Parse the response
+      const result = await response.json();
+      
+      // Define proper type for certificate details
+      type CertDetail = {
+        username: string;
+        success: boolean;
+        message: string;
+      };
+      
       // Reset form on success
       if (data.mode === 'single') {
         setCertFields([{
           name: '',
           group: '__ANON__',
           password: '',
-          isAdmin: false
+          isAdmin: false,
+          isEnrollment: false
         }]); // Reset to initial state
       }
 
-      const certificateCount = data.mode === 'batch' ? data.count : data.certificates.length;
-      const certificateNames = data.mode === 'batch' ? [data.name] : data.certificates.map(cert => cert.username);
+      // Get certificate count from the result
+      const completedCount = result.completed || 0;
+      const failedCount = result.failed || 0;
+      
+      // Set the created count only for successfully created certificates
+      setCreatedCount(completedCount);
 
-      // Set the created count
-      setCreatedCount(certificateCount);
-
-      toast({
-        title: "Certificates Created",
-        description: `Successfully created ${certificateCount} certificate(s): ${certificateNames.join(', ')}.`,
-        variant: 'success'
-      });
+      // Generate detailed message based on result
+      if (!result.success) {
+        // Show partial success or failure message
+        if (completedCount > 0) {
+          // Some certificates were created successfully
+          const successDetails = (result.details as CertDetail[])
+            ?.filter((detail: CertDetail) => detail.success)
+            .map((detail: CertDetail) => detail.username)
+            .join(', ');
+            
+          const failDetails = (result.details as CertDetail[])
+            ?.filter((detail: CertDetail) => !detail.success)
+            .map((detail: CertDetail) => `${detail.username} (${detail.message})`)
+            .join(', ');
+            
+          toast({
+            title: "Partial Success",
+            description: `Created ${completedCount} certificate(s) successfully: ${successDetails}. Failed to create ${failedCount} certificate(s): ${failDetails}`,
+            variant: 'destructive'
+          });
+        } else {
+          // All certificates failed to create
+          const failDetails = (result.details as CertDetail[])
+            ?.map((detail: CertDetail) => `${detail.username} (${detail.message})`)
+            .join(', ');
+            
+          toast({
+            title: "Failed to Create Certificates",
+            description: result.message || `All certificates failed to create: ${failDetails}`,
+            variant: 'destructive'
+          });
+        }
+      } else {
+        // All certificates created successfully
+        const certificateNames = (result.details as CertDetail[])
+          ?.map((detail: CertDetail) => detail.username)
+          .join(', ');
+          
+        toast({
+          title: "Certificates Created",
+          description: `Successfully created ${completedCount} certificate(s): ${certificateNames}.`,
+          variant: 'success'
+        });
+      }
     } catch (error) {
       toast({
         title: "Error",
@@ -511,11 +577,15 @@ const CreateCertificates: React.FC = () => {
                         )}
                       />
                     </div>
+                    
+                    {/* Password field */}
                     <div className="space-y-2">
                       <Label htmlFor={`password-${index}`} className="flex items-center gap-2 break-normal">
-                         Password for Enrollment (Optional)
+                        Password for Enrollment {field.isEnrollment ? '(Required)' : '(Optional)'}
                         <HelpIconTooltip 
-                          tooltip="Optional password for certificate enrollment. Enter if you prefer to use a password over uploading the certificate manually to ATAK. This is not the same as the certificate password."
+                          tooltip={field.isEnrollment 
+                            ? "Password is required for enrollment users to authenticate to the TAK server." 
+                            : "Optional password for certificate enrollment. Enter if you prefer to use a password over uploading the certificate manually to ATAK."}
                           triggerMode="hover"
                           iconSize={14}
                         />
@@ -529,20 +599,21 @@ const CreateCertificates: React.FC = () => {
                             onChange={(e) => handleCertFieldChange(index, 'password', e.target.value)}
                             onBlur={() => handleBlur(`password${index}`)}
                             placeholder="Enter password"
+                            required={field.isEnrollment}
                             className={cn(
                               "w-full pr-10",
-                              // displayErrors[`password${index}`] && "border-red-500"
+                              field.isEnrollment && !field.password && "border-red-500"
                             )}
                           />
-                      <Button
-                        type="button"
-                        onClick={() => togglePasswordVisibility(index)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 bg-transparent hover:bg-transparent text-muted-foreground hover:text-primary"
-                        tooltip="Show/Hide password"
-                        triggerMode="hover"
-                      >
-                        {passwordVisibility[index] ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </Button>
+                          <Button
+                            type="button"
+                            onClick={() => togglePasswordVisibility(index)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 bg-transparent hover:bg-transparent text-muted-foreground hover:text-primary"
+                            tooltip="Show/Hide password"
+                            triggerMode="hover"
+                          >
+                            {passwordVisibility[index] ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </Button>
                         </div>
                         <Button
                           type="button"
@@ -557,13 +628,33 @@ const CreateCertificates: React.FC = () => {
                         </Button>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <Switch
-                        id={`admin-${index}`}
-                        checked={field.isAdmin}
-                        onCheckedChange={(checked) => handleCertFieldChange(index, 'isAdmin', checked)}
-                      />
-                      <Label htmlFor={`admin-${index}`}>Admin Status</Label>
+                    
+                    {/* Admin and Enrollment switches stacked */}
+                    <div className="space-y-3 flex flex-col justify-center">
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id={`admin-${index}`}
+                          checked={field.isAdmin}
+                          onCheckedChange={(checked) => handleCertFieldChange(index, 'isAdmin', checked)}
+                        />
+                        <Label htmlFor={`admin-${index}`}>Admin Status</Label>
+                      </div>
+                      
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id={`enrollment-${index}`}
+                          checked={field.isEnrollment}
+                          onCheckedChange={(checked) => handleCertFieldChange(index, 'isEnrollment', checked)}
+                        />
+                        <Label htmlFor={`enrollment-${index}`} className="flex items-center gap-2">
+                          Enrollment User
+                          <HelpIconTooltip 
+                            tooltip="Enable this for users who will enroll to get their certificate from the TAK server instead of being provided with one."
+                            triggerMode="hover"
+                            iconSize={14}
+                          />
+                        </Label>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -681,6 +772,68 @@ const CreateCertificates: React.FC = () => {
                     className="w-fit"
                   />
                 </div>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="batchEnrollment"
+                    checked={batchEnrollment}
+                    onCheckedChange={setBatchEnrollment}
+                  />
+                  <Label htmlFor="batchEnrollment" className="flex items-center gap-2">
+                    Enrollment Users
+                    <HelpIconTooltip 
+                      tooltip="Enable this for batch users who will enroll to get their certificate from the TAK server instead of being provided with one."
+                      triggerMode="hover"
+                      iconSize={14}
+                    />
+                  </Label>
+                </div>
+                
+                {/* Add password field for batch enrollment */}
+                {batchEnrollment && (
+                  <div className="space-y-2">
+                    <Label htmlFor="batchPassword" className="flex items-center gap-2 break-normal">
+                      Password for Enrollment
+                      <HelpIconTooltip 
+                        tooltip="Password is required for enrollment users. This will be set for all users in the batch."
+                        triggerMode="hover"
+                        iconSize={14}
+                      />
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <div className="relative">
+                        <Input
+                          type={batchPasswordVisible ? "text" : "password"}
+                          id="batchPassword"
+                          value={batchPassword}
+                          onChange={(e) => setBatchPassword(e.target.value)}
+                          placeholder="Enter password"
+                          className="w-full pr-10"
+                          required={batchEnrollment}
+                        />
+                        <Button
+                          type="button"
+                          onClick={() => setBatchPasswordVisible(!batchPasswordVisible)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 bg-transparent hover:bg-transparent text-muted-foreground hover:text-primary"
+                          tooltip="Show/Hide password"
+                          triggerMode="hover"
+                        >
+                          {batchPasswordVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </Button>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setBatchPassword(generateSecurePassword())}
+                        className="h-10 w-10 shrink-0"
+                        tooltip="Generate secure password"
+                        triggerMode="hover"
+                      >
+                        <Wand2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
               {getCertificatePreview() && (
                 <div className="mt-4 text-sm text-muted-foreground">

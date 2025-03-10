@@ -3,7 +3,7 @@
 # ============================================================================
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import List, Optional, Dict, Any
 from backend.services.scripts.cert_manager.certmanager import CertManager
 from backend.services.scripts.cert_manager.cert_xml_editor import CertConfigManager
@@ -27,6 +27,14 @@ class Certificate(BaseModel):
     groups: List[str] = Field(default_factory=list)
     is_admin: bool = False
     password: Optional[str] = None
+    is_enrollment: Optional[bool] = False
+    
+    @model_validator(mode='after')
+    def validate_enrollment_password(self):
+        if self.is_enrollment and not self.password:
+            raise ValueError("Password is required for enrollment users")
+        
+        return self
 
 class BatchCreateRequest(BaseModel):
     name: Optional[str] = None
@@ -35,6 +43,7 @@ class BatchCreateRequest(BaseModel):
     prefixType: Optional[str] = "numeric"
     isAdmin: Optional[bool] = False
     startAt: Optional[str] = "1"
+    isEnrollment: Optional[bool] = False
     certificates: Optional[List[Certificate]] = None
 
 class DeleteRequest(BaseModel):
@@ -83,15 +92,19 @@ async def create_certificates(data: BatchCreateRequest):
                 certificates_to_create = data.certificates
             else:
                 # Fallback to old behavior if no certificates provided
-                for i in range(data.count):
-                    suffix = chr(97 + i) if data.prefixType == 'alpha' else str(i + 1)
-                    cert_name = f"{data.name}-{data.group}-{suffix}"
-                    certificates_to_create.append(Certificate(
-                        username=cert_name,
-                        groups=[data.group],
-                        is_admin=data.isAdmin,
-                        password=None
-                    ))
+                try:
+                    for i in range(data.count):
+                        suffix = chr(97 + i) if data.prefixType == 'alpha' else str(i + 1)
+                        cert_name = f"{data.name}-{data.group}-{suffix}"
+                        certificates_to_create.append(Certificate(
+                            username=cert_name,
+                            groups=[data.group],
+                            is_admin=data.isAdmin,
+                            is_enrollment=data.isEnrollment,
+                            password=None  # This will be validated by the Certificate model if is_enrollment is True
+                        ))
+                except ValueError as e:
+                    raise HTTPException(status_code=400, detail=str(e))
         else:
             raise HTTPException(status_code=400, detail="Either name or certificates must be provided")
 
@@ -101,6 +114,10 @@ async def create_certificates(data: BatchCreateRequest):
 
     except HTTPException:
         raise
+    except ValueError as e:
+        # Catch validation errors
+        logger.error(f"Validation error in certificate creation: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error creating certificates: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
