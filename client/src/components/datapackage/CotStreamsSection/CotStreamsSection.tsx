@@ -193,19 +193,29 @@ const CotStreamsSection: React.FC<CotStreamsSectionProps> = memo(({
   const handleReset = useCallback(() => {
     setRotate(true);
     
+    // Reset only CoT Stream preferences
     onPreferenceChange('count', '1');
-    configItems.forEach((item) => {
-      onPreferenceChange(item.label, item.value || '');
-    });
     
+    // Reset all stream configuration fields
+    for (let i = 0; i < 10; i++) { // Reset up to 10 streams to be safe
+      onPreferenceChange(`description${i}`, '');
+      onPreferenceChange(`ipAddress${i}`, '');
+      onPreferenceChange(`port${i}`, '');
+      onPreferenceChange(`protocol${i}`, 'ssl');
+      onPreferenceChange(`caLocation${i}`, '');
+      onPreferenceChange(`certPassword${i}`, '');
+    }
+    
+    // Reset display errors and touched fields
     setDisplayErrors({});
     setTouchedFields({});
-    validateAll();
-
+    
+    // Run validation after reset
     setTimeout(() => {
+      validateAll();
       setRotate(false);
-    }, 1000);
-  }, [onPreferenceChange, configItems, validateAll]);
+    }, 500);
+  }, [onPreferenceChange, validateAll]);
 
   const renderStreamConfig = (streamIndex: number) => {
     const streamItems = configItems.filter(item => 

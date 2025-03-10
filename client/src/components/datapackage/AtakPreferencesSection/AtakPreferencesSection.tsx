@@ -194,7 +194,7 @@ const AtakPreferencesSection: React.FC<AtakPreferencesSectionProps> = memo(({
 
   const handleReset = useCallback(() => {
     
-    // Reset both default and custom preferences
+    // Reset only ATAK preferences, not CoT Stream preferences
     ATAK_PREFERENCES.forEach((item) => {
       onPreferenceChange(item.label, item.defaultValue || '');
       onEnableChange(item.label, false);
@@ -207,7 +207,15 @@ const AtakPreferencesSection: React.FC<AtakPreferencesSectionProps> = memo(({
     // Also clear any custom preferences from the preferences state
     // Get all custom preference labels that might still be in the state
     const customPrefLabels = Object.keys(preferences).filter(
-      label => !ATAK_PREFERENCES.some(pref => pref.label === label)
+      label => !ATAK_PREFERENCES.some(pref => pref.label === label) && 
+               // Skip CoT Stream preferences
+               !label.startsWith('description') && 
+               !label.startsWith('ipAddress') && 
+               !label.startsWith('port') && 
+               !label.startsWith('protocol') && 
+               !label.startsWith('caLocation') && 
+               !label.startsWith('certPassword') && 
+               label !== 'count'
     );
     
     // Clear these custom preferences from state
