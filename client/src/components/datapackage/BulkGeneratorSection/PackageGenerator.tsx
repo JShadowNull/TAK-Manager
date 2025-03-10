@@ -39,6 +39,8 @@ interface ApiResponse {
     role: string;
     passwordHashed: boolean;
     groups: string[];
+    fingerprint?: string;
+    isEnrollment?: boolean;
   }>;
 }
 
@@ -107,7 +109,10 @@ const BulkGeneratorSection: React.FC<BulkGeneratorSectionProps> = ({
       const data: ApiResponse = await response.json();
       
       if (data.success) {
-        const availableCertOptions = data.certificates.map(cert => ({
+        // Filter out enrollment certificates
+        const nonEnrollmentCerts = data.certificates.filter(cert => !cert.isEnrollment);
+        
+        const availableCertOptions = nonEnrollmentCerts.map(cert => ({
           label: cert.identifier,
           value: `cert/${cert.identifier}.p12`
         }));

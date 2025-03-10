@@ -17,6 +17,8 @@ interface Certificate {
   role: string;
   passwordHashed: boolean;
   groups: string[];
+  fingerprint?: string;
+  isEnrollment?: boolean;
 }
 
 interface ExistingCertificatesProps {
@@ -378,16 +380,22 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
                         `Delete Selected (${selectedCerts.size})`
                       )}
                     </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => handleDownload()}
-                      disabled={isOperationInProgress}
-                      loading={currentOperation === 'download_batch'}
-                      loadingText={`Downloading ${selectedCerts.size} certificates...`}
-                      className="whitespace-nowrap"
-                    >
-                      Download Selected ({selectedCerts.size})
-                    </Button>
+                    
+                    {/* Only show batch download if there are non-enrollment certificates selected */}
+                    {Array.from(selectedCerts).some(id => 
+                        !certificates.find(cert => cert.identifier === id)?.isEnrollment) && (
+                      <Button
+                        variant="outline"
+                        onClick={() => handleDownload()}
+                        disabled={isOperationInProgress}
+                        loading={currentOperation === 'download_batch'}
+                        loadingText={`Downloading ${selectedCerts.size} certificates...`}
+                        className="whitespace-nowrap"
+                      >
+                        <ArrowDownToLine className="h-4 w-4 mr-2" />
+                        Download Selected
+                      </Button>
+                    )}
                   </>
                 )}
               </div>
@@ -435,12 +443,18 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
                                     {cert.passwordHashed ? (
                                       <>
                                         <LockKeyhole className="h-4 w-4 text-muted-foreground" />
-                                        <span className="text-xs text-muted-foreground">Password Configured</span>
+                                        <span className="text-xs text-muted-foreground">
+                                          Password Configured
+                                          {cert.isEnrollment && " - Enrollment User"}
+                                        </span>
                                       </>
                                     ) : (
                                       <>
                                         <LockKeyholeOpen className="h-4 w-4 text-muted-foreground" />
-                                        <span className="text-xs text-muted-foreground">No Password</span>
+                                        <span className="text-xs text-muted-foreground">
+                                          No Password
+                                          {cert.isEnrollment && " - Enrollment User"}
+                                        </span>
                                       </>
                                     )}
                                   </div>
@@ -472,24 +486,26 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
                           </div>
                         </div>
                         <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            tooltip="Download .p12 extension"
-                            triggerMode="hover"
-                            onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                              e.stopPropagation();
-                              handleDownload(cert.identifier);
-                            }}
-                            disabled={isOperationInProgress}
-                            className="relative hover:text-green-600 dark:hover:text-green-500 hover:bg-transparent"
-                          >
-                            {downloadingCerts.has(cert.identifier) ? (
-                              <Loader2 className="h-5 w-5 animate-spin" />
-                            ) : (
-                              <ArrowDownToLine className="h-5 w-5" />
-                            )}
-                          </Button>
+                          {!cert.isEnrollment && ( // Only show download button for non-enrollment certificates
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              tooltip="Download .p12 extension"
+                              triggerMode="hover"
+                              onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                                e.stopPropagation();
+                                handleDownload(cert.identifier);
+                              }}
+                              disabled={isOperationInProgress}
+                              className="relative hover:text-green-600 dark:hover:text-green-500 hover:bg-transparent"
+                            >
+                              {downloadingCerts.has(cert.identifier) ? (
+                                <Loader2 className="h-5 w-5 animate-spin" />
+                              ) : (
+                                <ArrowDownToLine className="h-5 w-5" />
+                              )}
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"

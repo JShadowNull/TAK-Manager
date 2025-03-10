@@ -59,11 +59,14 @@ class CertManager:
             certificates = []
             
             for user in root.findall('.//ns:User', ns):
+                fingerprint = user.get('fingerprint')
                 cert_info = {
                     'identifier': user.get('identifier'),
                     'passwordHashed': user.get('passwordHashed', 'false').lower() == 'true',
                     'role': user.get('role', ''),
-                    'groups': []
+                    'groups': [],
+                    'fingerprint': fingerprint,  # Include fingerprint in the response
+                    'isEnrollment': fingerprint is None  # Flag as enrollment if no fingerprint
                 }
                 
                 for group in user.findall('.//ns:groupList', ns):
