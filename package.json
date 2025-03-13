@@ -19,10 +19,8 @@
     "merge": "git checkout main && git pull origin main && git merge dev && git push origin main && git checkout dev"
   },
   "devDependencies": {
-    "dotenv": "^16.4.5",
     "js-yaml": "^4.1.0",
-    "prompt-sync": "^4.2.0",
-    "standard-version": "^9.5.0"
+    "prompt-sync": "^4.2.0"
   },
   "author": "Jacob Olsen",
   "description": "TAK Manager - A comprehensive TAK Server management solution",
