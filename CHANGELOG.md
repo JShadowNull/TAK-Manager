@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.0.1] - 2025-03-13
+
+## [3.0.1] - 2025-03-13
+
+
+### Fixed 🔧
+
+
+- Docker running detection on startup and port checking reliability for windows
+
+
+### Other 📦
+
+
+- Bump version to v3.0.0
+- Update package-lock.json for version 3.0.0
+- Update package dependencies and remove unused packages
+- Update executable name and paths in Inno Setup script
+- Release tak-manager@3.0.1 [skip ci]
+
 ## [3.0.0] - 2025-03-10
 
 ## [3.0.0] - 2025-03-10
