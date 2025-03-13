@@ -1619,8 +1619,8 @@ export const parseAtakPreferencesXml = (xmlContent: string): Record<string, stri
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlContent, "text/xml");
     
-    // Find the com.atakmap.app_preferences section
-    const appPreferences = xmlDoc.querySelector('preference[name="com.atakmap.app.civ_preferences"]');
+    // Find the com.atakmap.app.civ_preferences or com.atakmap.app._preferences section
+    const appPreferences = xmlDoc.querySelector('preference[name="com.atakmap.app.civ_preferences"], preference[name="com.atakmap.app_preferences"]');
     if (!appPreferences) {
       throw new Error("No ATAK app preferences found in the file");
     }
