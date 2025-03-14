@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.0.2] - 2025-03-14
+
+## [3.0.2] - 2025-03-14
+
+
+### Fixed 🔧
+
+
+- Enhance XML parsing for ATAK preferences
+- Webui button stores state so unneeded checks not longer occur. Fix false error message display
+- Upload progress complete doesn't show install complete
+
+
+### Other 📦
+
+
+- Bump version to v3.0.1
+- Update package-lock.json for version 3.0.1
+- Release tak-manager@3.0.2 [skip ci]
+
 ## [3.0.1] - 2025-03-13
 
 ## [3.0.1] - 2025-03-13
