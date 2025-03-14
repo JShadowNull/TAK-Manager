@@ -18,6 +18,9 @@ interface ControlButtonsProps {
   onInstall: () => void;
 }
 
+// Session storage key for WebUI readiness
+const WEB_UI_READY_KEY = 'tak_web_ui_ready';
+
 const ControlButtons: React.FC<ControlButtonsProps> = ({
   takState,
   onInstall
@@ -29,15 +32,49 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
   const [showUninstallConfirm, setShowUninstallConfirm] = useState(false);
   const [showUninstallProgress, setShowUninstallProgress] = useState(false);
   const [isCheckingWebUI, setIsCheckingWebUI] = useState(false);
-  const [webUIAvailable, setWebUIAvailable] = useState(false);
+  const [webUIAvailable, setWebUIAvailable] = useState(() => {
+    // Initialize from sessionStorage if available
+    try {
+      const storedValue = sessionStorage.getItem(WEB_UI_READY_KEY);
+      return storedValue === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
 
   useEffect(() => {
-    if (takState.isRunning && !webUIAvailable) {
-      checkWebUIStatus();
+    // Only check WebUI status on mount if server is running AND we don't have a stored ready state
+    if (takState.isRunning && !webUIAvailable && !isOperationInProgress) {
+      // Check if we have a stored value first
+      try {
+        const storedValue = sessionStorage.getItem(WEB_UI_READY_KEY);
+        if (storedValue === 'true') {
+          setWebUIAvailable(true);
+        } else if (storedValue !== 'true') {
+          // Only check if we don't have a positive stored value
+          checkWebUIStatus();
+        }
+      } catch (e) {
+        // If sessionStorage fails, fall back to checking
+        checkWebUIStatus();
+      }
+    }
+    
+    // Reset WebUI availability when server stops
+    if (!takState.isRunning && webUIAvailable) {
+      setWebUIAvailable(false);
+      try {
+        sessionStorage.removeItem(WEB_UI_READY_KEY);
+      } catch (e) {
+        console.error('Failed to update sessionStorage:', e);
+      }
     }
   }, [takState.isRunning]);
 
   const checkWebUIStatus = async () => {
+    // Don't check if another operation is in progress
+    if (isOperationInProgress) return;
+    
     setIsCheckingWebUI(true);
     try {
       const response = await fetch('/api/takserver/webui-status');
@@ -49,7 +86,19 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
       const result = await response.json();
       
       if (takState.isRunning) {
-        setWebUIAvailable(result.status === 'available');
+        const isAvailable = result.status === 'available';
+        setWebUIAvailable(isAvailable);
+        
+        // Store the result in sessionStorage
+        try {
+          if (isAvailable) {
+            sessionStorage.setItem(WEB_UI_READY_KEY, 'true');
+          } else {
+            sessionStorage.removeItem(WEB_UI_READY_KEY);
+          }
+        } catch (e) {
+          console.error('Failed to update sessionStorage:', e);
+        }
         
         if (result.status === 'initializing') {
           toast({
@@ -68,6 +117,12 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
     } catch (error) {
       if (takState.isRunning) {
         setWebUIAvailable(false);
+        try {
+          sessionStorage.removeItem(WEB_UI_READY_KEY);
+        } catch (e) {
+          console.error('Failed to update sessionStorage:', e);
+        }
+        
         const errorMessage = error instanceof Error ? error.message : 'Failed to check TAK Server readiness';
         toast({
           title: "Readiness Check Failed",
@@ -102,9 +157,17 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
         variant: "success"
       });
       
+      // Only check WebUI status after start or restart operations
       if (operation === 'start' || operation === 'restart') {
         setIsOperationInProgress(false);
         setCurrentOperation(null);
+        // Clear previous WebUI status and check again
+        setWebUIAvailable(false);
+        try {
+          sessionStorage.removeItem(WEB_UI_READY_KEY);
+        } catch (e) {
+          console.error('Failed to update sessionStorage:', e);
+        }
         await checkWebUIStatus();
       }
 
@@ -137,6 +200,15 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
       // Clear any previous errors and show progress popup before making API call
       setShowUninstallConfirm(false);
       setShowUninstallProgress(true);
+      setIsOperationInProgress(true);
+      
+      // Clear WebUI readiness state on uninstall
+      setWebUIAvailable(false);
+      try {
+        sessionStorage.removeItem(WEB_UI_READY_KEY);
+      } catch (e) {
+        console.error('Failed to update sessionStorage:', e);
+      }
       
       const response = await fetch('/api/takserver/uninstall-takserver', {
         method: 'POST'
@@ -150,6 +222,8 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
     } catch (error) {
       console.error('Uninstallation error:', error);
       // Error handling will be shown in the progress dialog
+    } finally {
+      setIsOperationInProgress(false);
     }
   };
 
