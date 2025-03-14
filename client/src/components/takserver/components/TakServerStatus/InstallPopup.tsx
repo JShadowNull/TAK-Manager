@@ -86,9 +86,16 @@ const InstallPopup: React.FC<InstallPopupProps> = ({
           }
           // Handle direct progress updates (new format)
           else if (typeof data.progress === 'number') {
-            setInstallProgress(data.progress);
-            if (data.progress === 100) {
-              setIsInstallationComplete(true);
+            // Only update installation progress if it's not an upload status
+            if (data.status !== 'uploading') {
+              setInstallProgress(data.progress);
+              // Only set installation complete when progress is 100 AND we receive a completion status
+              if (data.progress === 100 && (data.status === 'complete' || data.complete === true)) {
+                setIsInstallationComplete(true);
+              }
+            } else if (data.status === 'uploading' && data.progress === 100) {
+              // This is just upload completion, not installation completion
+              setUploadCompleted(true);
             }
           }
         } catch (error) {
@@ -134,9 +141,11 @@ const InstallPopup: React.FC<InstallPopupProps> = ({
       <DialogHeader>
         <DialogTitle>Installing TAK Server</DialogTitle>
         <DialogDescription>
-          {installProgress === 100 
+          {isInstallationComplete && installProgress === 100 
             ? "Installation complete. Review the logs and click Next to continue." 
-            : "Please wait while TAK Server is being installed..."}
+            : uploadCompleted && installProgress === 0
+              ? "Upload complete. Installation is now in progress..."
+              : "Please wait while TAK Server is being installed..."}
         </DialogDescription>
       </DialogHeader>
       <div className="py-4">
