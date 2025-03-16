@@ -1,12 +1,14 @@
 import os
+from typing import Optional
 from backend.config.logging_config import configure_logging
 from backend.services.helpers.run_command import RunCommand
+from backend.services.helpers.directories import DirectoryHelper
 
 logger = configure_logging(__name__)
 
 class CertificateManager:
-    def __init__(self, directory_helper):
-        self.directory_helper = directory_helper
+    def __init__(self, directory_helper: Optional[DirectoryHelper] = None, emit_event=None):
+        self.directory_helper = directory_helper if directory_helper else DirectoryHelper()
         self.run_command = RunCommand()
         
     async def copy_certificates_from_container(self, temp_dir, ca_certs, client_certs):

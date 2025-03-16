@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import ContainerStateIcon from '../components/shared/ui/inputs/ContainerStartStopButton';
 import { AnalyticsChart } from '../components/shared/ui/shadcn/charts/AnalyticsChart';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/shared/ui/shadcn/card/card';
+import { ConnectedClientsCard } from '../components/dashboard/ConnectedClientsCard';
+import { useTakServer } from '../components/shared/ui/shadcn/sidebar/app-sidebar';
 
 interface SystemMetrics {
   totalCpu: number;
@@ -47,6 +49,10 @@ export const Dashboard: React.FC = () => {
   });
 
   const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({});
+
+  // Get TAK server state from context
+  const { serverState } = useTakServer();
+  const takServerActive = serverState.isInstalled && serverState.isRunning;
 
   // Load historical data from localStorage
   const [cpuHistory, setCpuHistory] = useState<number[]>(() => {
@@ -314,40 +320,44 @@ export const Dashboard: React.FC = () => {
         />
       </div>
 
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle>Docker Containers</CardTitle>
-          <CardDescription>Container Status & Controls</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-auto rounded-lg border">
-            <ul className="list-none space-y-2 divide-y divide-border text-sm text-muted-foreground p-2">
-              {containers.length === 0 ? (
-                <li className="border-1 border-border p-4 rounded">No containers found</li>
-              ) : (
-                containers.map((container) => (
-                  <li key={container.id} className="p-4 rounded flex flex-col lg:flex-row justify-between items-start lg:items-center space-y-2 lg:space-y-0 lg:space-x-4">
-                    <div className="grow w-full">
-                      <div className="font-medium">{container.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        Status: {container.status} | Image: {container.image}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <Card className="w-full">
+          <CardHeader>
+            <CardTitle>Docker Containers</CardTitle>
+            <CardDescription>Container Status & Controls</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-auto rounded-lg border">
+              <ul className="list-none space-y-2 divide-y divide-border text-sm text-muted-foreground p-2">
+                {containers.length === 0 ? (
+                  <li className="border-1 border-border p-4 rounded">No containers found</li>
+                ) : (
+                  containers.map((container) => (
+                    <li key={container.id} className="p-4 rounded flex flex-col lg:flex-row justify-between items-start lg:items-center space-y-2 lg:space-y-0 lg:space-x-4">
+                      <div className="grow w-full">
+                        <div className="font-medium">{container.name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          Status: {container.status} | Image: {container.image}
+                        </div>
                       </div>
-                    </div>
-                    <div className="w-full lg:w-auto">
-                      <ContainerStateIcon
-                        name={container.name}
-                        isRunning={container.running}
-                        isLoading={loadingStates[container.name]}
-                        onOperation={handleContainerOperation}
-                      />
-                    </div>
-                  </li>
-                ))
-              )}
-            </ul>
-          </div>
-        </CardContent>
-      </Card>
+                      <div className="w-full lg:w-auto">
+                        <ContainerStateIcon
+                          name={container.name}
+                          isRunning={container.running}
+                          isLoading={loadingStates[container.name]}
+                          onOperation={handleContainerOperation}
+                        />
+                      </div>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+        
+        {takServerActive && <ConnectedClientsCard />}
+      </div>
     </div>
   );
 };

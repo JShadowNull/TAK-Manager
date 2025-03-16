@@ -24,6 +24,7 @@ from backend.routes.ota_routes import ota
 from backend.routes.certmanager_routes import certmanager
 from backend.routes.advanced_features_routes import advanced_features
 from backend.routes.port_manager_routes import portmanager
+from backend.routes.takserver_api_routes import takserver_api
 
 def create_app():
     # Set up logging
@@ -57,7 +58,8 @@ def create_app():
     app.include_router(certmanager, prefix='/api/certmanager')
     app.include_router(advanced_features, prefix='/api/advanced')
     app.include_router(portmanager, prefix='/api/port-manager')
-
+    app.include_router(takserver_api, prefix='/api/takserver-api')
+    
     # Only serve static files in production mode AFTER API routes
     if not is_dev:
         client_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "client"))
