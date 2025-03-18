@@ -53,6 +53,7 @@ docker/data/
 
 client/build/
 client/dist/
+client/dev-dist/
 
 commands.txt
 # End of Selection
