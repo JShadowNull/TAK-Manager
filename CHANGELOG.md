@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.1.0] - 2025-03-18
+
+## [3.1.0] - 2025-03-18
+
+
+### Added 🚀
+
+
+- Add connected clients feature to dashboard
+
+
+### Fixed 🔧
+
+
+- Adjust spacing in UpdatePrompt component for better layout
+
+
+### Other 📦
+
+
+- Update version 3.0.2
+- Update package-lock.json for version 3.0.2
+- Add client/dev-dist/ to .gitignore
+- Release tak-manager@3.1.0 [skip ci]
+
 ## [3.0.2] - 2025-03-14
 
 ## [3.0.2] - 2025-03-14
