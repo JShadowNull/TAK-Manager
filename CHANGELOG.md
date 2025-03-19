@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [3.1.1] - 2025-03-19
+
+## [3.1.1] - 2025-03-19
+
+
+### Added 🚀
+
+
+- Enhance loading states with skeleton components in various sections
+
+
+### Fixed 🔧
+
+
+- Enhance pwa support and theming
+
+
+### Other 📦
+
+
+- Bump version to v3.1.0
+- Update window title to reflect version 3.1.0
+- Update version to 3.1.0 in package-lock.json and add app.py version update functionality
+- Release tak-manager@3.1.1 [skip ci]
+
 ## [3.1.0] - 2025-03-18
 
 ## [3.1.0] - 2025-03-18
