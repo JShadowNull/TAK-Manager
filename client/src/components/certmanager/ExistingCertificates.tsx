@@ -11,6 +11,7 @@ import CertificateOperationPopups from './CertificateOperationPopups';
 import { useNavigate } from 'react-router-dom';
 import CertificateConfigEditor from './CertificateConfigEditor';
 import { toast } from "../shared/ui/shadcn/toast/use-toast";
+import { Skeleton } from "@/components/shared/ui/shadcn/skeleton";
 
 interface Certificate {
   identifier: string;
@@ -405,8 +406,27 @@ const ExistingCertificates: React.FC<ExistingCertificatesProps> = ({
               <ScrollArea className="h-full">
                 <div className="space-y-2 p-4">
                   {isLoading ? (
-                    <div className="text-center text-muted-foreground py-4">
-                      Loading certificates...
+                    <div className="space-y-2">
+                      {Array.from({ length: 4 }).map((_, index) => (
+                        <div key={index} className="flex flex-col md:flex-row items-start md:items-center justify-between p-3 border rounded-lg bg-muted/50">
+                          <div className="flex items-center gap-4 flex-1 w-full md:w-auto">
+                            <Checkbox
+                              checked={false}
+                              onCheckedChange={() => {}}
+                              onClick={(e: React.MouseEvent) => {
+                                e.stopPropagation();
+                              }}
+                              disabled={true}
+                            />
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Skeleton className="h-5 w-16" />
+                              <Skeleton className="h-4 w-1/4" />
+                              <Skeleton className="h-4 w-20" />
+                              <Skeleton className="h-4 w-20" />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ) : filteredCertificates.length === 0 ? (
                     <div className="text-center text-muted-foreground py-4">

@@ -12,6 +12,7 @@ import { PreferenceState } from '../AtakPreferencesSection/atakPreferencesConfig
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/shared/ui/shadcn/tooltip/tooltip';
 import FileUploadProgress from './FileUploadProgress';
 import { uploadWithProgress } from '../../../utils/uploadProgress';
+import { Skeleton } from '@/components/shared/ui/shadcn/skeleton';
 
 interface UploadCustomFilesSectionProps {
   onFilesChange: (files: { customFiles: PreferenceState }) => void;
@@ -35,6 +36,7 @@ const UploadCustomFilesSection: React.FC<UploadCustomFilesSectionProps> = ({ onF
   const [currentOperation, setCurrentOperation] = useState<'upload' | 'delete' | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [currentUploadFile, setCurrentUploadFile] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   // Add a ref to track initial mount
   const initialMount = useRef(true);
@@ -46,6 +48,7 @@ const UploadCustomFilesSection: React.FC<UploadCustomFilesSectionProps> = ({ onF
   }, [files, searchTerm]);
 
   const fetchFiles = useCallback(async () => {
+    setLoading(true);
     try {
       const response = await fetch('/api/datapackage/custom-files');
       const data = await response.json();
@@ -73,6 +76,8 @@ const UploadCustomFilesSection: React.FC<UploadCustomFilesSectionProps> = ({ onF
       }
     } catch (error) {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to fetch files' });
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -398,60 +403,77 @@ const UploadCustomFilesSection: React.FC<UploadCustomFilesSectionProps> = ({ onF
 
             <ScrollArea className="h-[400px] border rounded-lg">
               <div className="p-4 space-y-2">
-                {filteredFiles.map((fileName) => (
-                  <div 
-                    key={fileName} 
-                    className="flex flex-col md:flex-row items-start md:items-center justify-between p-3 border rounded-lg bg-muted/50 hover:bg-muted/60 transition-all duration-200 gap-2 cursor-pointer"
-                    onClick={() => handleSelectFile(fileName)}
-                  >
-                    <div className={`flex items-center ${selectedFiles.has(fileName) ? 'gap-4' : 'gap-0'} flex-1 w-full md:w-auto`}>
-                      <div className={`transition-all duration-200 overflow-hidden ${selectedFiles.has(fileName) ? 'w-4 opacity-100' : 'w-0 opacity-0'} flex items-center h-full`}>
-                        <Checkbox
-                          checked={selectedFiles.has(fileName)}
-                          onCheckedChange={() => handleSelectFile(fileName)}
-                          disabled={currentOperation !== null}
-                          onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                          className="h-4 w-4"
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1 justify-center">
-                        <span className="font-medium">{fileName}</span>
-                        <div className="text-xs text-muted-foreground flex gap-2">
-                          <span>{formatFileSize(files[fileName].metadata.size)}</span>
-                          <span>•</span>
-                          <span>{files[fileName].metadata.type}</span>
-                          <span>•</span>
-                          <span>
-                            {new Date(files[fileName].metadata.lastModified).toLocaleDateString()}
-                          </span>
+                {loading ? (
+                  <div className="flex flex-col space-y-2">
+                    {[...Array(3)].map((_, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
+                        <div className="flex flex-col flex-1">
+                          <Skeleton className="h-5 w-1/2 mb-1" />
+                          <div className="flex gap-2">
+                            <Skeleton className="h-4 w-1/6" />
+                            <Skeleton className="h-4 w-1/6" />
+                            <Skeleton className="h-4 w-1/6" />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div 
-                      className="flex items-center gap-2"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-muted-foreground">Include</span>
-                            <div className="relative flex items-center">
-                              <Switch
-                                checked={files[fileName].enabled}
-                                onCheckedChange={(checked) => handleToggleFile(fileName, checked)}
-                                className="data-[state=checked]:bg-primary data-[state=unchecked]:bg-input"
-                                onClick={(e) => e.stopPropagation()}
-                              />
-                            </div>
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Include in data packages</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </div>
+                    ))}
                   </div>
-                ))}
+                ) : (
+                  filteredFiles.map((fileName) => (
+                    <div 
+                      key={fileName} 
+                      className="flex flex-col md:flex-row items-start md:items-center justify-between p-3 border rounded-lg bg-muted/50 hover:bg-muted/60 transition-all duration-200 gap-2 cursor-pointer"
+                      onClick={() => handleSelectFile(fileName)}
+                    >
+                      <div className={`flex items-center ${selectedFiles.has(fileName) ? 'gap-0 lg:gap-4' : 'gap-0'} flex-1 w-full lg:w-auto lg:bg-transparent`}>
+                        <div className={`transition-all duration-200 flex items-center h-full ${selectedFiles.has(fileName) ? 'opacity-100' : 'opacity-0'}`}>
+                          <Checkbox
+                            checked={selectedFiles.has(fileName)}
+                            onCheckedChange={() => handleSelectFile(fileName)}
+                            disabled={currentOperation !== null}
+                            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                            className="h-4 w-4 hidden lg:block" // Hide checkbox on lg and smaller
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1 justify-center">
+                          <span className="font-medium">{fileName}</span>
+                          <div className="text-xs text-muted-foreground flex flex-col lg:flex-row lg:gap-2">
+                            <span>{formatFileSize(files[fileName].metadata.size)}</span>
+                            <span>•</span>
+                            <span>{files[fileName].metadata.type}</span>
+                            <span>•</span>
+                            <span>
+                              {new Date(files[fileName].metadata.lastModified).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <div 
+                        className="flex items-center gap-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm text-muted-foreground hidden lg:block">Include</span>
+                              <div className="relative flex items-center">
+                                <Switch
+                                  checked={files[fileName].enabled}
+                                  onCheckedChange={(checked) => handleToggleFile(fileName, checked)}
+                                  className="data-[state=checked]:bg-primary data-[state=unchecked]:bg-input"
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              </div>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Include in data packages</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </ScrollArea>
           </div>

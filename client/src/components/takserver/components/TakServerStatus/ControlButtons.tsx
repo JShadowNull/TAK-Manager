@@ -240,7 +240,7 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
 
   return (
     <>
-      <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 max-w-lg mt-4">
+      <div className="flex flex-col lg:flex-row space-y-2 lg:space-y-0 lg:space-x-2 max-w-lg">
         {takState.isInstalled ? (
           <>
             {takState.isRunning ? (

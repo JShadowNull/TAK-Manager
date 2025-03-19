@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/shared/ui/shadcn/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/shared/ui/shadcn/tooltip/tooltip";
 import PackageOperationPopups from './PackageOperationPopups';
 import { toast } from "@/components/shared/ui/shadcn/toast/use-toast";
+import { Skeleton } from '@/components/shared/ui/shadcn/skeleton';
 
 interface DataPackage {
   fileName: string;
@@ -348,9 +349,19 @@ const ExistingDataPackages: React.FC<ExistingDataPackagesProps> = ({
             <ScrollArea className="h-full">
               <div className="space-y-2 p-4">
                 {isLoading ? (
-                  <div className="text-center text-muted-foreground py-4">
-                    <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />
-                    Loading data packages...
+                  <div className="flex flex-col space-y-2">
+                    {[...Array(3)].map((_, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
+                        <div className="flex flex-col flex-1">
+                          <Skeleton className="h-6 w-1/3 mb-1" />
+                          <div className="flex gap-2">
+                            <Skeleton className="h-4 w-1/6" />
+                            <Skeleton className="h-4 w-1/6" />
+                            <Skeleton className="h-4 w-1/6" />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : filteredPackages.length === 0 ? (
                   <div className="text-center text-muted-foreground py-4">

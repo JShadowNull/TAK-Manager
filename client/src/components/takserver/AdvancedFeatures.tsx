@@ -32,7 +32,7 @@ const AdvancedFeatures: React.FC = () => {
 
   return (
     <>
-      <div className="w-full border border-border bg-card p-4 xs:p-6 rounded-lg shadow-lg min-w-fit">
+      <div className="w-full border border-border bg-card p-4 lg:p-6 rounded-lg shadow-lg min-w-fit">
         <div className="flex flex-col h-full justify-between">
           <div>
             <h3 className="text-base font-bold mb-4 text-primary">Advanced Features</h3>
@@ -46,7 +46,7 @@ const AdvancedFeatures: React.FC = () => {
                   type="text" 
                   id="ota-zip-file" 
                   value={inputValue}
-                  className="flex-1 max-w-[450px]"
+                  className="flex-1 w-full max-w-[450px]"
                   onChange={(e) => setInputValue(e.target.value)}
                 />
                 <div className="flex gap-2">
