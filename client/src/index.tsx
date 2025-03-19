@@ -6,17 +6,46 @@ import { library } from '@fortawesome/fontawesome-svg-core';
 import { faPlay, faStop, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import { registerSW } from 'virtual:pwa-register';
 
-// Register service worker
+// Register service worker with improved configuration for Android compatibility
 const updateSW = registerSW({
+  immediate: true,
   onNeedRefresh() {
-    if (confirm('New content available. Reload?')) {
+    if (confirm('New content available. Reload application?')) {
       updateSW(true);
     }
   },
   onOfflineReady() {
     console.log('App ready to work offline');
   },
+  onRegistered(registration: ServiceWorkerRegistration | undefined) {
+    console.log('Service worker registered:', registration);
+    
+    // Force update check periodically (helps with Android refresh issues)
+    setInterval(() => {
+      if (registration) {
+        registration.update().catch(console.error);
+      }
+    }, 60 * 60 * 1000); // Check every hour
+  },
+  onRegisterError(error: any) {
+    console.error('Service worker registration failed:', error);
+  }
 });
+
+// Handle Android back button correctly in standalone mode
+if (window.matchMedia('(display-mode: standalone)').matches) {
+  window.addEventListener('load', () => {
+    window.addEventListener('popstate', () => {
+      if (window.history.state === null && window.location.pathname === '/') {
+        // We're at the root with no history state, likely a back button from the root
+        if (navigator.userAgent.includes('Android')) {
+          // On Android, this should exit the app instead of navigating back
+          window.close();
+        }
+      }
+    });
+  });
+}
 
 // Add icons to the library
 library.add(faPlay, faStop, faSpinner);

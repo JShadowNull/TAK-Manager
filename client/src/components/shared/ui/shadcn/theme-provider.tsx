@@ -20,6 +20,22 @@ const initialState: ThemeProviderState = {
 
 const ThemeProviderContext = createContext<ThemeProviderState>(initialState)
 
+// Theme color values from tailwind.css
+const THEME_COLORS = {
+  light: "hsl(0 0% 100%)",
+  dark: "hsl(240 10% 3.9%)"
+}
+
+// Helper to get the actual theme (accounting for system preference)
+export function resolveTheme(theme: Theme): "dark" | "light" {
+  if (theme === "system") {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light"
+  }
+  return theme
+}
+
 export function ThemeProvider({
   children,
   defaultTheme = "system",
@@ -32,20 +48,41 @@ export function ThemeProvider({
 
   useEffect(() => {
     const root = window.document.documentElement
+    const themeColorMeta = document.querySelector('meta[name="theme-color"]')
 
     root.classList.remove("light", "dark")
 
-    if (theme === "system") {
-      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
-        .matches
-        ? "dark"
-        : "light"
+    let appliedTheme = resolveTheme(theme)
+    
+    root.classList.add(appliedTheme)
 
-      root.classList.add(systemTheme)
-      return
+    // Update the theme-color meta tag
+    if (themeColorMeta) {
+      const themeColor = THEME_COLORS[appliedTheme]
+      themeColorMeta.setAttribute("content", themeColor)
     }
-
-    root.classList.add(theme)
+    
+    // Add listener for system theme changes
+    if (theme === "system") {
+      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
+      
+      const handleChange = (e: MediaQueryListEvent) => {
+        const newTheme = e.matches ? "dark" : "light"
+        root.classList.remove("light", "dark")
+        root.classList.add(newTheme)
+        
+        if (themeColorMeta) {
+          const themeColor = THEME_COLORS[newTheme]
+          themeColorMeta.setAttribute("content", themeColor)
+        }
+      }
+      
+      mediaQuery.addEventListener("change", handleChange)
+      
+      return () => {
+        mediaQuery.removeEventListener("change", handleChange)
+      }
+    }
   }, [theme])
 
   const value = {
@@ -70,4 +107,29 @@ export const useTheme = () => {
     throw new Error("useTheme must be used within a ThemeProvider")
 
   return context
+}
+
+export const useThemeColor = () => {
+  const { theme } = useTheme()
+  const [themeColor, setThemeColor] = useState<string>(() => {
+    const resolvedTheme = resolveTheme(theme)
+    return THEME_COLORS[resolvedTheme]
+  })
+  
+  useEffect(() => {
+    const updateThemeColor = () => {
+      const resolvedTheme = resolveTheme(theme)
+      setThemeColor(THEME_COLORS[resolvedTheme])
+    }
+    
+    updateThemeColor()
+    
+    if (theme === "system") {
+      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
+      mediaQuery.addEventListener("change", updateThemeColor)
+      return () => mediaQuery.removeEventListener("change", updateThemeColor)
+    }
+  }, [theme])
+  
+  return themeColor
 }
