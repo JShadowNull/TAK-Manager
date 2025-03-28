@@ -2,6 +2,18 @@
 
 A comprehensive TAK Server management solution providing a modern web interface for managing and monitoring TAK (Team Awareness Kit) servers.
 
+<img width="2056" alt="image" src="https://github.com/user-attachments/assets/cc8996ab-aa6a-4040-aa13-6e541da283b1" />
+
+<img width="2056" alt="image" src="https://github.com/user-attachments/assets/5afaa608-11de-406b-a0e1-92be2d686d0d" />
+
+<img width="2056" alt="image" src="https://github.com/user-attachments/assets/7353b175-4fc8-4528-bd25-07e79eda2cf4" />
+
+<img width="2056" alt="image" src="https://github.com/user-attachments/assets/ae190c19-3f8e-4ecc-a023-ca394335833a" />
+
+<img width="2056" alt="image" src="https://github.com/user-attachments/assets/fd2c712f-7e85-4555-8b61-3f1d27af84d5" />
+
+<img width="2056" alt="image" src="https://github.com/user-attachments/assets/32e3af1e-2378-4824-91b9-8fdf3a002cf3" />
+
 ## Quick Start
 
 ### Download and Install
