@@ -36,7 +36,7 @@ A comprehensive TAK Server management solution providing a modern web interface 
 ## System Requirements
 
 - **macOS**: macOS 11 (Big Sur) or later
-- **Windows**: Windows 10 or later
+- **Windows**: Windows 10 or later with wsl 2 enabled
 - **Linux**: Any modern Linux distribution with Docker support
 
 ## Configuration
