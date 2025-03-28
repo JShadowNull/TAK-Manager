@@ -7,13 +7,13 @@ A comprehensive TAK Server management solution providing a modern web interface 
 ### Download and Install
 
 #### macOS
-1. Download the latest DMG installer from the [releases page](https://gitea.ubuntuserver.buzz/Jake/Tak-Manager/releases/latest)
+1. Download the latest DMG installer from the [releases page]([https://gitea.ubuntuserver.buzz/Jake/Tak-Manager/releases/latest](https://github.com/JShadowNull/TAK-Manager/releases/))
 2. Open the DMG file
 3. Drag the TAK Manager application to your Applications folder
 4. Open TAK Manager from your Applications folder
 
 #### Windows
-1. Download the latest EXE installer from the [releases page](https://gitea.ubuntuserver.buzz/Jake/Tak-Manager/releases/latest)
+1. Download the latest EXE installer from the [releases page]([https://gitea.ubuntuserver.buzz/Jake/Tak-Manager/releases/latest](https://github.com/JShadowNull/TAK-Manager/releases/))
 2. Run the installer
 3. Follow the installation wizard
 4. Launch TAK Manager from the Start menu
