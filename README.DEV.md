@@ -28,7 +28,7 @@ This document provides detailed instructions for developers who want to contribu
 
 ### 1. Clone the repository:
 ```bash
-git clone https://gitea.ubuntuserver.buzz/Jake/Tak-Manager.git
+git clone https://github.com/JShadowNull/TAK-Manager.git
 cd Tak-Manager
 ```
 

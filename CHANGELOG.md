@@ -488,7 +488,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improve release process and version management
 - Improve version bump detection in release script
 - Simplify release script changelog and release generation
-- Improve Gitea release script JSON handling and escaping
 
 
 ### Other 📦
@@ -513,8 +512,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Revert version to 1.0.3 and clean up release artifacts
 - Commit current changes
 - Revert version to 1.0.3 and update release scripts
-- Revert version to 1.0.3 and add Gitea token support in release script
-- Revert version to 1.0.3 and improve Gitea release script
 - Revert version to 1.0.3 and refactor release script
 - Release tak-manager@1.1.0 [skip ci]
 - Release tak-manager@1.2.0 [skip ci]
@@ -529,12 +526,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Other 📦
 
 
-- Merge pull request 'feature overhaul' ([#6](https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/issues/6)) from dev into main
+- Merge pull request 'feature overhaul' ([#6](https://github.com/JShadowNull/TAK-Manager/issues/6)) from dev into main
 
-Reviewed-on: https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/pulls/6
-- Merge pull request 'update changelog config' ([#7](https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/issues/7)) from dev into main
+Reviewed-on: https://github.com/JShadowNull/TAK-Manager/pulls/6
+- Merge pull request 'update changelog config' ([#7](https://github.com/JShadowNull/TAK-Manager/issues/7)) from dev into main
 
-Reviewed-on: https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/pulls/7
+Reviewed-on: https://github.com/JShadowNull/TAK-Manager/pulls/7
 
 
 ### Added 🚀
@@ -592,12 +589,12 @@ Reviewed-on: https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/pulls/7
 
 
 - Delete FETCH_HEAD
-- Merge pull request 'add windows package' ([#4](https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/issues/4)) from dev into main
+- Merge pull request 'add windows package' ([#4](https://github.com/JShadowNull/TAK-Manager/issues/4)) from dev into main
 
-Reviewed-on: https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/pulls/4
-- Merge pull request 'update ui and windows support' ([#5](https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/issues/5)) from dev into main
+Reviewed-on: https://github.com/JShadowNull/TAK-Manager/pulls/4
+- Merge pull request 'update ui and windows support' ([#5](https://github.com/JShadowNull/TAK-Manager/issues/5)) from dev into main
 
-Reviewed-on: https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/pulls/5
+Reviewed-on: https://github.com/JShadowNull/TAK-Manager/pulls/5
 
 
 ### Added 🚀
@@ -626,15 +623,15 @@ Reviewed-on: https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/pulls/5
 ### Other 📦
 
 
-- Merge pull request 'docker' ([#1](https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/issues/1)) from docker into main
+- Merge pull request 'docker' ([#1](https://github.com/JShadowNull/TAK-Manager/issues/1)) from docker into main
 
-Reviewed-on: https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/pulls/1
-- Merge pull request 'Add wrapper submodule' ([#2](https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/issues/2)) from dev into main
+Reviewed-on: https://github.com/JShadowNull/TAK-Manager/pulls/1
+- Merge pull request 'Add wrapper submodule' ([#2](https://github.com/JShadowNull/TAK-Manager/issues/2)) from dev into main
 
-Reviewed-on: https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/pulls/2
-- Merge pull request 'Add packaging' ([#3](https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/issues/3)) from dev into main
+Reviewed-on: https://github.com/JShadowNull/TAK-Manager/pulls/2
+- Merge pull request 'Add packaging' ([#3](https://github.com/JShadowNull/TAK-Manager/issues/3)) from dev into main
 
-Reviewed-on: https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/pulls/3
+Reviewed-on: https://github.com/JShadowNull/TAK-Manager/pulls/3
 
 
 ### Added 🚀
