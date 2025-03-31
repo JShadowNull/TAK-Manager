@@ -103,7 +103,3 @@ See `.env.example` for all available options.
 
 Jacob Olsen
 
-## License
-
-ISC License 
-
