@@ -64,3 +64,7 @@ docs/
 
 # ignore cursor rules
 .cursor 
+
+package-bk.json
+.env.bk.example
+scripts/

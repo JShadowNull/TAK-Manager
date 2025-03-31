@@ -8,7 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.1.1] - 2025-03-19
 
-## [3.1.1] - 2025-03-19
 
 
 ### Added 🚀
@@ -33,7 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.1.0] - 2025-03-18
 
-## [3.1.0] - 2025-03-18
 
 
 ### Added 🚀
@@ -58,7 +56,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.0.2] - 2025-03-14
 
-## [3.0.2] - 2025-03-14
 
 
 ### Fixed 🔧
@@ -78,7 +75,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.0.1] - 2025-03-13
 
-## [3.0.1] - 2025-03-13
 
 
 ### Fixed 🔧
@@ -98,7 +94,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.0.0] - 2025-03-10
 
-## [3.0.0] - 2025-03-10
 
 
 ### Added 🚀
@@ -160,7 +155,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.1.1] - 2025-02-27
 
-## [2.1.1] - 2025-02-27
 
 
 ### Added 🚀
@@ -197,7 +191,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.1.0] - 2025-02-26
 
-## [2.1.0] - 2025-02-26
 
 
 ### Added 🚀
@@ -248,7 +241,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.1] - 2025-02-21
 
-## [2.0.1] - 2025-02-21
 
 
 ### Fixed 🔧
