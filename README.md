@@ -1,4 +1,5 @@
 # TAK Manager
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-F7941E?style=for-the-badge&logo=buy-me-a-coffee&logoColor=white)](https://ko-fi.com/jakeolsen)
 
 A comprehensive TAK Server management solution providing a modern web interface for managing and monitoring TAK (Team Awareness Kit) servers.
 
