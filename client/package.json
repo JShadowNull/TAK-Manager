@@ -14,7 +14,7 @@
     "build": "tsc && vite build",
     "image:mac": "rm -rf ../TAK-Wrapper/docker/* && docker build -t tak-manager:${npm_package_version} -f ../DockerfileProd .. && mkdir -p ../TAK-Wrapper/docker && docker save tak-manager:${npm_package_version} | gzip > ../TAK-Wrapper/docker/tak-manager-${npm_package_version}.tar.gz",
     "image:win": "docker build -t tak-manager:%npm_package_version% -f ..\\DockerfileProd .. && if not exist ..\\TAK-Wrapper\\docker mkdir ..\\TAK-Wrapper\\docker && docker save tak-manager:%npm_package_version% -o ..\\TAK-Wrapper\\docker\\tak-manager-%npm_package_version%.tar",
-    "docker:dev": "docker compose -f ../docker-compose.dev.yml --env-file ../.env.dev up"
+    "docker:dev": "docker compose -f ../docker-compose.dev.yml --env-file ../.env.dev up --build"
   },
   "keywords": [],
   "author": "",
