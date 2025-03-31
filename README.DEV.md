@@ -66,7 +66,7 @@ npm run docker:image-mac
 ```bash
 npm run package:mac
 ```
-This will create a DMG installer in the `tak-manager-wrapper/dist` directory.
+This will create a DMG installer in the `TAK-Wrapper/dist` directory.
 
 ### Building for Windows:
 ```bash
@@ -76,7 +76,7 @@ npm run docker:image-win
 ```bash
 npm run package:win
 ```
-This will create an EXE installer in the `tak-manager-wrapper/dist` directory.
+This will create an EXE installer in the `TAK-Wrapper/dist` directory.
 
 ## Project Structure
 
@@ -84,7 +84,7 @@ This will create an EXE installer in the `tak-manager-wrapper/dist` directory.
 tak-manager/
 ├── client/                         
 ├── server/                         
-├── tak-manager-wrapper/           
+├── TAK-Wrapper/           
 │   └── docker/                         
 │       └── tak-manager-*.tar.gz   
 │   └── dist/    

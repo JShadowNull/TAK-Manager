@@ -186,7 +186,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Bump version to 2.1.0
 - Update pip version to 25.0.1 in requirements files
-- Update tak-manager-wrapper submodule
+- Update TAK-Wrapper submodule
 - Release tak-manager@2.1.1 [skip ci]
 
 ## [2.1.0] - 2025-02-26
@@ -305,7 +305,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Upgrade pywebview to version 5.4
 - Bump version to 1.1.3 in package-lock.json
 - Update Docker base image and Docker installation in Dockerfiles
-- Update tak-manager-wrapper submodule to latest commit
+- Update TAK-Wrapper submodule to latest commit
 - Add prompt-sync package for interactive CLI input
 - Release tak-manager@2.0.0 [skip ci]
 
@@ -453,7 +453,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Other 📦
 
 
-- Update tak-manager-wrapper submodule
+- Update TAK-Wrapper submodule
 - Update docker image build scripts and package version
 - Merge dev into main for release
 - Release tak-manager@1.1.0 [skip ci]
@@ -566,8 +566,8 @@ Reviewed-on: https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/pulls/7
 
 - Remove default browser scroll
 - Bump version to 1.0.2 and update changelog
-- Update tak-manager-wrapper submodule
-- Update tak-manager-wrapper submodule to latest commit
+- Update TAK-Wrapper submodule
+- Update TAK-Wrapper submodule to latest commit
 - Update changelog
 - Update changelog and add new npm script for changelog generation
 - Enhance changelog generation and configuration
@@ -659,9 +659,9 @@ Reviewed-on: https://gitea.local.ubuntuserver.buzz/Jake/Tak-Manager/pulls/3
 - Remove Electron-related files and configurations
 - Remove Tauri-related workspace and scripts
 - Update .env.example with improved configuration and comments
-- Add tak-manager-wrapper submodule
+- Add TAK-Wrapper submodule
 - Update workspace configuration and dependencies
-- Mark tak-manager-wrapper submodule as dirty
+- Mark TAK-Wrapper submodule as dirty
 - Update project configuration and Docker image build path
 - Update .env.example for production deployment
 - Update version scripts and Mac-specific packaging

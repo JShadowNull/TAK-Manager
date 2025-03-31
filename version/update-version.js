@@ -8,11 +8,11 @@ const rootDir = path.join(__dirname, '..');
 const paths = {
   root: path.join(rootDir, 'package.json'),
   client: path.join(rootDir, 'client/package.json'),
-  wrapper: path.join(rootDir, 'tak-manager-wrapper/web/package.json'),
+  wrapper: path.join(rootDir, 'TAK-Wrapper/web/package.json'),
   dockerCompose: path.join(rootDir, 'docker-compose.prod.yml'),
-  innoSetup: path.join(rootDir, 'tak-manager-wrapper/inno-tak.iss'),
-  versionTxt: path.join(rootDir, 'tak-manager-wrapper/version.txt'), // Added path for version.txt
-  app: path.join(rootDir, 'tak-manager-wrapper/app.py'), // Added path for app.py
+  innoSetup: path.join(rootDir, 'TAK-Wrapper/inno-tak.iss'),
+  versionTxt: path.join(rootDir, 'TAK-Wrapper/version.txt'), // Added path for version.txt
+  app: path.join(rootDir, 'TAK-Wrapper/app.py'), // Added path for app.py
 };
 
 // Read version from root package.json
