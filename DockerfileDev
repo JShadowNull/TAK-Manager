@@ -35,12 +35,13 @@ COPY package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \
     npm install --prefer-offline
 
-# Python dependencies with cache mount
-COPY server/requirements.txt .
-RUN --mount=type=cache,target=/root/.cache \
-    pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
-
+# Python dependencies with Poetry - Install globally
+WORKDIR /app/server
+COPY server/pyproject.toml ./
+COPY server/poetry.lock ./
+RUN pip install poetry && \
+    poetry config virtualenvs.create false && \
+    poetry install
 
 # Application setup
 RUN mkdir -p /app/logs && chmod -R 755 /app/logs
@@ -49,4 +50,4 @@ COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
 # Start of Selection
-CMD ["/start.sh"] 
+CMD ["/start.sh"]

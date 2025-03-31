@@ -44,11 +44,13 @@ RUN apt-get update && \
 # End of Selection
 
 # Added separate build stage for Python dependencies
-# Copy the requirements.txt file and install the Python dependencies.
-COPY server/requirements.txt /app/
-RUN --mount=type=cache,target=/root/.cache \
-    pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+# Python dependencies with Poetry - Install globally
+WORKDIR /app/server
+COPY server/pyproject.toml ./
+COPY server/poetry.lock ./
+RUN pip install poetry && \
+    poetry config virtualenvs.create false && \
+    poetry install
 
 # Copy built frontend and backend files
 # Copy the built frontend files from the previous stage and the backend files to the final image.
@@ -61,6 +63,6 @@ RUN mkdir -p /app/logs && \
     chmod -R 755 /app/logs
 
 # Command to run the application
-# Start the Python application when the container runs.
-CMD ["python", "/app/server/app.py"] 
+# Update to use poetry run for production
+CMD ["poetry", "run", "python", "/app/server/app.py"]
 # End of Selection

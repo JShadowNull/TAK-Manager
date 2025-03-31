@@ -1,0 +1,30 @@
+[project]
+name = "tak-manager-server"
+version = "3.1.2"
+description = "Backend for TAK Manager"
+authors = [
+    {name = "JShadowNull",email = "95039572+JShadowNull@users.noreply.github.com"}
+]
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi (>=0.115.12)",
+    "uvicorn (>=0.34.0)",
+    "requests (>=2.32.3)",
+    "psutil (>=7.0.0)",
+    "docker (>=7.1.0)",
+    "pexpect (>=4.9.0)",
+    "watchdog (>=6.0.0)",
+    "sse-starlette (>=2.2.1)",
+    "python-multipart (>=0.0.20)",
+    "lxml (>=5.3.1)",
+    "aiofiles (>=24.1.0)",
+    "pyyaml (>=6.0.2)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+package-mode = false
