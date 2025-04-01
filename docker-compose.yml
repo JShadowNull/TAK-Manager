@@ -12,14 +12,14 @@ services:
       - .env
     environment:
       - PYTHONUNBUFFERED=1
-      - BACKEND_PORT=${BACKEND_PORT}
+      - BACKEND_PORT=${BACKEND_PORT:-8003}
       - TAK_SERVER_INSTALL_DIR=${TAK_SERVER_INSTALL_DIR}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${TAK_SERVER_INSTALL_DIR}/tak-manager/data:/home/tak-manager:rw
       - ${TAK_SERVER_INSTALL_DIR}/tak-manager/logs:/app/logs:rw
     ports:
-      - ${BACKEND_PORT}:${BACKEND_PORT}
+      - ${BACKEND_PORT:-8003}:${BACKEND_PORT:-8003}
     networks:
       - tak-manager-network
     healthcheck:
@@ -28,9 +28,9 @@ services:
         - curl
         - '-f'
         - http://localhost:${BACKEND_PORT}/health
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      interval: ${HEALTHCHECK_INTERVAL:-30s}
+      timeout: ${HEALTHCHECK_TIMEOUT:-10s}
+      retries: ${HEALTHCHECK_RETRIES:-3}
   dev:
     build:
       context: .
@@ -39,7 +39,7 @@ services:
         ENV: development
     image: tak-manager-development:latest
     container_name: tak-manager-development
-    restart: ${RESTART_POLICY}
+    restart: ${RESTART_POLICY:-always}
     privileged: true
     env_file:
       - .env
@@ -53,8 +53,8 @@ services:
       - node_modules:/app/client/node_modules
       - ${TAK_SERVER_INSTALL_DIR}/tak-manager/data:/home/tak-manager:rw
     ports:
-      - ${BACKEND_PORT}:${BACKEND_PORT}
-      - ${FRONTEND_PORT}:${FRONTEND_PORT}
+      - ${BACKEND_PORT:-8003}:${BACKEND_PORT:-8003}
+      - ${FRONTEND_PORT:-5174}:${FRONTEND_PORT:-5174}
     networks:
       - tak-manager-network
     healthcheck:
@@ -63,9 +63,9 @@ services:
         - curl
         - '-f'
         - http://localhost:${BACKEND_PORT}/health
-      interval: ${HEALTHCHECK_INTERVAL}
-      timeout: ${HEALTHCHECK_TIMEOUT}
-      retries: ${HEALTHCHECK_RETRIES}
+      interval: ${HEALTHCHECK_INTERVAL:-30s}
+      timeout: ${HEALTHCHECK_TIMEOUT:-10s}
+      retries: ${HEALTHCHECK_RETRIES:-3}
 volumes:
   node_modules: null
 networks:
