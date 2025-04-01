@@ -68,3 +68,4 @@ docs/
 package.json.bak
 .env.bk.example
 scripts/
+.env.github
