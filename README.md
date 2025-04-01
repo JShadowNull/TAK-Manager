@@ -83,16 +83,6 @@ After installation, configure TAK Manager to connect to your TAK Server:
 
 If you're interested in developing or contributing to TAK Manager, please see the [Development README](README.DEV.md) for detailed instructions.
 
-## Environment Variables
-
-Key environment variables that can be configured:
-
-- `MODE`: Production
-- `BACKEND_PORT`: Backend API port
-- `TAK_SERVER_INSTALL_DIR`: TAK Server installation directory on host machine
-
-See `.env.example` for all available options.
-
 ## Author
 
 Jacob Olsen

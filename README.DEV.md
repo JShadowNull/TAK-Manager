@@ -17,6 +17,7 @@ This document provides detailed instructions for developers who want to contribu
 - FastAPI
 - Docker support
 - SSE (Server-Sent Events) for real-time updates
+- Poetry for python dependency management
 
 ## Prerequisites
 
@@ -32,20 +33,23 @@ git clone https://github.com/JShadowNull/TAK-Manager.git
 cd Tak-Manager
 ```
 
-### 2. Create environment file:
+### 2. Run the setup script:
+Before starting the development environment, run the setup script to configure your environment and install dependencies:
 ```bash
-cp .env.example .env
+python dev_scripts/setup_project.py
 ```
-Edit the `.env.dev` file with your specific configuration.
+This script will:
+- Check for necessary system dependencies (like Docker and Docker Compose).
+- Create a `.env` file from `.env.example` and set required environment variables.
+- Install npm and Python dependencies.
 
-### 4. Start the development environment:
+### 3. Start the development environment:
 ```bash
 npm run dev
 ```
-
 This will start the Docker development environment with hot reloading enabled.
 
-### 5. For wrapper development (Pywebview app):
+### 4. For wrapper development (Pywebview app):
 ```bash
 npm run docker:image-mac # or npm run docker:image-win
 ```
@@ -53,9 +57,10 @@ npm run docker:image-mac # or npm run docker:image-win
 ```bash
 npm run wrapper:dev
 ```
-
 This will start the Pywebview development environment with hot reloading for the wrapper but docker app will need to be built again upon changes.
 ## Building Packages
+
+**Important Note:** Ensure that the root `.env` file is configured for production mode before deploying the application. This includes setting the `MODE` variable to `production` and verifying that all necessary environment variables are correctly defined.
 
 ### Building for macOS:
 
@@ -115,7 +120,4 @@ npm run release
 ```
 
 This will:
-1. Update the version number
-2. Merge the dev branch into main
-3. Create a new release tag
-4. Update the changelog
+- Update the version number across the application
