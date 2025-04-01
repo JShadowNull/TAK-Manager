@@ -7,9 +7,10 @@
     "TAK-Wrapper/web"
   ],
   "scripts": {
+    "setup": "python dev_scripts/setup_project.py",
     "docker:image-mac": "npm run image:mac --workspace=client",
     "docker:image-win": "npm run image:win --workspace=client",
-    "update:version": "node version/update-version.js",
+    "update:version": "node dev_scripts/version/update-version.js",
     "dev": "npm run docker:dev --workspace=client",
     "wrapper:dev": "cd TAK-Wrapper && poetry run python app.py --dev",
     "package:mac": "VERSION=$npm_package_version npm run image:mac --workspace=client && VERSION=$npm_package_version npm run package --workspace=TAK-Wrapper/web && create-dmg --dmg-title=\"TAK Manager $npm_package_version\" 'TAK-Wrapper/dist/TAK Manager.app' TAK-Wrapper/dist/",

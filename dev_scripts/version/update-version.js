@@ -5,13 +5,12 @@ const yaml = require('js-yaml');
 const readline = require('readline');
 
 // Define paths
-const rootDir = path.join(__dirname, '..');
+const rootDir = path.join(__dirname, '../..');
 const paths = {
   root: path.join(rootDir, 'package.json'),
   client: path.join(rootDir, 'client/package.json'),
   wrapper: path.join(rootDir, 'TAK-Wrapper/web/package.json'),
   dockerCompose: path.join(rootDir, 'docker-compose.yml'),
-  takWrapperDockerCompose: path.join(rootDir, 'TAK-Wrapper/docker-compose.yml'),
   innoSetup: path.join(rootDir, 'TAK-Wrapper/inno-tak.iss'),
   versionTxt: path.join(rootDir, 'TAK-Wrapper/version.txt'),
   app: path.join(rootDir, 'TAK-Wrapper/app.py'),
@@ -131,7 +130,6 @@ async function main() {
     changes = updatePackageJson(paths.client, version) || changes;
     changes = updatePackageJson(paths.wrapper, version) || changes;
     changes = updateDockerCompose(paths.dockerCompose, version) || changes;
-    changes = updateDockerCompose(paths.takWrapperDockerCompose, version) || changes;
     changes = updateInnoSetup(paths.innoSetup, version) || changes;
     changes = updateVersionTxt(paths.versionTxt, version) || changes;
     changes = updateAppVersion(paths.app, version) || changes;
