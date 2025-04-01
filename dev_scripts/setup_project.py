@@ -72,7 +72,8 @@ def command_exists(command):
     # Special handling for Windows npm check
     if platform.system() == "Windows" and command == "npm":
         try:
-            # Check using 'where' command on Windows
+            # On Windows, npm may be found in PATH but fails when called through Python subprocess
+            # First check with where command
             result = subprocess.run(
                 ["where", "npm"],
                 capture_output=True,
@@ -80,16 +81,9 @@ def command_exists(command):
                 check=False
             )
             if result.returncode == 0 and result.stdout.strip():
-                return True
-                
-            # Fallback to trying npm directly
-            result = subprocess.run(
-                ["npm", "--version"],
-                capture_output=True,
-                text=True,
-                check=False
-            )
-            return result.returncode == 0
+                # Found npm in PATH, but need to verify it works through Python
+                npm_path = result.stdout.strip().split('\n')[0]  # Use the first path found
+                return os.path.exists(npm_path)
         except Exception:
             pass
             
@@ -99,6 +93,47 @@ def command_exists(command):
 def run_command(command_list, cwd=None, check=True, capture_output=False):
     """Runs a shell command."""
     print(f"  {COLOR_YELLOW}Running: {' '.join(command_list)}{COLOR_RESET}" + (f" in {cwd}" if cwd else ""))
+    
+    # Special handling for npm commands on Windows
+    if platform.system() == "Windows" and command_list and command_list[0] == "npm":
+        # Try to use the full path to npm on Windows
+        try:
+            where_result = subprocess.run(
+                ["where", "npm"],
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            if where_result.returncode == 0 and where_result.stdout.strip():
+                npm_path = where_result.stdout.strip().split('\n')[0]  # Use the first path found
+                command_list[0] = npm_path
+        except Exception:
+            pass
+            
+        # On Windows, use shell=True for npm commands to ensure they work properly
+        try:
+            cmd_str = " ".join(command_list)
+            result = subprocess.run(
+                cmd_str,
+                cwd=cwd,
+                check=check,
+                capture_output=capture_output,
+                text=True,
+                shell=True,
+                stderr=subprocess.PIPE if not capture_output else None
+            )
+            if result.returncode != 0 and check:
+                print_error(f"Command failed with error: {result.stderr}")
+            return result
+        except FileNotFoundError:
+            print_error(f"Command not found: {command_list[0]}. Please ensure it's installed and in your PATH.")
+        except subprocess.CalledProcessError as e:
+            error_message = e.stderr if e.stderr else str(e)
+            print_error(f"Command failed with error: {error_message}")
+        except Exception as e:
+            print_error(f"An unexpected error occurred while running the command: {e}")
+    
+    # Standard execution for non-npm commands or non-Windows platforms
     try:
         result = subprocess.run(
             command_list,
@@ -146,32 +181,56 @@ def check_prerequisites():
          )
 
     # Node.js and npm
-    if not command_exists("npm"):
+    npm_found = command_exists("npm")
+    if not npm_found:
         warnings.append(
             "Node.js/npm not found. Please install it from: "
             f"{COLOR_YELLOW}https://nodejs.org/{COLOR_RESET}"
         )
     else:
-        # Verify npm works by checking version
-        try:
-            npm_version = subprocess.run(
-                ["npm", "--version"],
-                capture_output=True,
-                text=True,
-                check=False
-            )
-            if npm_version.returncode == 0:
-                print_success(f"Node.js/npm found (version: {npm_version.stdout.strip()}).")
-            else:
+        # Verify npm works by checking version on Windows with shell=True
+        if platform.system() == "Windows":
+            try:
+                npm_version = subprocess.run(
+                    "npm --version",
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    shell=True
+                )
+                if npm_version.returncode == 0:
+                    print_success(f"Node.js/npm found (version: {npm_version.stdout.strip()}).")
+                else:
+                    warnings.append(
+                        "npm was found in PATH but doesn't seem to be working correctly. "
+                        f"Please verify your Node.js installation: {COLOR_YELLOW}https://nodejs.org/{COLOR_RESET}"
+                    )
+            except Exception as e:
                 warnings.append(
-                    "npm was found in PATH but doesn't seem to be working correctly. "
+                    f"npm was found in PATH but encountered an error when checking version: {str(e)}. "
                     f"Please verify your Node.js installation: {COLOR_YELLOW}https://nodejs.org/{COLOR_RESET}"
                 )
-        except Exception:
-            warnings.append(
-                "npm was found in PATH but encountered an error when checking version. "
-                f"Please verify your Node.js installation: {COLOR_YELLOW}https://nodejs.org/{COLOR_RESET}"
-            )
+        else:
+            # Non-Windows platforms
+            try:
+                npm_version = subprocess.run(
+                    ["npm", "--version"],
+                    capture_output=True,
+                    text=True,
+                    check=False
+                )
+                if npm_version.returncode == 0:
+                    print_success(f"Node.js/npm found (version: {npm_version.stdout.strip()}).")
+                else:
+                    warnings.append(
+                        "npm was found in PATH but doesn't seem to be working correctly. "
+                        f"Please verify your Node.js installation: {COLOR_YELLOW}https://nodejs.org/{COLOR_RESET}"
+                    )
+            except Exception:
+                warnings.append(
+                    "npm was found in PATH but encountered an error when checking version. "
+                    f"Please verify your Node.js installation: {COLOR_YELLOW}https://nodejs.org/{COLOR_RESET}"
+                )
 
     # Poetry
     if not command_exists("poetry"):
