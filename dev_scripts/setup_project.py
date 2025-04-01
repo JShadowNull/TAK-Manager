@@ -96,23 +96,14 @@ def run_command(command_list, cwd=None, check=True, capture_output=False):
     
     # Special handling for npm commands on Windows
     if platform.system() == "Windows" and command_list and command_list[0] == "npm":
-        # Try to use the full path to npm on Windows
+        # On Windows, use shell=True and the npm command directly
         try:
-            where_result = subprocess.run(
-                ["where", "npm"],
-                capture_output=True,
-                text=True,
-                check=False
-            )
-            if where_result.returncode == 0 and where_result.stdout.strip():
-                npm_path = where_result.stdout.strip().split('\n')[0]  # Use the first path found
-                command_list[0] = npm_path
-        except Exception:
-            pass
-            
-        # On Windows, use shell=True for npm commands to ensure they work properly
-        try:
-            cmd_str = " ".join(command_list)
+            # Convert to a properly escaped command string
+            if len(command_list) > 1:
+                cmd_str = f"npm {' '.join(command_list[1:])}"
+            else:
+                cmd_str = "npm"
+                
             result = subprocess.run(
                 cmd_str,
                 cwd=cwd,
@@ -126,7 +117,7 @@ def run_command(command_list, cwd=None, check=True, capture_output=False):
                 print_error(f"Command failed with error: {result.stderr}")
             return result
         except FileNotFoundError:
-            print_error(f"Command not found: {command_list[0]}. Please ensure it's installed and in your PATH.")
+            print_error(f"Command not found: npm. Please ensure it's installed and in your PATH.")
         except subprocess.CalledProcessError as e:
             error_message = e.stderr if e.stderr else str(e)
             print_error(f"Command failed with error: {error_message}")
@@ -347,7 +338,26 @@ def setup_env_file():
 def install_dependencies():
     """Installs npm and poetry dependencies."""
     print_status("Installing root npm dependencies (workspaces)...")
-    run_command(["npm", "install", "--workspaces"], cwd=PROJECT_ROOT)
+    
+    if platform.system() == "Windows":
+        # For Windows, handle npm install differently
+        try:
+            print(f"  {COLOR_YELLOW}Running: npm install --workspaces{COLOR_RESET} in {PROJECT_ROOT}")
+            result = subprocess.run(
+                "npm install --workspaces",
+                cwd=PROJECT_ROOT,
+                shell=True,
+                text=True,
+                stderr=subprocess.PIPE
+            )
+            if result.returncode != 0:
+                print_error(f"npm install failed with error: {result.stderr}")
+        except Exception as e:
+            print_error(f"An error occurred during npm install: {e}")
+    else:
+        # For non-Windows platforms
+        run_command(["npm", "install", "--workspaces"], cwd=PROJECT_ROOT)
+        
     print_success("Root npm dependencies installed.")
 
     print_status("Installing root Python dependencies (poetry)...")
