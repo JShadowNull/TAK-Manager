@@ -69,6 +69,31 @@ def get_documents_dir() -> Path:
 
 def command_exists(command):
     """Checks if a command exists in the system's PATH."""
+    # Special handling for Windows npm check
+    if platform.system() == "Windows" and command == "npm":
+        try:
+            # Check using 'where' command on Windows
+            result = subprocess.run(
+                ["where", "npm"],
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return True
+                
+            # Fallback to trying npm directly
+            result = subprocess.run(
+                ["npm", "--version"],
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            return result.returncode == 0
+        except Exception:
+            pass
+            
+    # Standard check for other commands or platforms
     return shutil.which(command) is not None
 
 def run_command(command_list, cwd=None, check=True, capture_output=False):
@@ -120,6 +145,42 @@ def check_prerequisites():
             f"See: {COLOR_YELLOW}https://docs.docker.com/compose/install/{COLOR_RESET}"
          )
 
+    # Node.js and npm
+    if not command_exists("npm"):
+        warnings.append(
+            "Node.js/npm not found. Please install it from: "
+            f"{COLOR_YELLOW}https://nodejs.org/{COLOR_RESET}"
+        )
+    else:
+        # Verify npm works by checking version
+        try:
+            npm_version = subprocess.run(
+                ["npm", "--version"],
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            if npm_version.returncode == 0:
+                print_success(f"Node.js/npm found (version: {npm_version.stdout.strip()}).")
+            else:
+                warnings.append(
+                    "npm was found in PATH but doesn't seem to be working correctly. "
+                    f"Please verify your Node.js installation: {COLOR_YELLOW}https://nodejs.org/{COLOR_RESET}"
+                )
+        except Exception:
+            warnings.append(
+                "npm was found in PATH but encountered an error when checking version. "
+                f"Please verify your Node.js installation: {COLOR_YELLOW}https://nodejs.org/{COLOR_RESET}"
+            )
+
+    # Poetry
+    if not command_exists("poetry"):
+        warnings.append(
+            "Poetry not found. Please install it from: "
+            f"{COLOR_YELLOW}https://python-poetry.org/docs/#installation{COLOR_RESET}"
+        )
+    else:
+        print_success("Poetry found.")
 
     # OS-specific checks
     system = platform.system()
@@ -226,14 +287,6 @@ def setup_env_file():
 
 def install_dependencies():
     """Installs npm and poetry dependencies."""
-
-    # Check for package managers
-    if not command_exists("npm"):
-        print_error("`npm` command not found. Please install Node.js and npm: https://nodejs.org/")
-    if not command_exists("poetry"):
-         print_error("`poetry` command not found. Please install Poetry: https://python-poetry.org/docs/#installation")
-
-
     print_status("Installing root npm dependencies (workspaces)...")
     run_command(["npm", "install", "--workspaces"], cwd=PROJECT_ROOT)
     print_success("Root npm dependencies installed.")
