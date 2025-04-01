@@ -15,7 +15,8 @@
     "wrapper:dev": "cd TAK-Wrapper && poetry run python app.py --dev",
     "package:mac": "VERSION=$npm_package_version npm run image:mac --workspace=client && VERSION=$npm_package_version npm run package --workspace=TAK-Wrapper/web && create-dmg --dmg-title=\"TAK Manager $npm_package_version\" 'TAK-Wrapper/dist/TAK Manager.app' TAK-Wrapper/dist/",
     "package:win": "set VERSION=%npm_package_version% && npm run image:win --workspace=client && npm run package --workspace=TAK-Wrapper/web && iscc TAK-Wrapper/inno-tak.iss",
-    "merge": "git checkout main && git pull origin main && git merge dev && git push origin main && git checkout dev"
+    "merge": "git checkout main && git pull origin main && git merge dev && git push origin main && git checkout dev",
+    "release": "npm run update:version && npm run merge && node dev_scripts/release.js"
   },
   "devDependencies": {
     "js-yaml": "^4.1.0",
