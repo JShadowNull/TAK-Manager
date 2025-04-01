@@ -36,24 +36,17 @@ cp .env.example .env
 ```
 Edit the `.env` file with your specific configuration.
 
-3. Build the Docker image with the correct tag:
+3. Start the Docker container:
 ```bash
-docker build -f DockerfileProd -t tak-manager:<version> .
-```
-
-4. Start the Docker container:
-```bash
-docker compose -f docker-compose.prod.yml --env-file .env up -d
+docker compose -f docker-compose.yml up prod -d
 ```
 
 The application will be available at `http://localhost:8989` (or your configured port).
 
 To stop the container:
 ```bash
-docker compose -f docker-compose.prod.yml down
+docker compose -f docker-compose.yml down
 ```
-
-Ensure the Docker build tag matches the tag in `docker-compose.prod.yml`.
 
 ## Features
 

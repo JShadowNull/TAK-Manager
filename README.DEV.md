@@ -34,7 +34,7 @@ cd Tak-Manager
 
 ### 2. Create environment file:
 ```bash
-cp .env.example .env.dev
+cp .env.example .env
 ```
 Edit the `.env.dev` file with your specific configuration.
 
@@ -89,11 +89,8 @@ tak-manager/
 │       └── tak-manager-*.tar.gz   
 │   └── dist/    
 │       └── TAK Manager <version>.exe or TAK Manager <version>.dmg               
-├── docker-compose.dev.yml             
-├── docker-compose.prod.yml        
-├── DockerfileProd                 
-├── DockerfileDev                  
-├── .env.dev
+├── docker-compose.yml             
+├── Dockerfile                 
 ├── .env.example
 └── .env                           
 ```

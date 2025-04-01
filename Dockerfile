@@ -1,29 +1,20 @@
-# Start of Selection
 # syntax=docker/dockerfile:1
 
-# Build stage for frontend
-# This stage uses a Node.js base image to build the frontend application.
+ARG ENV=prod
+
+# Stage 1: Frontend builder for production
 FROM node:22-slim AS frontend-builder
 WORKDIR /app/client
-
-# Install dependencies first (better layer caching)
-# Copy the package.json files to the working directory and install the necessary Node.js dependencies.
 COPY client/package*.json ./
 RUN npm install
-
-# Build the frontend
-# Copy the rest of the frontend application files and build the production-ready frontend.
 COPY client/ .
 RUN npm run build
 
-# Final stage
-# This stage uses a Python base image to set up the backend application.
-FROM python:3.13.2-slim
-
+# Stage 2: Base image with common dependencies
+FROM python:3.13.2-slim AS base
 WORKDIR /app
 
-# Start of Selection
-# Docker repository setup (still needed for CLI)
+# Docker repository setup (needed for both dev and prod)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl && \
     install -m 0755 -d /etc/apt/keyrings && \
@@ -41,9 +32,41 @@ RUN apt-get update && \
     libxml2-utils \
     sed && \
     rm -rf /var/lib/apt/lists/*
-# End of Selection
 
-# Added separate build stage for Python dependencies
+# Stage 3: Development environment
+FROM base AS development
+WORKDIR /app
+
+# Node.js installation for development
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y nodejs=22.13.1-1nodesource1 && \
+    rm -rf /var/lib/apt/lists/*
+
+# Client dependencies setup with cache
+WORKDIR /app/client
+COPY client/package.json ./
+COPY package-lock.json ./
+RUN npm install --prefer-offline
+
+# Python dependencies with Poetry - Install globally
+WORKDIR /app/server
+COPY server/pyproject.toml ./
+COPY server/poetry.lock ./
+RUN pip install poetry && \
+    poetry config virtualenvs.create false && \
+    poetry install
+
+# Application setup
+RUN mkdir -p /app/logs && chmod -R 755 /app/logs
+COPY . .
+
+# Dev command to start both frontend and backend
+CMD ["/bin/sh", "-c", "cd /app/client && npm run start & cd /app/server && poetry run python app.py"]
+
+# Stage 4: Production environment
+FROM base AS production
+WORKDIR /app
+
 # Python dependencies with Poetry - Install globally
 WORKDIR /app/server
 COPY server/pyproject.toml ./
@@ -53,16 +76,14 @@ RUN pip install poetry && \
     poetry install
 
 # Copy built frontend and backend files
-# Copy the built frontend files from the previous stage and the backend files to the final image.
 COPY --from=frontend-builder /app/client/build /app/client/build
 COPY server/ /app/server/
 
 # Create required directories
-# Create a logs directory and set appropriate permissions.
 RUN mkdir -p /app/logs && \
     chmod -R 755 /app/logs
 
-# Command to run the application
-# Update to use poetry run for production
 CMD ["poetry", "run", "python", "/app/server/app.py"]
-# End of Selection
+
+# Final image based on ARG ENV
+FROM ${ENV} AS final
