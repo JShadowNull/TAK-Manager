@@ -93,19 +93,44 @@ export function TakServerProvider({ children }: { children: React.ReactNode }) {
 
   // Fetch status on mount and setup SSE
   useEffect(() => {
+    let retryTimeout: number | null = null;
+    let retryCount = 0;
+    const maxRetries = 3;
+    
     const fetchStatus = async () => {
       try {
-        const response = await fetch('/api/takserver/takserver-status');
+        const response = await fetch('/api/takserver/takserver-status', {
+          // Add a timeout to the request
+          signal: AbortSignal.timeout(5000)
+        });
+        
         if (!response.ok) {
           throw new Error(`Failed to fetch status: ${response.statusText}`);
         }
+        
         const data = await response.json();
         setServerState(data);
+        // Reset retry count on success
+        retryCount = 0;
       } catch (error) {
+        console.error('Error fetching server status:', error);
+        
+        // Update state with error but preserve previous state values
         setServerState(prev => ({ 
           ...prev, 
           error: error instanceof Error ? error.message : 'Failed to fetch server status' 
         }));
+        
+        // Retry logic for transient errors
+        if (retryCount < maxRetries) {
+          retryCount++;
+          const delay = Math.min(1000 * Math.pow(2, retryCount), 10000); // Exponential backoff with 10s max
+          console.log(`Retrying status fetch in ${delay}ms (attempt ${retryCount}/${maxRetries})`);
+          
+          retryTimeout = window.setTimeout(() => {
+            fetchStatus();
+          }, delay);
+        }
       }
     };
 
@@ -113,48 +138,69 @@ export function TakServerProvider({ children }: { children: React.ReactNode }) {
     fetchStatus();
 
     // Setup SSE with reconnection logic
-    const serverStatus = new EventSource('/api/takserver/server-status-stream');
+    let serverStatus: EventSource | null = null;
+    
+    try {
+      serverStatus = new EventSource('/api/takserver/server-status-stream');
 
-    // Handle connection open
-    serverStatus.onopen = () => {
-      // Connection opened
-    };
+      // Handle connection open
+      serverStatus.onopen = () => {
+        // Connection opened successfully
+        console.log('Server status stream connection established');
+      };
 
-    // Handle errors and reconnection
-    serverStatus.onerror = () => {
-      // The browser will automatically try to reconnect
-    };
+      // Handle errors and reconnection
+      serverStatus.onerror = (event) => {
+        console.error('Server status stream error:', event);
+        // The browser will automatically try to reconnect
+      };
 
-    // Handle server status events
-    serverStatus.addEventListener('server-status', (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        
-        // Handle both direct status updates and operation events
-        if (data.type === 'status') {
-          const statusData = data.data;
-          if (statusData && typeof statusData.isInstalled !== 'undefined') {
-            setServerState(prev => ({
-              ...prev,
-              ...statusData,
-              // Maintain restarting state until server is confirmed running
-              isRestarting: statusData.isRunning ? false : prev.isRestarting
-            }));
+      // Handle server status events
+      serverStatus.addEventListener('server-status', (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          // Handle both direct status updates and operation events
+          if (data.type === 'status') {
+            const statusData = data.data;
+            if (statusData && typeof statusData.isInstalled !== 'undefined') {
+              setServerState(prev => ({
+                ...prev,
+                ...statusData,
+                // Maintain restarting state until server is confirmed running
+                isRestarting: statusData.isRunning ? false : prev.isRestarting
+              }));
+            }
+          } else if (data.type === 'operation') {
+            // Fetch latest status after operation completes
+            if (data.status === 'complete' || data.status === 'error') {
+              fetchStatus();
+            }
           }
-        } else if (data.type === 'operation') {
-          // Fetch latest status after operation completes
-          if (data.status === 'complete' || data.status === 'error') {
-            fetchStatus();
-          }
+        } catch (error) {
+          console.error('Error parsing event data:', error);
         }
-      } catch (error) {
-        // Error parsing event data
-      }
-    });
+      });
+    } catch (error) {
+      console.error('Failed to create EventSource:', error);
+      // Set fallback polling if SSE fails
+      const pollInterval = window.setInterval(() => {
+        fetchStatus();
+      }, 10000); // Poll every 10 seconds
+      
+      return () => {
+        clearInterval(pollInterval);
+      };
+    }
 
     // Cleanup on unmount
     return () => {
-      serverStatus.close();
+      if (serverStatus) {
+        serverStatus.close();
+      }
+      if (retryTimeout !== null) {
+        clearTimeout(retryTimeout);
+      }
     };
   }, []);
 
@@ -332,7 +378,6 @@ export function AppSidebar() {
           </SidebarHeader>
           <SidebarContent>
             <SidebarGroup>
-              <SidebarGroupLabel>TAK Manager</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
                   {items

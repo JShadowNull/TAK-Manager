@@ -67,8 +67,6 @@ class TakServerStatus:
             # Check if all required containers exist and are running
             all_running = all(required_containers.values())
             if not all_running:
-                not_running = [name for name, running in required_containers.items() if not running]
-                logger.debug(f"The following containers are not running or missing: {', '.join(not_running)}")
                 return False
 
             return True
