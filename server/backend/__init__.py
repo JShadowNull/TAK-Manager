@@ -14,6 +14,9 @@ class LargeRequestMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         return response
 
+# Import auth middleware
+from backend.middleware.auth_middleware import AuthMiddleware
+
 # Import routers (equivalent to blueprints)
 from backend.routes.dashboard_routes import dashboard
 from backend.routes.docker_manager_routes import dockermanager
@@ -25,6 +28,7 @@ from backend.routes.certmanager_routes import certmanager
 from backend.routes.advanced_features_routes import advanced_features
 from backend.routes.port_manager_routes import portmanager
 from backend.routes.takserver_api_routes import takserver_api
+from backend.routes.auth_routes import auth
 
 def create_app():
     # Set up logging
@@ -33,6 +37,7 @@ def create_app():
     
     # Determine mode
     is_dev = os.environ.get('MODE', 'development') == 'development'
+    logger.info(f"Application mode: {'development' if is_dev else 'production'}")
     
     # Initialize FastAPI app
     app = FastAPI(
@@ -42,6 +47,9 @@ def create_app():
 
     # Add middleware for large file uploads
     app.add_middleware(LargeRequestMiddleware)
+    
+    # Add auth middleware
+    app.add_middleware(AuthMiddleware)
 
     # Health check endpoint
     @app.get('/health')
@@ -49,6 +57,7 @@ def create_app():
         return {'status': 'healthy'}
 
     # Include routers (equivalent to registering blueprints) FIRST
+    app.include_router(auth, prefix='/api/auth')
     app.include_router(dashboard, prefix='/api/dashboard')
     app.include_router(dockermanager, prefix='/api/docker-manager')
     app.include_router(datapackage, prefix='/api/datapackage')
@@ -62,6 +71,7 @@ def create_app():
     
     # Only serve static files in production mode AFTER API routes
     if not is_dev:
+        logger.info("Serving static frontend files (production mode)")
         client_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "client"))
         build_dir = os.path.join(client_dir, 'build')
         app.mount("/static", StaticFiles(directory=build_dir), name="static")
@@ -81,6 +91,8 @@ def create_app():
                 return FileResponse(file_path)
             logger.debug(f"File not found: {file_path}")  # Changed from error to debug level
             return FileResponse(os.path.join(build_dir, 'index.html'))
+    else:
+        logger.info("Not serving static files (development mode)")
 
     logger.info(f"FastAPI application created in {'development' if is_dev else 'production'} mode")
     return app

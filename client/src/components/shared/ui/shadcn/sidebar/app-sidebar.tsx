@@ -7,6 +7,8 @@ import {
   Database,
   Menu,
   Settings,
+  UserCircle,
+  LogOut,
 } from "lucide-react"
 import { ModeToggle } from "@/components/shared/ui/shadcn/mode-toggle"
 import { Sheet, SheetContent } from "@/components/shared/ui/shadcn/sheet"
@@ -22,6 +24,7 @@ import {
   SidebarFooter,
   SidebarHeader,
 } from "@/components/shared/ui/shadcn/sidebar/sidebar"
+import { useAuth } from '@/utils/AuthContext'
 
 interface ServerState {
   isInstalled: boolean;
@@ -205,12 +208,20 @@ const items = [
     alwaysShow: false,
     showWhen: (takServerInstalled: boolean) => takServerInstalled,
   },
+  {
+    title: "Profile",
+    url: "/profile",
+    icon: UserCircle,
+    iconColor: "text-green-500",
+    alwaysShow: true,
+  },
 ]
 
 export function AppSidebar() {
   const location = useLocation()
   const [isOpen, setIsOpen] = useState(false)
   const { serverState } = useTakServer();
+  const { logout, username } = useAuth();
 
   const getTitle = () => {
     const currentItem = items.find(item => item.url === location.pathname)
@@ -286,9 +297,23 @@ export function AppSidebar() {
                 </SidebarGroupContent>
               </SidebarGroup>
             </SidebarContent>
-            <SidebarFooter className="mt-auto border-t border-border p-6">
-              <div className="flex items-center justify-center w-full">
-                <ModeToggle />
+            <SidebarFooter className="mt-auto border-t border-border p-4">
+              <div className="flex flex-col gap-2 w-full">
+                <div className="flex items-center justify-between w-full">
+                  <span className="text-sm text-muted-foreground">
+                    Logged in as: {username}
+                  </span>
+                  <ModeToggle />
+                </div>
+                <div className="flex justify-center w-full">
+                  <button 
+                    onClick={logout}
+                    className="flex items-center px-3 py-2 text-sm text-red-500 hover:text-red-600 hover:bg-accent rounded-md"
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    <span>Logout</span>
+                  </button>
+                </div>
               </div>
             </SidebarFooter>
           </div>
@@ -341,9 +366,21 @@ export function AppSidebar() {
               </SidebarGroupContent>
             </SidebarGroup>
           </SidebarContent>
-          <SidebarFooter className="flex items-center justify-center p-4 border-t border-border">
-            <div className="flex items-center justify-center w-full">
+          <SidebarFooter className="flex flex-col gap-2 p-4 border-t border-border">
+            <div className="flex items-center justify-between w-full">
+              <span className="text-sm text-muted-foreground">
+                Logged in as: {username}
+              </span>
               <ModeToggle />
+            </div>
+            <div className="flex justify-center w-full">
+              <button 
+                onClick={logout}
+                className="flex items-center px-3 py-2 text-sm text-red-500 hover:text-red-600 hover:bg-accent rounded-md"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                <span>Logout</span>
+              </button>
             </div>
           </SidebarFooter>
         </Sidebar>
